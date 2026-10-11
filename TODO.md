@@ -152,9 +152,23 @@
   of every library: the full collections grew longer); sizes are computed without objects instead
   (`bookWidth`). What is left: about one full collection (MajorGC) per scenario, 25-45 ms, after a
   room switch, when the previous room's records, packed items and geometry arrays become old
-  garbage together. Next: which phases of those pauses take the time (a V8 trace with the GC
-  sub-phases), then keep less per room (the position copy for hidden books, smaller vertex
-  types) or fewer objects alive (the sort keys' WeakMap holds an entry per book).
+  garbage together.
+  *Step 2* (a V8 trace of the GC sub-phases, and Blink's): in those pauses marking took 10-15
+  ms, 5-8 of it ephemeron marking (a WeakMap's entries, done in the pause), with the heap at 60-68
+  MB after collection. The sort keys' WeakMap held an entry per book (80,000): the keys now live on
+  the book under a non-enumerable symbol (skipped by JSON, structuredClone and spreading), and the
+  overlay's search index (an entry and two strings per book, made with every catalogue, in VR
+  too) is made at the first search. Heap after collection 47-54 MB; pauses of 12 ms or more in
+  the traced scenarios 9 → 3. Runs (`perf/quest-2026-10-11_*`, baseline → step 1 → step 2):
+  dropped frames 250 → 206 → 179 (1.4 → 1.2 → 1.0 %), GC time 867 → 827 → 665 ms, dropped frames
+  in a GC pause 161 → 113 → 93; room-walk 36 → 28 → 19, filters 74 → 57 → 48, the hall 41 → 28 →
+  28, reading 45 → 48 → 40; the longest pause per scenario now mostly under 15 ms (was 20-49).
+  What is left: young-generation collections landing on busy frames while a room is rebuilt
+  (filters 34 of 48 drops, entering the hall 23 of 28, mostly behind the fade), and ~1-2 MB/s
+  allocated per frame inside three's uniform uploads (per draw call and eye: fewer draw calls,
+  or multiview, would cut it). Possible next: the room's furniture made once (chandelier, globe,
+  reading corner: ~8 MB a switch), and less kept per room (the position copy for hidden books,
+  smaller vertex types).
 - **Reading: dropped frames while pages are prepared.** Reading in VR on a Quest 3 (2026-10-06,
   a local ZIM, step 2) dropped 2.6–2.7 % of frames at 72 Hz, while page turns themselves stayed
   smooth (1.3 %). The drops cluster where the reader prepares the next spreads on the main

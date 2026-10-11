@@ -56,15 +56,21 @@ export const SORT_MODES = ['title', 'author', 'popularity'];
 
 // Sort keys cost regexes and Unicode normalization, and a sort needs ~2·n·log n of them (a
 // 60,000-book library took 2 s to sort on a Quest), so each book's keys are computed once and
-// kept here, off the book objects (which get serialized). Recomputed if a title/author changes.
-const keyCache = new WeakMap();
+// kept on the book under a non-enumerable symbol: JSON, structuredClone and spreading skip it
+// (books get serialized and copied). A WeakMap held them before, an entry per book (80,000 with
+// a 60,000-book library open), and every full garbage collection on a Quest worked through those
+// entries inside its pause (ephemeron marking: 5-8 ms of 15-28 ms). Recomputed if a title or
+// author changes.
+const KEYS = Symbol('vrlbry.sortKeys');
 
 /** A book's cached sort keys: { t: titleKey, a: authorKey (made when first wanted: authorOf), id, book }. */
 function keysOf(book) {
-  let k = keyCache.get(book);
+  let k = book[KEYS];
   if (!k || k.title !== book.title || k.author !== book.author) {
     k = { title: book.title, author: book.author, t: titleKey(book.title), a: null, id: String(book.id), book };
-    keyCache.set(book, k);
+    try {
+      Object.defineProperty(book, KEYS, { value: k, writable: true, configurable: true });
+    } catch { /* a frozen book: its keys are made each time */ }
   }
   return k;
 }

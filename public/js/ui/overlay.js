@@ -81,10 +81,11 @@ export class Overlay {
     this.mode = 'desktop';
     this._pick = null;
     this._enterVR = null;
-    this._index = [];
+    this._index = null; // the search index, made at the first search (_bookIndex)
     this._results = [];
     this._sel = -1;
     this._libraries = [];
+    this._booksByLib = {};
     this._books = []; // book results of the current query
     this._articles = []; // article results of the current query
     this._searchToken = 0;
@@ -406,8 +407,17 @@ export class Overlay {
         </div>`).join('') + (libraries.length > 1 ? `<div class="ov-lib-meta">${total.toLocaleString()} books in ${libraries.length} libraries</div>` : '')
       : `<div class="ov-lib-desc">${this._static ? 'This online version has no books yet. Open a ZIM file from this device or the web below, or run vrlbry yourself (see the README).' : 'No .zim files were found in the server folder. Add some and reload, or open one from this device or the web below.'}</div>`;
     fillLocalImages(this.$('.ov-libs'));
-    this._index = bookIndex(libraries, booksByLib);
+    // The search index is made at the first search, not with every catalogue: an entry and two
+    // strings per book (80,000 with a 60,000-book library open) that every full garbage
+    // collection had to mark, also in VR, where this search is never used.
+    this._index = null;
     this._libraries = libraries;
+    this._booksByLib = booksByLib;
+  }
+
+  /** The search index of the current catalogue (search.js bookIndex; shared with the kiosk's). */
+  _bookIndex() {
+    return (this._index ??= bookIndex(this._libraries, this._booksByLib));
   }
 
   /** Shows when the website last changed (next to the brand). */
@@ -673,7 +683,7 @@ export class Overlay {
       this._articles = found;
       this._showResults();
     }, 150);
-    this._books = matchBooks(this._index, q, 12);
+    this._books = matchBooks(this._bookIndex(), q, 12);
     this._showResults();
   }
 
@@ -701,8 +711,9 @@ export class Overlay {
     });
   }
 
+  /** Whether more than one library has books (results then name their library). */
   _multi() {
-    return new Set(this._index.map((e) => e.lib.id)).size > 1;
+    return this._libraries.filter((l) => this._booksByLib[l.id]?.length).length > 1;
   }
 
   _searchKey(e) {
