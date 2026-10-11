@@ -17,12 +17,15 @@
 // after that long. --prune deletes indexes of editions no longer current. --publish copies the
 // indexes into a site's indexes/ folder. --out and --publish get a list.json of what is there.
 // --ship copies the indexes in --out into a built site, as many as fit in --budget-mb for the
-// whole site (GitHub Pages: 1 GB per site), the smallest first (shipIndexes).
+// whole site (GitHub Pages: 1 GB per site), the smallest first (shipIndexes). An index of an older
+// version that can be upgraded (core/index-versions.js WIKIPEDIA_UPGRADABLE) is upgraded instead
+// of built; only current versions are listed and shipped, and --prune drops the older ones.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { indexNamesFor, isCurrentIndexName } from '../public/js/core/index-versions.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OPDS = 'https://opds.library.kiwix.org/catalog/v2/entries';
@@ -40,7 +43,19 @@ export async function indexNameOf(entry) {
   return indexNameFor(entry.kind, entry.uuid);
 }
 
-/** Writes `dir`/list.json: the index files there (Kiwix's library in the page reads it). */
+/**
+ * Upgrades an index file of an older version (v4) to the current one, beside it: seconds, where a
+ * build reads most of the ZIM (half an hour for the full English Wikipedia from a local copy).
+ */
+export async function upgradeIndex(from, to) {
+  await import('../server/platform-node.js');
+  const { indexText, parseIndexV4 } = await import('../public/js/core/wikipedia.js');
+  const uuid = /-([0-9a-f]{32})\.v\d+\.json$/.exec(path.basename(from))?.[1];
+  const idx = parseIndexV4(fs.readFileSync(from, 'utf8'), uuid);
+  if (!idx) throw new Error(`${path.basename(from)} is not an index that can be upgraded`);
+  fs.writeFileSync(to, indexText(idx));
+}
+
 /** Bytes of every file under a folder. */
 function dirBytes(dir) {
   if (!fs.existsSync(dir)) return 0;
@@ -62,7 +77,7 @@ function dirBytes(dir) {
 export function shipIndexes(from, site, { budgetBytes = Infinity, log = console.log } = {}) {
   const to = path.join(site, 'indexes');
   const files = (fs.existsSync(from) ? fs.readdirSync(from) : [])
-    .filter((n) => /^(wikipedia|wikisource)-[0-9a-f]{32}\.v\d+\.json$/.test(n) && !fs.existsSync(path.join(to, n)))
+    .filter((n) => isCurrentIndexName(n) && !fs.existsSync(path.join(to, n)))
     .map((n) => ({ name: n, size: fs.statSync(path.join(from, n)).size }))
     .sort((a, b) => a.size - b.size || a.name.localeCompare(b.name));
   let siteBytes = dirBytes(site);
@@ -85,8 +100,9 @@ export function shipIndexes(from, site, { budgetBytes = Infinity, log = console.
   return { shipped, left, siteBytes };
 }
 
+/** Writes `dir`/list.json: the index files there in their current versions (Kiwix's library in the page reads it). */
 export function writeIndexList(dir) {
-  const indexes = fs.readdirSync(dir).filter((n) => /^(wikipedia|wikisource)-[0-9a-f]{32}\.v\d+\.json$/.test(n)).sort();
+  const indexes = fs.readdirSync(dir).filter(isCurrentIndexName).sort();
   fs.writeFileSync(path.join(dir, 'list.json'), `${JSON.stringify({ indexes }, null, 1)}\n`);
   return indexes;
 }
@@ -160,7 +176,7 @@ export async function buildListed({ bases, out, zims = null, web = false, hours 
   const until = hours ? performance.now() + Number(hours) * 3600e3 : Infinity;
   const editions = await currentEditions(bases, { fetch: fetchImpl });
   const current = new Set();
-  const summary = { kept: [], built: [], missing: [], failed: [], unlisted: [] };
+  const summary = { kept: [], upgraded: [], built: [], missing: [], failed: [], unlisted: [] };
   for (const { base, entry } of editions) {
     if (!entry) {
       log(`${base}: not in Kiwix's catalogue`);
@@ -173,6 +189,18 @@ export async function buildListed({ bases, out, zims = null, web = false, hours 
     if (fs.existsSync(path.join(out, name))) {
       summary.kept.push(file);
       continue;
+    }
+    // One of an older version (the release's, or an earlier run's): upgraded in seconds.
+    const older = indexNamesFor(entry.kind, entry.uuid).slice(1).find((n) => fs.existsSync(path.join(out, n)));
+    if (older) {
+      try {
+        await upgradeIndex(path.join(out, older), path.join(out, name));
+        log(`${file}: ${older} upgraded to ${name} (${(fs.statSync(path.join(out, name)).size / 1048576).toFixed(1)} MB)`);
+        summary.upgraded.push(file);
+        continue;
+      } catch (err) {
+        log(`${file}: ${err.message}; building it instead`);
+      }
     }
     const local = zims && path.join(zims, file);
     const source = local && fs.existsSync(local) ? local : web ? entry.url : null;
@@ -212,7 +240,7 @@ export async function buildListed({ bases, out, zims = null, web = false, hours 
     for (const n of listed) fs.copyFileSync(path.join(out, n), path.join(publish, n));
     log(`published ${listed.length} indexes to ${publish} (${writeIndexList(publish).length} there with any before)`);
   }
-  log(`kept ${summary.kept.length}, built ${summary.built.length}, missing ${summary.missing.length}, failed ${summary.failed.length}, not in the catalogue ${summary.unlisted.length}`);
+  log(`kept ${summary.kept.length}, upgraded ${summary.upgraded.length}, built ${summary.built.length}, missing ${summary.missing.length}, failed ${summary.failed.length}, not in the catalogue ${summary.unlisted.length}`);
   return summary;
 }
 

@@ -13,7 +13,11 @@ import { createApp } from '../server/http.js';
 import { fileStore } from '../server/cache-store.js';
 import { IndexQueue } from '../public/js/core/util/index-queue.js';
 import { ZimArchive } from '../public/js/core/zim/reader.js';
-import { isWikipedia, buildIndex, volumeTitle, removeCheckpoint, searchIndex } from '../public/js/core/wikipedia.js';
+import {
+  isWikipedia, buildIndex, volumeTitle, removeCheckpoint, searchIndex, SIZE_STEPS, sizeCode, storedSize, encodeOrder, decodeOrder,
+  indexText, parseIndex, loadIndex, indexName,
+} from '../public/js/core/wikipedia.js';
+import { memoryStore } from '../public/js/local/prebuilt.js';
 import { titleKey } from '../public/js/util/books.js';
 import { article, redirectPage, WIKI_PNG, writeWikipediaZim } from './helpers/zim-fixtures.js';
 import { writeZim } from './helpers/zimwriter.js';
@@ -136,7 +140,59 @@ describe('wikipedia', () => {
       assert.deepEqual(titles, ORDER);
       assert.deepEqual(idx.volumes, [['2001: A Space Odyssey', 'apple'], ['Banana', 'Éclair'], ['Zebra', 'Zebra']]);
       assert.equal(idx.sizes.length, 7);
-      assert.ok([...idx.sizes].every((n) => n >= 1500), 'each article’s HTML size, for page estimates');
+      assert.ok([...idx.sizes].every((n) => n >= 1400), 'each article’s HTML size (within 4 %), for page estimates');
+    } finally {
+      await z.close();
+    }
+  });
+
+  it('stores sizes in one byte each, within 4 %, and keeps them so in a built index', () => {
+    for (let c = 1; c < 256; c++) assert.ok(SIZE_STEPS[c] > SIZE_STEPS[c - 1], 'steps grow');
+    for (let c = 0; c < 256; c++) assert.equal(sizeCode(SIZE_STEPS[c]), c, 'a step is its own code');
+    assert.ok(SIZE_STEPS[255] > 300e6, 'up to ~310 MB');
+    for (const n of [0, 1, 55, 56, 99, 1500, 4096, 123456, 9876543, 250e6]) {
+      assert.ok(Math.abs(storedSize(n) - n) <= Math.max(0.5, n * 0.04), `${n} → ${storedSize(n)}`);
+      assert.equal(storedSize(storedSize(n)), storedSize(n), 'stored twice: the same');
+    }
+    assert.equal(sizeCode(4e9), 255, 'beyond the last step: the last');
+  });
+
+  it('stores the order as variable-length deltas, read back exactly', () => {
+    const order = Uint32Array.from([5, 6, 7, 9, 3, 1000, 999, 0, 0xffffffff, 12, 2 ** 31, 1]);
+    const bytes = encodeOrder(order);
+    assert.deepEqual([...decodeOrder(bytes, order.length)], [...order]);
+    assert.deepEqual([...encodeOrder(Uint32Array.from([1, 2, 3, 4]))], [2, 2, 2, 2], 'small steps: a byte each');
+    assert.equal(decodeOrder(bytes, order.length + 1), null, 'too few');
+    assert.equal(decodeOrder(bytes, order.length - 1), null, 'too many');
+    assert.equal(decodeOrder(Uint8Array.from([255, 255, 255, 255, 255, 255, 1]), 1), null, 'no runaway value');
+    assert.equal(decodeOrder(Uint8Array.from([3]), 1), null, 'never below 0');
+    assert.deepEqual([...decodeOrder(new Uint8Array(0), 0)], []);
+  });
+
+  it('keeps a compact index (v5) that reads back as built, and upgrades a v4 one where found', async () => {
+    const file = path.join(tmp, 'store.zim');
+    writeWikipediaZim(file);
+    const z = await ZimArchive.open(file);
+    try {
+      const built = await buildIndex(z, { volumeSize: 3 });
+      const uuid = z.header.uuid;
+      const plain = (idx) => ({ ...idx, order: [...idx.order], sizes: [...idx.sizes] });
+      const text = indexText(built);
+      assert.equal(JSON.parse(text).version, 5);
+      assert.deepEqual(plain(parseIndex(text, uuid)), plain(built), 'read back as built');
+      assert.equal(parseIndex(text, 'f'.repeat(32)), null, 'another archive\'s');
+      assert.equal(parseIndex(JSON.stringify({ ...JSON.parse(text), count: 8 }), uuid), null, 'a count it does not hold');
+      assert.equal(parseIndex(JSON.stringify({ ...JSON.parse(text), version: 4 }), uuid), null, 'another version');
+      assert.equal(parseIndex('{"oops', uuid), null);
+      // A v4 index in the store (as kept before, or fetched from a site): upgraded and kept as v5.
+      const store = memoryStore();
+      const b64 = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).toString('base64');
+      await store.writeText(`wikipedia-${uuid}.v4.json`, JSON.stringify({ ...built, version: 4, order: b64(built.order), sizes: b64(built.sizes) }));
+      const name = indexName(z);
+      assert.match(name, /\.v5\.json$/);
+      assert.deepEqual(plain(await loadIndex(store, name, z)), plain(built));
+      assert.equal(parseIndex(await store.readText(name), uuid).count, built.count, 'kept as v5');
+      assert.equal(await loadIndex(memoryStore(), name, z), null, 'none at all: null');
     } finally {
       await z.close();
     }

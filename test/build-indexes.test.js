@@ -56,19 +56,20 @@ describe('prebuilt indexes (tools/build-indexes.mjs)', () => {
     assert.equal(found[0].entry.url, 'https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_test_maxi_2026-01.zim');
     assert.equal(found[0].entry.uuid, 'a'.repeat(32));
     assert.equal(found[1].entry, null, 'not in the catalogue');
-    assert.equal(await indexNameOf(found[0].entry), `wikipedia-${'a'.repeat(32)}.v4.json`);
+    assert.equal(await indexNameOf(found[0].entry), `wikipedia-${'a'.repeat(32)}.v5.json`);
   });
 
   it('ships the indexes into a built site, the smallest first, while the site stays within its budget', () => {
     const from = fs.mkdtempSync(path.join(os.tmpdir(), 'vrlbry-ship-from-'));
     const site = fs.mkdtempSync(path.join(os.tmpdir(), 'vrlbry-ship-site-'));
     try {
-      const name = (kind, n) => `${kind}-${String(n).repeat(32)}.v1.json`;
+      const name = (kind, n) => `${kind}-${String(n).repeat(32)}.v${kind === 'wikipedia' ? 5 : 1}.json`;
       fs.writeFileSync(path.join(from, name('wikipedia', 1)), 'x'.repeat(300));
       fs.writeFileSync(path.join(from, name('wikipedia', 2)), 'x'.repeat(100));
       fs.writeFileSync(path.join(from, name('wikisource', 3)), 'x'.repeat(200));
       fs.writeFileSync(path.join(from, 'list.json'), '{}');
       fs.writeFileSync(path.join(from, 'notes.txt'), 'not an index');
+      fs.writeFileSync(path.join(from, `wikipedia-${'5'.repeat(32)}.v4.json`), 'x'); // an older version: upgraded, never shipped
       // The site: 500 bytes of its own, one of them its own index (the demo set's).
       fs.mkdirSync(path.join(site, 'indexes'));
       fs.writeFileSync(path.join(site, 'indexes', name('wikipedia', 4)), 'y'.repeat(50));
@@ -105,7 +106,7 @@ describe('prebuilt indexes (tools/build-indexes.mjs)', () => {
     const first = await run({ prune: true, publish: site });
     assert.deepEqual(first.built, ['wikipedia_en_test_maxi_2026-02.zim']);
     assert.deepEqual(first.unlisted, ['wikipedia_en_other_maxi']);
-    const name = `wikipedia-${uuid}.v4.json`;
+    const name = `wikipedia-${uuid}.v5.json`;
     assert.equal(JSON.parse(fs.readFileSync(path.join(out, name), 'utf8')).count, 7, 'the fixture\'s 7 articles');
     assert.deepEqual(fs.readdirSync(out).sort(), ['.work', 'list.json', name]);
     assert.deepEqual(fs.readdirSync(path.join(out, '.work')).filter((n) => /\.part/.test(n)), [], 'no checkpoint left once built');
@@ -132,7 +133,34 @@ describe('prebuilt indexes (tools/build-indexes.mjs)', () => {
     const r = await buildListed({ bases: ['wikipedia_en_webtest_maxi'], out, web: true, fetch: catalogue(entries), log: () => {} });
     assert.deepEqual(r.built, ['wikipedia_en_webtest_maxi_2026-03.zim']);
     assert.ok(web.requests.length > before, 'read over HTTP');
-    assert.equal(JSON.parse(fs.readFileSync(path.join(out, `wikipedia-${uuid}.v4.json`), 'utf8')).count, 7);
-    assert.deepEqual(writeIndexList(out), [`wikipedia-${uuid}.v4.json`]);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(out, `wikipedia-${uuid}.v5.json`), 'utf8')).count, 7);
+    assert.deepEqual(writeIndexList(out), [`wikipedia-${uuid}.v5.json`]);
+  });
+
+  it('upgrades an index of an older version (v4) instead of building it, and prunes the old one', async () => {
+    await import('../server/platform-node.js');
+    const { buildIndex, parseIndex, storedSize } = await import('../public/js/core/wikipedia.js');
+    const { ZimArchive } = await import('../public/js/core/zim/reader.js');
+    const file = writeWikipediaZim(path.join(tmp, 'wikipedia_en_up_maxi_2026-04.zim')).filePath;
+    const uuid = await uuidOf(file);
+    const z = await ZimArchive.open(file);
+    const built = await buildIndex(z, { volumeSize: 3 });
+    await z.close();
+    // The same index as v4 wrote it: base64 32-bit numbers, the sizes exact.
+    const exact = built.sizes.map((n) => n + 7); // not on a step: the upgrade rounds them
+    const b64 = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).toString('base64');
+    const out = path.join(tmp, 'out-up');
+    fs.mkdirSync(out, { recursive: true });
+    fs.writeFileSync(path.join(out, `wikipedia-${uuid}.v4.json`), JSON.stringify({ ...built, version: 4, order: b64(built.order), sizes: b64(exact) }));
+    const entries = [{ uuid, name: 'wikipedia_en_up', flavour: 'maxi', href: 'https://download.kiwix.org/zim/wikipedia/wikipedia_en_up_maxi_2026-04.zim.meta4', size: fs.statSync(file).size }];
+    const logs = [];
+    const r = await buildListed({ bases: ['wikipedia_en_up_maxi'], out, prune: true, fetch: catalogue(entries), log: (m) => logs.push(m) });
+    assert.deepEqual([r.upgraded, r.built, r.missing], [['wikipedia_en_up_maxi_2026-04.zim'], [], []], 'upgraded, with no copy to build from');
+    assert.match(logs.join('\n'), /v4\.json upgraded to wikipedia-[0-9a-f]{32}\.v5\.json/);
+    const idx = parseIndex(fs.readFileSync(path.join(out, `wikipedia-${uuid}.v5.json`), 'utf8'), uuid);
+    assert.deepEqual([...idx.order], [...built.order]);
+    assert.deepEqual([...idx.sizes], [...exact].map(storedSize));
+    assert.deepEqual(idx.volumes, built.volumes);
+    assert.deepEqual(fs.readdirSync(out).sort(), ['list.json', `wikipedia-${uuid}.v5.json`], 'the v4 one pruned');
   });
 });

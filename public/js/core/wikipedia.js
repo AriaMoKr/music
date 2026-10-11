@@ -2,7 +2,9 @@
 // app's title order, cut into volumes of VOLUME_SIZE consecutive articles. The index needs titles
 // only (no article is read), so building it is a scan of the directory plus one sort; it is built
 // in the background on first open and kept in a store (the server's .cache/, server/cache-store.js)
-// like the Wikisource index.
+// like the Wikisource index. Stored compact (v5, indexText): the order as variable-length deltas
+// and each size as one byte, about a quarter of v4's size (the full English Wikipedia's index:
+// 74 MB to 20 MB, 11.5 MB as GitHub Pages sends it gzipped); a v4 one is upgraded where found.
 
 import { titleKey } from '../util/books.js';
 import { platform } from './platform.js';
@@ -113,7 +115,8 @@ export async function buildIndex(archive, {
   const articleSizes = new Uint32Array(articles);
   for (let j = 0; j < articles; j++) {
     order[j] = index[pick[perm[j]]];
-    articleSizes[j] = sizes[pick[perm[j]]];
+    // As stored (one byte a size): an index read back is the one built.
+    articleSizes[j] = storedSize(sizes[pick[perm[j]]]);
   }
   const volumes = [];
   for (let from = 0; from < articles; from += volumeSize) {
@@ -443,26 +446,135 @@ export function indexName(archive) {
   return `wikipedia-${archive.header.uuid}.v${INDEX_VERSION}.json`;
 }
 
-/** Loads a stored index (order decoded to a Uint32Array), or null when absent/stale/corrupt. */
-export async function loadIndex(store, name, archive) {
+// ------------------------------------------------------------------------------------------------
+// The stored index. v5 is JSON with `order` as zigzag variable-length deltas (encodeOrder: the
+// title order is close to the directory's, so 89 % of them take one byte) and `sizes` as one byte
+// each (sizeCode), both in base64, beside the volumes' titles: about 2.2 bytes an article before
+// base64, where v4 stored both as base64 32-bit numbers (8).
+
+/** HTML sizes as one byte: SIZE_STEPS[code], exact up to 56 bytes, then 8 % apart (up to ~310 MB). Only page estimates use them. */
+export const SIZE_STEPS = (() => {
+  const steps = new Uint32Array(256);
+  for (let c = 1; c < 256; c++) steps[c] = Math.max(steps[c - 1] + 1, Math.round(1.08 ** (c - 1)));
+  return steps;
+})();
+
+/** The code of the step nearest `bytes` (so sizeCode(SIZE_STEPS[c]) === c). */
+export function sizeCode(bytes) {
+  let lo = 0;
+  let hi = 255;
+  while (lo < hi) {
+    const m = (lo + hi + 1) >> 1;
+    if (SIZE_STEPS[m] <= bytes) lo = m;
+    else hi = m - 1;
+  }
+  if (lo < 255 && SIZE_STEPS[lo + 1] - bytes < bytes - SIZE_STEPS[lo]) lo++;
+  return lo;
+}
+
+/** A size as an index keeps it (within 4 %). */
+export const storedSize = (bytes) => SIZE_STEPS[sizeCode(bytes)];
+
+/** Entry indices as zigzag variable-length deltas (7 bits a byte, the high bit: more follows). */
+export function encodeOrder(order) {
+  const out = new Uint8Array(order.length * 5);
+  let p = 0;
+  let prev = 0;
+  for (let i = 0; i < order.length; i++) {
+    const d = order[i] - prev;
+    prev = order[i];
+    let z = d >= 0 ? 2 * d : -2 * d - 1;
+    while (z >= 128) {
+      out[p++] = (z % 128) | 128;
+      z = Math.floor(z / 128);
+    }
+    out[p++] = z;
+  }
+  return out.slice(0, p);
+}
+
+/** encodeOrder's bytes back to `count` entry indices; null unless they hold exactly that many valid ones. */
+export function decodeOrder(bytes, count) {
+  const order = new Uint32Array(count);
+  let p = 0;
+  let prev = 0;
+  for (let i = 0; i < count; i++) {
+    let z = 0;
+    let scale = 1;
+    for (;;) {
+      if (p >= bytes.length || scale > 2 ** 35) return null;
+      const b = bytes[p++];
+      z += (b & 127) * scale;
+      scale *= 128;
+      if (!(b & 128)) break;
+    }
+    prev += z % 2 ? -(z + 1) / 2 : z / 2;
+    if (prev < 0 || prev > 0xffffffff) return null;
+    order[i] = prev;
+  }
+  return p === bytes.length ? order : null;
+}
+
+/** An index's stored form (v5). */
+export function indexText(idx) {
+  return JSON.stringify({
+    ...idx, version: INDEX_VERSION, order: platform.toBase64(encodeOrder(idx.order)), sizes: platform.toBase64(Uint8Array.from(idx.sizes, sizeCode)),
+  });
+}
+
+/** An index from its stored form (v5), or null when it is another archive's, another version or does not hold together. */
+export function parseIndex(text, uuid) {
   try {
-    const raw = JSON.parse((await store.readText(name)) ?? 'null');
-    if (raw?.version !== INDEX_VERSION || raw.uuid !== archive.header.uuid || !Array.isArray(raw.volumes)) return null;
-    // Copied out of the decoded bytes: their offsets may be unaligned for a Uint32Array.
-    const u32 = (b64) => new Uint32Array(new Uint8Array(platform.fromBase64(b64)).buffer);
-    const order = u32(raw.order);
-    const sizes = u32(raw.sizes);
-    if (order.length !== raw.count || sizes.length !== raw.count) return null;
+    const raw = JSON.parse(text ?? 'null');
+    if (raw?.version !== INDEX_VERSION || raw.uuid !== uuid || !Array.isArray(raw.volumes) || !Number.isInteger(raw.count)) return null;
+    const order = decodeOrder(new Uint8Array(platform.fromBase64(raw.order)), raw.count);
+    const codes = new Uint8Array(platform.fromBase64(raw.sizes));
+    if (!order || codes.length !== raw.count) return null;
+    const sizes = new Uint32Array(raw.count);
+    for (let i = 0; i < raw.count; i++) sizes[i] = SIZE_STEPS[codes[i]];
     return { ...raw, order, sizes };
   } catch {
     return null;
   }
 }
 
-/** Saves an index in a store; `order` and `sizes` are stored as base64. */
+/**
+ * A v4 index (`order` and `sizes` as base64 32-bit numbers) as v5 holds it, sizes to their steps;
+ * null when it is not one of this archive.
+ */
+export function parseIndexV4(text, uuid) {
+  try {
+    const raw = JSON.parse(text ?? 'null');
+    if (raw?.version !== 4 || raw.uuid !== uuid || !Array.isArray(raw.volumes)) return null;
+    // Copied out of the decoded bytes: their offsets may be unaligned for a Uint32Array.
+    const u32 = (b64) => new Uint32Array(new Uint8Array(platform.fromBase64(b64)).buffer);
+    const order = u32(raw.order);
+    const sizes = u32(raw.sizes).map(storedSize);
+    if (order.length !== raw.count || sizes.length !== raw.count) return null;
+    return { ...raw, version: INDEX_VERSION, order, sizes };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Loads a stored index, or null when absent, stale or corrupt. Where only a v4 index is kept (a
+ * store from before v5, or a site's: withPrebuilt fetches it), it is upgraded and kept as v5: a
+ * rebuild would take the full English Wikipedia half an hour.
+ */
+export async function loadIndex(store, name, archive) {
+  const uuid = archive.header.uuid;
+  const idx = parseIndex(await store.readText(name).catch(() => null), uuid);
+  if (idx) return idx;
+  const old = parseIndexV4(await store.readText(`wikipedia-${uuid}.v4.json`).catch(() => null), uuid);
+  if (!old) return null;
+  await saveIndex(store, name, old).catch(() => {});
+  return old;
+}
+
+/** Saves an index in a store, in its stored form (indexText). */
 export async function saveIndex(store, name, idx) {
-  const b64 = (a) => platform.toBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
-  await store.writeText(name, JSON.stringify({ ...idx, order: b64(idx.order), sizes: b64(idx.sizes) }));
+  await store.writeText(name, indexText(idx));
 }
 
 /** The title of a volume: its range ("Aachen – Abbey"), or the one title of a one-article volume. */

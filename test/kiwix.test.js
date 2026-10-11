@@ -113,6 +113,7 @@ describe('Kiwix\'s library (kiwix.js)', () => {
 
   it('lists a kind in a language, reading each feed once, with its languages', async () => {
     const top1m = parseEntries(feed('wikipedia')).find((e) => e.name === 'wikipedia_en_top1m').uuid;
+    // An index of an older version counts as there: the page upgrades it when it reads it.
     const fetch = fakeFetch({ indexes: { indexes: [`wikipedia-${top1m}.v4.json`] } });
     const kept = new Set();
     const cat = kiwixCatalog({ fetch, indexList: 'https://site.example/indexes/list.json', localIndexes: async () => kept });

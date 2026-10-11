@@ -162,9 +162,19 @@ is the maxi flavour (with images). A Wikipedia is its own room of encyclopedia v
   `.part.bin`: the sizes in cluster order, appended as they finish), so a stopped build resumes
   it after a new scan; the checkpoint fits only the same scan (count and a fingerprint) and is
   deleted once the index is saved. It is built in the background on first open and kept in the
-  store as `.cache/wikipedia-<uuid>.v<INDEX_VERSION>.json`: the entry indices in title order and their
-  HTML sizes (both base64 `Uint32Array`s), and each volume's first and last title. Wikipedia
-  100 takes under a second, Simple English 56 s.
+  store as `.cache/wikipedia-<uuid>.v<INDEX_VERSION>.json`: JSON with each volume's first and last
+  title, the entry indices in title order (`order`) and their HTML sizes (`sizes`). Since v5
+  (`indexText` / `parseIndex`) both are compact, in base64: `order` as zigzag variable-length
+  deltas (`encodeOrder`: 7 bits a byte, the high bit set when more follow; the title order is
+  close to the directory's, so 89 % take one byte) and `sizes` as one byte each, the code of the
+  nearest of 256 steps (`SIZE_STEPS`: exact to 56 bytes, then 8 % apart, to ~310 MB; within 4 %,
+  enough for page estimates; `buildIndex` keeps them so, so an index read back is the one built).
+  About 2.2 bytes an article before base64 where v4 (base64 `Uint32Array`s) took 8: the full
+  English Wikipedia's 74 MB became 20 MB (11.5 MB as GitHub Pages sends it gzipped), read in about
+  0.1 s on a PC. Where only a v4 index is kept (a store, or a site: `withPrebuilt` fetches it),
+  `loadIndex` upgrades it and keeps it as v5 (`parseIndexV4`; `WIKIPEDIA_UPGRADABLE` in
+  `core/index-versions.js`, whose `indexNamesFor` lists the names an index may be found under).
+  Wikipedia 100 takes under a second, Simple English 56 s.
 
 ### 2.6 ZIM files opened in the browser (the local library)
 
@@ -240,9 +250,12 @@ whole. It works on GitHub Pages (no server) and beside a server's own libraries.
   (64 KB blocks, compressed clusters in one read, 8 requests at once). A build works in
   `<out>/.work`, its store, so a Wikipedia stopped at `--hours` resumes its sizes pass from the
   checkpoint next time; `--hours` is a hard stop (no build starts after it, and one running
-  stops, as "missing", not "failed"). `--prune` deletes the indexes of editions no longer
-  current (not with `--only`); `--publish <dir>` copies them into a site's `indexes/`; both
-  folders get `list.json` (`writeIndexList`, which `build-pages.mjs --indexes` uses too).
+  stops, as "missing", not "failed"). An index of an older version that can be upgraded (v4) is
+  upgraded in seconds instead of built (`upgradeIndex`), so the workflow's run turns the release's
+  v4 files into v5 by itself. `--prune` deletes the indexes of editions no longer current, and
+  older versions (not with `--only`); `--publish <dir>` copies them into a site's `indexes/`; both
+  folders get `list.json` (`writeIndexList`, which `build-pages.mjs --indexes` uses too), and
+  `--ship`, of the current versions only (`isCurrentIndexName`).
   `--ship <site> --budget-mb <n>` copies them into a built site while the whole site stays within
   the budget, the smallest first (`shipIndexes`; the main site: 950 MB, as Pages publishes at most
   1 GB). Each site's workflow (main's `pages.yml`, the cloud site's `pages-cloud.yml`, each with

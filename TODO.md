@@ -117,6 +117,19 @@
   - *Other books' links:* Gutenberg links to other Gutenberg books, generic ZIMs' links between
     their articles, and EPUB links out of the book are dropped (in-book ones work).
   - *Long-press for where a link goes:* in VR a tooltip with the target's title before following.
+- **Prebuilt indexes, which next** (discussed 2026-10-11). Five of the 49 in `tools/indexes.txt`
+  are built (Wikipedia 100, Simple English, the top 1M, Wikisource, the full English maxi), so
+  Kiwix's library opens 22 of the 65 English Wikipedias from the web. Not all at once: every new
+  Kiwix edition needs its own (monthly or so), and a build reads most of the file from the mirror
+  (~60 GB for the list without the full English ones, ~65 GB more for those two). In order:
+  1. ~~The compact format~~ (v5, done: a quarter of the size, SPEC §2.5).
+  2. One flavour per selection, the maxi (reading from the web, the pictured one is the one to
+     read), and the 18 topics' maxis: small indexes, mostly mirror bandwidth. Kiwix's library
+     could then offer the indexed flavour of a big selection and leave the others out.
+  3. The nopic and mini flavours later, if at all: they help those who downloaded such a copy
+     and open it from their device (the site's index saves them a build in the browser).
+  4. New editions rebuilt by the workflow when Kiwix's catalogue lists them, so the shipped
+     indexes do not go stale one by one.
 - **URL parameters for testing, and for settings** (asked 2026-10-11). Today there are a few,
   scattered (`?xr=emulate`, `?perf`, `?hz=`, `?roomcap=`, `?zimproxy=`, `?atlas=gpu`, `?aa=0`,
   `?dpr=`), read where each is used. Wanted:
@@ -520,9 +533,18 @@
            .indexes/*.json --clobber`, then push or run the workflow; or tick "prebuilt indexes"
            to build the rest from the mirror (about 60 GB of its bandwidth once without the three
            full English Wikipedias; over the web from here Cricket, 379 MB, read 0.20 GB in
-           232 s). Later: a more compact index (the full
-           English one is about 75 MB, 38 MB compressed: deltas of the order and a byte per
-           size would shrink it several times), and other languages.
+           232 s). *Compact indexes (v5, done 2026-10-11):* the order as variable-length
+           deltas and each size as one byte within 4 % (SPEC §2.5): the full English
+           Wikipedia's index 73.9 → 20.5 MB (11.5 MB as Pages sends it gzipped), the top 1M
+           10.2 → 2.9 MB, Simple English 2.9 → 0.8 MB, each order identical to v4's; read in
+           0.1 s on a PC (Chrome's own base64 decoder where it has one: 5 ms instead of 459
+           for that order). A v4 index is upgraded where found (a store, a site, `--out`), so
+           the workflow turns the release's v4 files into v5 by itself and nothing is rebuilt;
+           uploading v5 files to the release (and deleting the v4 ones) only saves it that
+           step. Not yet measured on a Quest (the headset was not reachable). Possible next:
+           deflate before base64 (20.5 → ~12.8 MB on disk, little less to download), and
+           more indexes (which, and in what order: "Prebuilt indexes, which next" below).
+           Later: other languages.
            *Shared storage, on purpose (decided 2026-10-10):* the three Pages sites (vrlbry,
            vrlbry-standalone, vrlbry-cloud; the other two private since 2026-10-10, their sites
            gone, the rule kept for when they return) are one origin, ariamokr.github.io, so they share

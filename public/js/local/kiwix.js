@@ -6,7 +6,7 @@
 // chosen without another request. When it cannot be reached the page says so, and web addresses
 // and files still open: nothing else needs it.
 
-import { indexNameFor } from '../core/index-versions.js';
+import { indexNamesFor } from '../core/index-versions.js';
 import { libraryTitle } from '../util/library-title.js';
 import { URL_INDEX_BUILD_BYTES, zimUrl } from './zim-url.js';
 
@@ -122,14 +122,15 @@ const BUILD_BYTES_PER_SECOND = 1e6 / 0.7;
  * null for a kind without one (Gutenberg).
  * @param {object} entry
  * @param {{ site?: Set<string>, here?: Set<string> }} [available] index names (core/index-versions.js
- *   indexNameFor): the site's indexes/list.json, this browser's store
+ *   indexNamesFor: the current one, or an older one that is upgraded when read): the site's
+ *   indexes/list.json, this browser's store
  * @returns {'here'|'site'|'build'|'missing'|null}
  */
 export function indexState(entry, { site = new Set(), here = new Set() } = {}) {
-  const name = indexNameFor(entry.kind, entry.uuid);
-  if (!name) return null;
-  if (here.has(name)) return 'here';
-  if (site.has(name)) return 'site';
+  const names = indexNamesFor(entry.kind, entry.uuid);
+  if (!names.length) return null;
+  if (names.some((n) => here.has(n))) return 'here';
+  if (names.some((n) => site.has(n))) return 'site';
   return (entry.size ?? 0) > URL_INDEX_BUILD_BYTES ? 'missing' : 'build';
 }
 

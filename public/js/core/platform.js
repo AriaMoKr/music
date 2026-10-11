@@ -34,11 +34,19 @@ export const platform = {
   encodeUtf8: (text) => encoder.encode(text),
   /** Bytes of a base64 (or base64url) string; other characters are skipped, as Node does. */
   fromBase64: (text) => {
+    // The browser's own decoder where there is one (an index is megabytes of base64); it refuses
+    // what is not plain base64, which the slow path below cleans up.
+    if (typeof Uint8Array.fromBase64 === 'function') {
+      try {
+        return Uint8Array.fromBase64(String(text));
+      } catch { /* base64url or stray characters */ }
+    }
     const clean = String(text).replace(/[-_]/g, (c) => (c === '-' ? '+' : '/')).replace(/[^A-Za-z0-9+/]/g, '');
     return Uint8Array.from(atob(clean + '='.repeat((4 - (clean.length % 4)) % 4)), (c) => c.charCodeAt(0));
   },
   /** Base64 of bytes. */
   toBase64: (bytes) => {
+    if (typeof bytes.toBase64 === 'function') return bytes.toBase64();
     let s = '';
     for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     return btoa(s);

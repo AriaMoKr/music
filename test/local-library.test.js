@@ -248,7 +248,7 @@ describe('local library (ZIM files read in the browser)', () => {
     assert.deepEqual(stages, ['queued', 'scan', 'sizes', 'sort', 'ready'], stages.join(' '));
     assert.ok(events.slice(0, -1).every((e, k) => k === 0 || e.info.progress >= events[k - 1].info.progress), 'progress never falls');
     assert.equal(events.at(-1).info, null);
-    assert.deepEqual([...new Set((await store.names()).map((n) => n.replace(/-[0-9a-f]{32}\./, '-<uuid>.')))], ['wikipedia-<uuid>.v4.json'], 'the index, no checkpoint left');
+    assert.deepEqual([...new Set((await store.names()).map((n) => n.replace(/-[0-9a-f]{32}\./, '-<uuid>.')))], ['wikipedia-<uuid>.v5.json'], 'the index, no checkpoint left');
     // Opened again (another page load): the index is found by the ZIM's UUID, nothing is built.
     const again = createLocalLibraries({ store });
     provide(browser);
