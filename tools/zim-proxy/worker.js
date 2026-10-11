@@ -20,6 +20,11 @@
 // reads Kiwix's mirror directly). A request without an allowed Origin is refused (403); "*"
 // allows any.
 //
+// Each request is logged as one object (Workers Logs keep its fields searchable; wrangler.toml's
+// [observability]): the file, the bytes asked, which mirror answered and which were passed over,
+// the page's origin, the visitor's continent, the status and the time. Nothing else about the
+// visitor: no address, no user agent.
+//
 // Deploy: `npx wrangler deploy` in this folder (wrangler.toml), with a Cloudflare account.
 
 /** The mirrors (Kiwix's MirrorBrain list, from a file's .meta4): where each one's /zim/ is. */
@@ -96,45 +101,58 @@ export function allowOrigin(origin, allowed) {
  * The proxy itself, for the Worker and tests.
  * @param {Request} request
  * @param {{ fetch?: typeof fetch, continent?: string, skipped?: Map<string, number>, now?: () => number,
- *   timeoutMs?: number, origins?: string }} [opts] fetch: the mirrors' (tests); continent: the
- *   visitor's; skipped: `<mirror> <path>` → until when it is passed over (kept between requests);
- *   origins: the pages allowed (allowOrigin; any by default, the Worker's from ALLOWED_ORIGINS)
+ *   timeoutMs?: number, origins?: string, log?: (entry: object) => void }} [opts] fetch: the
+ *   mirrors' (tests); continent: the visitor's; skipped: `<mirror> <path>` → until when it is
+ *   passed over (kept between requests); origins: the pages allowed (allowOrigin; any by default,
+ *   the Worker's from ALLOWED_ORIGINS); log: given one entry per request (the Worker's is
+ *   console.log; none by default)
  * @returns {Promise<Response>}
  */
 export async function handle(request, {
   fetch: fetchImpl = (...a) => globalThis.fetch(...a), continent = request.cf?.continent, skipped = SKIPPED,
-  now = Date.now, timeoutMs = MIRROR_TIMEOUT_MS, origins = '*',
+  now = Date.now, timeoutMs = MIRROR_TIMEOUT_MS, origins = '*', log = null,
 } = {}) {
+  const started = now();
   const url = new URL(request.url);
-  const origin = allowOrigin(request.headers.get('origin'), origins);
-  if (!origin) return answer(403, 'this proxy serves the pages of its own sites only');
+  // The request's log entry: what was asked, from which page and continent, and how it ended (ms:
+  // until the answer began; a part then streams through).
+  const entry = { method: request.method, zim: null, bytes: null, origin: request.headers.get('origin'), continent: continent ?? null };
+  const done = (response, fields = {}) => {
+    log?.({ ...entry, ...fields, status: response.status, ms: now() - started });
+    return response;
+  };
+  const origin = allowOrigin(entry.origin, origins);
+  if (!origin) return done(answer(403, 'this proxy serves the pages of its own sites only'), { refused: 'origin' });
   const CORS = {
     'access-control-allow-origin': origin,
     'access-control-expose-headers': EXPOSE,
     ...(origin === '*' ? {} : { vary: 'Origin' }),
   };
   if (request.method === 'OPTIONS') {
-    return new Response(null, {
+    return done(new Response(null, {
       status: 204,
       headers: { ...CORS, 'access-control-allow-methods': 'GET, HEAD, OPTIONS', 'access-control-allow-headers': 'Range', 'access-control-max-age': '86400' },
-    });
+    }));
   }
-  if (request.method !== 'GET' && request.method !== 'HEAD') return answer(405, 'only GET and HEAD', { ...CORS, allow: 'GET, HEAD, OPTIONS' });
-  if (!FILE_PATH.test(url.pathname)) return answer(404, 'only Kiwix\'s ZIM files: /zim/<folder>/<file>.zim', CORS);
+  if (request.method !== 'GET' && request.method !== 'HEAD') return done(answer(405, 'only GET and HEAD', { ...CORS, allow: 'GET, HEAD, OPTIONS' }), { refused: 'method' });
+  if (!FILE_PATH.test(url.pathname)) return done(answer(404, 'only Kiwix\'s ZIM files: /zim/<folder>/<file>.zim', CORS), { refused: 'path' });
+  const path = url.pathname.slice('/zim/'.length);
+  entry.zim = path;
   const range = request.headers.get('range');
   const m = RANGE.exec(range ?? '');
+  if (m) entry.bytes = Number(m[2]) - Number(m[1]) + 1;
   if (request.method === 'GET') {
-    if (!m) return answer(416, 'a Range header is needed: bytes=<start>-<end> (parts of the file, not all of it)', CORS);
+    if (!m) return done(answer(416, 'a Range header is needed: bytes=<start>-<end> (parts of the file, not all of it)', CORS), { refused: 'range' });
     if (Number(m[2]) < Number(m[1]) || Number(m[2]) - Number(m[1]) + 1 > MAX_RANGE_BYTES) {
-      return answer(416, `a range of 1 to ${MAX_RANGE_BYTES} bytes`, CORS);
+      return done(answer(416, `a range of 1 to ${MAX_RANGE_BYTES} bytes`, CORS), { refused: 'range' });
     }
   }
-  const path = url.pathname.slice('/zim/'.length);
   const t = now();
   const order = mirrorsFor(continent);
   // Those passed over for this file last, not left out: when all fail, each gets its try.
   const tries = [...order.filter((k) => !(skipped.get(`${k} ${path}`) > t)), ...order.filter((k) => skipped.get(`${k} ${path}`) > t)];
   let last = null;
+  const passed = []; // the mirrors passed over, and why ("nluug: HTTP 404")
   for (const key of tries) {
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), timeoutMs);
@@ -148,6 +166,7 @@ export async function handle(request, {
       });
     } catch (err) {
       last = `${key}: ${err.message}`;
+      passed.push(last);
       skip(skipped, `${key} ${path}`, t + SKIP_MS);
       continue;
     } finally {
@@ -159,6 +178,7 @@ export async function handle(request, {
     if (!good) {
       await res.body?.cancel().catch(() => {});
       last = `${key}: HTTP ${res.status}`;
+      passed.push(last);
       skip(skipped, `${key} ${path}`, t + SKIP_MS);
       continue;
     }
@@ -168,13 +188,14 @@ export async function handle(request, {
       const v = res.headers.get(h);
       if (v != null) headers[h] = v;
     }
-    return new Response(request.method === 'HEAD' ? null : res.body, { status: res.status, headers });
+    return done(new Response(request.method === 'HEAD' ? null : res.body, { status: res.status, headers }),
+      { mirror: key, ...(passed.length ? { passed } : {}) });
   }
-  return answer(502, `no mirror answered (${last})`, CORS);
+  return done(answer(502, `no mirror answered (${last})`, CORS), { mirror: null, passed });
 }
 
 export default {
   fetch(request, env) {
-    return handle(request, { origins: env?.ALLOWED_ORIGINS ?? '*' });
+    return handle(request, { origins: env?.ALLOWED_ORIGINS ?? '*', log: (entry) => console.log(entry) });
   },
 };

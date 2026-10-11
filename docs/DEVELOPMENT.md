@@ -103,7 +103,11 @@ not visitors; only ZIMs read from the web go through the proxy, never the demo s
 The Worker also keeps Workers Logs (`[observability]` in `wrangler.toml`): a record of each recent
 request, searchable in the dashboard (Workers & Pages → the Worker → Logs, or Observability),
 within the free plan's daily quota and short retention. `npx wrangler tail vrlbry-zim-proxy`
-shows the same live.
+shows the same live. Each request logs one entry whose fields can be grouped and filtered on:
+`zim` (the file), `bytes`, `mirror` (which answered; null when none did), `passed` (the mirrors
+passed over and why), `origin` (the page's site), `continent`, `status`, `ms` (until the answer
+began), and `refused` (origin, method, path or range) for what it turned away. Nothing else about
+the visitor is logged: no address, no user agent.
 
 Why only Kiwix's own mirror can be read from a page, and what the others would need, is in
 [MIRRORS.md](MIRRORS.md).

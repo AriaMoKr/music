@@ -96,8 +96,14 @@ describe('the edge proxy (tools/zim-proxy/worker.js)', () => {
     const toml = fs.readFileSync(new URL('../tools/zim-proxy/wrangler.toml', import.meta.url), 'utf8');
     const listed = /^ALLOWED_ORIGINS = "([^"]+)"$/m.exec(toml)?.[1];
     assert.ok(listed && allowOrigin('https://ariamokr.github.io', listed) && !allowOrigin('https://other.example', listed), listed);
-    const fromEnv = await worker.fetch(get(ZIM, { range: 'bytes=0-3', origin: 'https://other.example' }), { ALLOWED_ORIGINS: listed });
-    assert.equal(fromEnv.status, 403);
+    const quiet = console.log; // the Worker logs each request (the log test checks what)
+    console.log = () => {};
+    try {
+      const fromEnv = await worker.fetch(get(ZIM, { range: 'bytes=0-3', origin: 'https://other.example' }), { ALLOWED_ORIGINS: listed });
+      assert.equal(fromEnv.status, 403);
+    } finally {
+      console.log = quiet;
+    }
   });
 
   it('asks the mirrors nearest the visitor first', () => {
@@ -151,6 +157,51 @@ describe('the edge proxy (tools/zim-proxy/worker.js)', () => {
     assert.equal(asked.length, mirrorsFor('EU').length, 'every mirror was tried');
     assert.match(await res.text(), /no mirror answered/);
     assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  });
+
+  it('logs one entry per request: the file, the bytes, the mirror and those passed over, and nothing about the visitor but the page and continent', async () => {
+    const SITES = 'https://ariamokr.github.io';
+    const page = { origin: 'https://ariamokr.github.io' };
+    const entries = [];
+    const opts = (fetch, extra = {}) => ({ fetch, continent: 'NA', skipped: new Map(), origins: SITES, now: () => 1000, log: (e) => entries.push(e), ...extra });
+    const { fetch } = mirrors({ driftlessWi: 404, driftlessNy: 206 });
+    await handle(get(ZIM, { range: 'bytes=100-163', ...page }), opts(fetch));
+    assert.deepEqual(entries.pop(), {
+      method: 'GET', zim: 'wikipedia/wikipedia_en_x_2026-01.zim', bytes: 64, origin: 'https://ariamokr.github.io', continent: 'NA',
+      mirror: 'driftlessNy', passed: ['driftlessWi: HTTP 404'], status: 206, ms: 0,
+    });
+    // The first mirror answering: no list of those passed over.
+    await handle(get(ZIM, { range: 'bytes=0-3', ...page }), opts(mirrors({ driftlessWi: 206 }).fetch));
+    assert.equal(entries.at(-1).mirror, 'driftlessWi');
+    assert.equal('passed' in entries.at(-1), false);
+    // Refused, a preflight, and none answering are logged too.
+    await handle(get(ZIM, { range: 'bytes=0-3', origin: 'https://other.example' }), opts(fetch));
+    assert.deepEqual(entries.pop(), { method: 'GET', zim: null, bytes: null, origin: 'https://other.example', continent: 'NA', refused: 'origin', status: 403, ms: 0 });
+    await handle(get(ZIM, page), opts(fetch));
+    assert.deepEqual([entries.at(-1).refused, entries.at(-1).status, entries.at(-1).zim], ['range', 416, 'wikipedia/wikipedia_en_x_2026-01.zim']);
+    await handle(get(ZIM, page, 'OPTIONS'), opts(fetch));
+    assert.equal(entries.at(-1).status, 204);
+    await handle(get(ZIM, { range: 'bytes=0-3', ...page }), opts(mirrors({}).fetch));
+    assert.equal(entries.at(-1).status, 502);
+    assert.equal(entries.at(-1).mirror, null);
+    assert.equal(entries.at(-1).passed.length, mirrorsFor('NA').length);
+    // Only these fields, ever: no address, user agent or other headers of the visitor.
+    const allowed = new Set(['method', 'zim', 'bytes', 'origin', 'continent', 'mirror', 'passed', 'refused', 'status', 'ms']);
+    for (const e of entries) assert.deepEqual(Object.keys(e).filter((k) => !allowed.has(k)), [], JSON.stringify(e));
+    // No log unless one is given (tests, serve.mjs); the deployed Worker logs to the console.
+    const before = entries.length;
+    await handle(get(ZIM, { range: 'bytes=0-3', ...page }), { fetch, continent: 'NA', skipped: new Map(), origins: SITES });
+    assert.equal(entries.length, before);
+    const logged = [];
+    const real = console.log;
+    console.log = (e) => logged.push(e);
+    try {
+      await worker.fetch(get(ZIM, { range: 'bytes=0-3', origin: 'https://other.example' }), { ALLOWED_ORIGINS: SITES });
+    } finally {
+      console.log = real;
+    }
+    assert.equal(logged.length, 1);
+    assert.equal(logged[0].status, 403);
   });
 
   it('answers a HEAD with the file\'s headers', async () => {
