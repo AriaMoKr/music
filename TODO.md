@@ -121,9 +121,9 @@
   works (menus, toasts, the libraries load), but the 3D view stays the page's background. The
   debug report (with the GPU fields added for it) shows WebGL 2 on a PowerVR C-Series GPU (ANGLE
   on Vulkan), 20 draw calls and the room's colours read back from a drawn frame: drawn, never
-  shown. A plain three.js demo is blank in Vivaldi too and works in Chrome on the same phone, as
-  vrlbry does: Vivaldi's compositing of WebGL on that GPU, not the app. To report to Vivaldi with
-  the three.js demo. `?aa=0` (no antialiasing) and `?dpr=1` are left to try there; applying one
+  shown. A plain three.js demo (https://threejs.org/examples/#webgl_geometry_cube) is blank in
+  Vivaldi too and works in Chrome on the same phone, as vrlbry does: Vivaldi's compositing of
+  WebGL on that GPU, not the app. To report to Vivaldi with that demo. `?aa=0` (no antialiasing) and `?dpr=1` are left to try there; applying one
   automatically would need telling Vivaldi from Chrome, which on Android it does not say.
 - **Prebuilt indexes, which next** (discussed 2026-10-11). Five of the 49 in `tools/indexes.txt`
   are built (Wikipedia 100, Simple English, the top 1M, Wikisource, the full English maxi), so
