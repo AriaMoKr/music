@@ -219,23 +219,37 @@ export function kiwixCatalog({
     /**
      * What a list shows: a kind's entries in one language, each with its `index` state
      * (indexState) and `needsIndex` (those last), and the languages it has ({ code, name, count },
-     * most entries first).
+     * most entries first). A flavour that needs an index is left out when another flavour of the
+     * same selection opens here (`listed`).
      * @returns {Promise<{ entries: object[], languages: Array<{ code: string, name: string, count: number }> }>}
      */
     async view(kind, lang) {
       const [all, names, site, here] = await Promise.all([this.entries(kind), this.languageNames(), this.prebuilt(), this.local()]);
+      const shown = listed(all.map((e) => {
+        const index = indexState(e, { site, here });
+        return { ...e, index, needsIndex: index === 'missing' };
+      }));
       const counts = new Map();
-      for (const e of all) for (const l of e.languages) counts.set(l, (counts.get(l) ?? 0) + 1);
+      for (const e of shown) for (const l of e.languages) counts.set(l, (counts.get(l) ?? 0) + 1);
       const languages = [...counts].map(([code, count]) => ({ code, name: names.get(code) ?? code, count }))
         .sort((a, b) => b.count - a.count || collator.compare(a.name, b.name));
       // Those that open here first (each part in title order): most big Wikipedias need an index.
-      const entries = all.filter((e) => e.languages.includes(lang)).map((e) => {
-        const index = indexState(e, { site, here });
-        return { ...e, index, needsIndex: index === 'missing' };
-      }).sort((a, b) => a.needsIndex - b.needsIndex);
+      const entries = shown.filter((e) => e.languages.includes(lang)).sort((a, b) => a.needsIndex - b.needsIndex);
       return { entries, languages };
     },
   };
+}
+
+/**
+ * The entries a list offers: a flavour that needs an index nowhere to be had is left out when
+ * another flavour of its selection (its `name`) opens here, since it would only say "Needs an
+ * index" (the prebuilt indexes are made for one flavour of each big selection: tools/indexes.txt).
+ * A selection none of whose flavours opens keeps them all, listed last.
+ * @param {Array<{ name: string, needsIndex: boolean }>} entries
+ */
+export function listed(entries) {
+  const opens = new Set(entries.filter((e) => !e.needsIndex).map((e) => e.name));
+  return entries.filter((e) => !e.needsIndex || !opens.has(e.name));
 }
 
 /** "37 MB", "4.5 GB": an entry's size. */

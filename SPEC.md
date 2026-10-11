@@ -243,7 +243,9 @@ whole. It works on GitHub Pages (no server) and beside a server's own libraries.
 - **Prebuilt indexes** (milestone 3 step 6, optional; `tools/build-indexes.mjs`): the big
   editions' indexes, for those opened from the web. `tools/indexes.txt` lists the ZIMs by file
   name without the date (`wikipedia_en_top1m_maxi`): the English Wikipedias and Wikisources over
-  256 MB, 49 in October 2026. The tool finds each one's current edition in Kiwix's catalogue
+  256 MB, 49 in October 2026, in the order they are built: every selection's maxi first, then the
+  other flavours (the full English Wikipedia's nopic and mini, 67 GB to read, commented out). The
+  tool finds each one's current edition in Kiwix's catalogue
   (`currentEditions`, through `parseEntries`), keeps an index already in `--out` (named by the
   edition's UUID, so a new edition gets a new one), and builds a missing one as the server
   does, from a copy in `--zims` (the same file name) or, with `--web`, read from Kiwix's mirror
@@ -311,14 +313,17 @@ whole. It works on GitHub Pages (no server) and beside a server's own libraries.
   the title says it (`about`).
   Listed by title, a topic's editions together (the fullest first), and those that open here
   first. Each Wikipedia or Wikisource has an index state (`indexState`), by its index name
-  (`core/index-versions.js` `indexNameFor`: kind, UUID and the current version, as the core
-  names it, so an old version counts as none) and labelled (`indexLabel`): "Indexed here" (in
+  (`core/index-versions.js` `indexNamesFor`: kind, UUID and the current version, as the core
+  names it, or an older version it upgrades) and labelled (`indexLabel`): "Indexed here" (in
   this browser's store, `local/idb-store.js` `names()`, read again each time the list is shown),
   "Index ready" (in the site's `indexes/list.json`), "Indexed on first open (under a minute /
   about N min)" (up to 256 MB, `URL_INDEX_BUILD_BYTES`: built in the browser; the time from its
   size, at about 70 % of the file read at 1 MB/s) or, over 256 MB and nowhere, "Needs an index":
   it cannot be opened from the list (43 of the 65 English Wikipedias once the site's indexes
-  were published). The dialog shows the label as a badge after the size and date (its meaning
+  were published). Such a flavour is left out when another flavour of the same selection opens
+  here (`listed`): the prebuilt indexes are made for one flavour of each big selection (the maxi),
+  so the others would only say "Needs an index"; a selection none of whose flavours opens keeps
+  them all, last. The language counts are of what is listed. The dialog shows the label as a badge after the size and date (its meaning
   on hover; for "needs an index" the reason, under it); the kiosk at the start of the row's
   second line ("needs an index" on the right). When the libraries change the list is read again
   quietly (the dialog's `refresh`, the kiosk's stale view), so an index finished shows. The card's "Browse Kiwix's library…" opens

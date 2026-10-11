@@ -124,8 +124,14 @@
   (~60 GB for the list without the full English ones, ~65 GB more for those two). In order:
   1. ~~The compact format~~ (v5, done: a quarter of the size, SPEC §2.5).
   2. One flavour per selection, the maxi (reading from the web, the pictured one is the one to
-     read), and the 18 topics' maxis: small indexes, mostly mirror bandwidth. Kiwix's library
-     could then offer the indexed flavour of a big selection and leave the others out.
+     read), and the 18 topics' maxis: small indexes, mostly mirror bandwidth. *Ready
+     (2026-10-11):* `tools/indexes.txt` lists the maxis first (20 missing, 33 GB of files), and
+     Kiwix's library leaves out a selection's flavours that need an index once one of its
+     flavours opens (`listed`). Cricket's built from the mirror here: a 0.1 MB index, 0.20 GB
+     read in 212 s; at that rate the 20 maxis read ~17 GB in ~5 hours: one or two runs of the
+     workflow with "prebuilt indexes" ticked (a stopped build resumes). Then 43 of the 67
+     English Wikipedias and Wikisources open from the web (23 now), every selection by at least
+     one flavour.
   3. The nopic and mini flavours later, if at all: they help those who downloaded such a copy
      and open it from their device (the site's index saves them a build in the browser).
   4. New editions rebuilt by the workflow when Kiwix's catalogue lists them, so the shipped

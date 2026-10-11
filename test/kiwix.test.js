@@ -118,12 +118,15 @@ describe('Kiwix\'s library (kiwix.js)', () => {
     const kept = new Set();
     const cat = kiwixCatalog({ fetch, indexList: 'https://site.example/indexes/list.json', localIndexes: async () => kept });
     const en = await cat.view('wikipedia', 'eng');
-    assert.equal(en.entries.length, 7);
-    assert.deepEqual(en.languages, [{ code: 'eng', name: 'English', count: 7 }, { code: 'fra', name: 'français', count: 3 }]);
+    // Chemistry's maxi (514 MB, no index) is left out: its nopic and mini are indexed in the browser.
+    assert.equal(en.entries.length, 6);
+    assert.equal(en.entries.some((e) => e.name === 'wikipedia_en_chemistry' && e.flavour === 'maxi'), false);
+    assert.deepEqual(en.entries.filter((e) => e.name === 'wikipedia_en_chemistry').map((e) => e.flavour).sort(), ['mini', 'nopic']);
+    assert.deepEqual(en.languages, [{ code: 'eng', name: 'English', count: 6 }, { code: 'fra', name: 'français', count: 3 }], 'counts of what is listed');
     assert.equal(en.entries.find((e) => e.name === 'wikipedia_en_top1m').needsIndex, false, 'prebuilt here');
-    assert.equal(en.entries.find((e) => e.name === 'wikipedia_en_all').needsIndex, true);
-    assert.deepEqual(en.entries.map((e) => e.needsIndex), [false, false, false, false, true, true, true], 'those that open here first');
-    assert.deepEqual(en.entries.map((e) => e.index), ['build', 'build', 'build', 'site', 'missing', 'missing', 'missing']);
+    assert.equal(en.entries.find((e) => e.name === 'wikipedia_en_all').needsIndex, true, 'no flavour of it opens: still listed');
+    assert.deepEqual(en.entries.map((e) => e.needsIndex), [false, false, false, false, true, true], 'those that open here first');
+    assert.deepEqual(en.entries.map((e) => e.index), ['build', 'build', 'build', 'site', 'missing', 'missing']);
     // An index kept in this browser since (asked again each time the list is shown).
     const chem = en.entries.find((e) => e.name === 'wikipedia_en_chemistry' && e.flavour === 'mini');
     kept.add(indexNameFor('wikipedia', chem.uuid));
@@ -131,7 +134,7 @@ describe('Kiwix\'s library (kiwix.js)', () => {
     assert.equal(again.entries.find((e) => e.uuid === chem.uuid).index, 'here');
     assert.equal(fetch.asked.filter((u) => /list\.json/.test(u)).length, 1, 'the site\'s list was read once');
     const fr = await cat.view('wikipedia', 'fra');
-    assert.deepEqual(fr.entries.map((e) => e.name), ['wikipedia_fr_all', 'wikipedia_fr_all', 'wikipedia_fr_all']);
+    assert.deepEqual(fr.entries.map((e) => e.name), ['wikipedia_fr_all', 'wikipedia_fr_all', 'wikipedia_fr_all'], 'none opens: all kept');
     assert.equal(fetch.asked.filter((u) => /category=wikipedia/.test(u)).length, 1, 'the feed was read once');
     assert.equal(fetch.asked.filter((u) => /languages/.test(u)).length, 1);
     assert.deepEqual((await cat.view('gutenberg', 'fra')).entries.map((e) => e.name), ['gutenberg_mul_all']);
