@@ -127,6 +127,14 @@
     the page working without it.
   - *Opening straight into a place:* a given library (by id or ZIM name), room (genre, letter,
     page), sort, and a number of books (only the first n of a library; `?roomcap=` caps a room).
+  - *What the page keeps (asked 2026-10-11), three switches:* ignore it (read nothing, write
+    nothing: every load is a first visit, and nothing of it stays), read but do not write (try
+    things on top of the saved state without changing it: `util/storage.js` `freezeStorage` from
+    the start), and clear it (what "Reset stored data" does, `reset.js`; which parts, all by
+    default?), the parameter then taken out of the address (`history.replaceState`) so a reload
+    does not clear again. To decide: whether IndexedDB (files opened, indexes, the web cache)
+    follows the same switches or has its own; and a visible note while saving is off, so a tester
+    knows why a setting does not stick.
   - *Possibly as settings/preferences:* the same names as a link that opens a library sorted by
     popularity, say, or a page of the help dialog. To decide: whether a parameter overrides the
     saved settings for this visit only (a test link must not change the visitor's own place or
