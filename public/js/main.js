@@ -8,7 +8,7 @@ import { Controls } from './xr/controls.js';
 import { Interaction, DEFAULT_SETTINGS } from './interaction.js';
 import { Overlay } from './ui/overlay.js';
 import { audio } from './audio.js';
-import { load, save } from './util/storage.js';
+import { freezeStorage, load, save } from './util/storage.js';
 import { progressText } from './util/progress.js';
 import { handleStore, pickFiles, reopen, supportsHandles } from './local/handles.js';
 import { fileNameOf, onKiwixMirror, zimUrl } from './local/zim-url.js';
@@ -17,7 +17,8 @@ import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
-import { copyText, debugReport, startErrorLog, noteError } from './debug-info.js';
+import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
+import { resetStoredData } from './reset.js';
 import { parseScene, restoreScene, saveScene, savedScene } from './scene.js';
 
 startErrorLog(); // first: the debug report lists the page's last errors
@@ -27,6 +28,17 @@ const overlay = new Overlay({ root: document.getElementById('overlay') });
 overlay.onDebugInfo(async () => {
   const text = JSON.stringify(debugReport(window.__vrlbry, { overlay }), null, 2);
   overlay.showDebugInfo(text, await copyText(text));
+});
+// "Save screenshot" beside it: the 3D view as the GPU draws it (debug-info.js screenshot).
+overlay.onScreenshot(async () => {
+  const blob = await screenshot(window.__vrlbry).catch(() => null);
+  if (!blob) {
+    overlay.showToast('There is no 3D view to capture.', 'error', 5000);
+    return;
+  }
+  const name = screenshotName();
+  saveFile(blob, name);
+  overlay.showToast(`Saved ${name}: attach it to your bug report.`, 'info', 6000);
 });
 
 // Dev: emulate a Quest 3 with IWER (must happen before anything queries navigator.xr).
@@ -222,6 +234,26 @@ async function start() {
   });
   interaction.onSaveScene = sceneActions.save;
   interaction.onRestoreScene = sceneActions.restore;
+  // "Reset stored data" (reset.js; the help dialog and the kiosk): nothing is saved from here on
+  // and the worker that writes the indexes and the cache stops, the parts chosen are cleared, and
+  // the page reloads, so nothing it holds in memory is written back.
+  async function resetStored(parts) {
+    overlay.showHelp(false);
+    const busy = overlay.showToast('Clearing what this site keeps in this browser…', 'busy', Infinity);
+    if (renderer.xr.isPresenting) interaction.notice('Clearing stored data', 'The page reloads', 10);
+    freezeStorage();
+    localLibrary.stop();
+    const { databases } = await resetStoredData(parts);
+    const left = Object.entries(databases).filter(([, s]) => s !== 'deleted').map(([name, s]) => `${name} (${s})`);
+    if (left.length) {
+      console.warn(`[vrlbry] Reset: not cleared yet: ${left.join(', ')}`);
+      busy.update('Another tab of this site still uses part of it: it is cleared once that tab is closed. Reloading…');
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    location.reload();
+  }
+  overlay.onReset(resetStored);
+  interaction.onResetStored = resetStored;
   showSaved();
   controls.addEventListener('gamepad', (e) => overlay.setGamepad(e.detail.active));
   // When the website last changed, fetched once: it tells which version this page is running.

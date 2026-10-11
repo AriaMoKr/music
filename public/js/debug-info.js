@@ -151,6 +151,40 @@ export function debugReport(app, { overlay = app?.overlay } = {}) {
   };
 }
 
+/**
+ * A screenshot of the 3D view without the page's menus: a frame drawn now, as a PNG. It is what
+ * the GPU drew, so it shows the room even where the browser never put it on the screen (a blank
+ * view: compare it with the person's own screenshot). null in VR (the headset's frames are not
+ * the canvas's) or before the app exists.
+ * @returns {Promise<Blob|null>}
+ */
+export function screenshot(app) {
+  const r = app?.renderer;
+  if (!r || r.xr.isPresenting) return Promise.resolve(null);
+  r.setRenderTarget(null);
+  r.render(app.scene, app.camera);
+  // toBlob takes the canvas as it is now, before the drawn frame is shown (and cleared).
+  return new Promise((resolve) => r.domElement.toBlob((blob) => resolve(blob ?? null), 'image/png'));
+}
+
+/** The screenshot's file name, from the local time: vrlbry-2026-10-11-0502.png. */
+export function screenshotName(date = new Date()) {
+  const two = (n) => String(n).padStart(2, '0');
+  return `vrlbry-${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}-${two(date.getHours())}${two(date.getMinutes())}.png`;
+}
+
+/** Offers a file to save, as a download. */
+export function saveFile(blob, name, { doc = globalThis.document } = {}) {
+  const a = doc.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.style.display = 'none';
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+
 /** Copies text to the clipboard. False when the browser does not allow it (copy it by hand then). */
 export async function copyText(text) {
   try {

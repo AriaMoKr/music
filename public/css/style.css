@@ -123,7 +123,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ov-scene-restore:disabled { opacity: .45; cursor: default; }
 .ov-scene-note { color: var(--muted); font-size: 13px; }
 .ov-scene-text { margin-top: 8px; }
-.ov-debug-btn, .ov-loading-debug { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); }
+.ov-debug-btn, .ov-loading-debug, .ov-shot-btn, .ov-reset-btn, .ov-reset-go, .ov-reset-cancel { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); }
+.ov-reset-go:disabled { opacity: .45; cursor: default; }
+.ov-reset-note { color: var(--muted); font-size: 13px; }
+/* "Reset stored data…": the parts to clear, one per line, then the buttons. */
+.ov-reset { display: grid; gap: 6px; margin: 8px 0 0; padding: 8px 12px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.ov-reset legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+.ov-reset label { display: flex; gap: 8px; align-items: baseline; }
+.ov-reset > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 4px; }
 .ov-debug-note { color: var(--muted); font-size: 13px; }
 .ov-debug-text { display: block; width: 100%; height: 12em; margin-top: 10px; resize: vertical; font: 12px/1.4 ui-monospace, Consolas, monospace; color: inherit; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 8px; padding: 8px; box-sizing: border-box; }
 .ov-help-close { background: none; border: 0; font-size: 26px; line-height: 1; color: var(--muted); }

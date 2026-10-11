@@ -117,12 +117,10 @@
   - *Other books' links:* Gutenberg links to other Gutenberg books, generic ZIMs' links between
     their articles, and EPUB links out of the book are dropped (in-book ones work).
   - *Long-press for where a link goes:* in VR a tooltip with the target's title before following.
-- **Reset stored data** (asked 2026-10-10). A way to start afresh: clear what the page keeps in
-  this browser (settings, reading positions, recently read, the saved scene, remembered web
-  addresses and file handles in localStorage and IndexedDB, the indexes and the block cache), from
-  the help dialog and the kiosk, with a confirmation, and a choice of what to keep (e.g. keep the
-  indexes, which take long to build). (The parked standalone and cloud sites share the origin's
-  storage; they need no special care: they may be made private.)
+- **Reset stored data** (done 2026-10-10, `reset.js`, SPEC §5.6). The help dialog's "Reset stored
+  data…" and the kiosk's "Reset…" offer four parts to clear or keep (settings and reading; files
+  and addresses opened here; the indexes, kept by default; the web cache), then clear them and
+  reload. Possible later: each part's size (`navigator.storage.estimate()` gives only the total).
 - **The kiosk opens on its Kiwix tab** (done 2026-10-10): the page starts on Kiwix's library,
   more to read being what a new visitor most likely wants. Possible later: remember a returning
   visitor's last tab.
@@ -167,12 +165,13 @@
   place, viewpoint, the open book and page, the dialogs and the last 20 errors; pasting it into
   the help dialog, or `__vrlbry.reproduce(report)`, restores that scene, see `scene.js`).
   Ideas, roughly by value:
-  - *A screenshot* of the 3D view (copied as an image, or saved as a PNG beside the text): the
-    report does not show what the person saw.
+  - ~~*A screenshot* of the 3D view~~ (done 2026-10-10: "Save screenshot", a PNG of a frame drawn
+    for it; copying it as an image could follow).
   - *A "What went wrong?" box* whose text goes into the report.
   - *Recent actions:* the last 20–30 steps (room changed, book taken, opened, page turned), by id
     rather than title: how they got there.
-  - *Smoothness:* frame times of the last ~10 s, long tasks, WebGL context loss.
+  - *Smoothness:* frame times of the last ~10 s, long tasks (a lost WebGL context is reported
+    since 2026-10-10: a toast, and `gpu.contextLost`).
   - *Failed downloads:* chunk, image or catalogue requests that failed, with their status (some
     fail without a console error, especially on the static site).
   - *Reading detail:* how much of the book is laid out (the shown page, its side and the text size

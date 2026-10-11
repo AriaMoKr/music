@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { debugReport, noteError, recentErrors, startErrorLog } from '../public/js/debug-info.js';
+import { debugReport, noteError, recentErrors, screenshot, screenshotName, startErrorLog } from '../public/js/debug-info.js';
 
 const event = (type, props) => Object.assign(new Event(type), props);
 
@@ -123,5 +123,19 @@ describe('debug info', () => {
     assert.match(early.view, /^unavailable/);
     assert.equal(early.errors.length, 20);
     assert.doesNotThrow(() => JSON.stringify(early));
+  });
+
+  it('draws a frame for a screenshot of the 3D view, none in VR or before the app', async () => {
+    let rendered = 0;
+    const renderer = {
+      xr: { isPresenting: false }, setRenderTarget() {}, render: () => rendered++,
+      domElement: { toBlob: (cb, type) => cb({ type, size: 1234 }) },
+    };
+    assert.deepEqual(await screenshot({ renderer, scene: {}, camera: {} }), { type: 'image/png', size: 1234 });
+    assert.equal(rendered, 1, 'drawn just before it is taken');
+    renderer.xr.isPresenting = true;
+    assert.equal(await screenshot({ renderer }), null);
+    assert.equal(await screenshot(undefined), null);
+    assert.equal(screenshotName(new Date(2026, 9, 11, 5, 2)), 'vrlbry-2026-10-11-0502.png');
   });
 });

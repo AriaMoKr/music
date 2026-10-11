@@ -14,6 +14,7 @@ import { progressText } from './util/progress.js';
 import { isLocal } from './local/local.js';
 import { resolveLink } from './api.js';
 import { makeRoom } from './world/room-ahead.js';
+import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
@@ -198,6 +199,7 @@ export class Interaction {
           this._kioskTab = id;
           this._kioskTabPicked = true;
           this._search.focus = id === 'search';
+          this._resetForm = null; // another tab, or the same again: the reset's choice is left
           this._fillKiosk();
         },
       });
@@ -256,7 +258,10 @@ export class Interaction {
       .filter((e) => e.type === 'list' && e.id && e.scroll).map((e) => [e.id, e.scroll]));
     const hover = this._hoveredBook;
     return {
-      kiosk: { tab: this._kioskTab, search: this._search.q || null, typing: !!this._search.focus, scroll: scrolled(this.kiosk) },
+      kiosk: {
+        tab: this._kioskTab, search: this._search.q || null, typing: !!this._search.focus, scroll: scrolled(this.kiosk),
+        ...(this._resetForm ? { reset: { ...this._resetForm } } : {}), // the reset's choice, when it is open
+      },
       inspect: !!this.inspectPanel.visible,
       toolbar: !!this.toolbar.visible,
       contents: this.tocPanel.visible ? { scroll: this.tocPanel.get('list')?.scroll ?? 0 } : null,
@@ -279,6 +284,8 @@ export class Interaction {
       st.pending = !!st.q.trim();
       st.results = [];
       if (st.pending) await this._runSearch(++st.token);
+      // The reset's choice as it was shown (only shown: nothing is cleared).
+      this._resetForm = k.reset ? { ...defaultResetParts(), ...k.reset } : null;
       this._fillKiosk();
       for (const [id, rows] of Object.entries(k.scroll || {})) {
         const el = this.kiosk.get(id);
@@ -307,7 +314,49 @@ export class Interaction {
     if (on && notice && this.controls.presenting) this.notice('This site has been updated', 'Reload the page (on the catalogue stand) to see the changes', 6);
   }
 
+  /**
+   * "Reset stored data" on the kiosk (the help dialog has the same; reset.js): each part kept or
+   * cleared at a tap, then Clear and reload (onResetStored). The headset has no other way.
+   */
+  _fillResetForm(p, y0, pad) {
+    const W = p.w;
+    const form = this._resetForm;
+    let y = y0;
+    p.add({ type: 'text', x: pad, y, w: W - 2 * pad, h: 44, text: 'Reset stored data', size: 34, weight: '600', serif: true, color: UI.accent });
+    y += 54;
+    p.add({
+      type: 'text', x: pad, y, w: W - 2 * pad, h: 66, size: 24, color: UI.muted, maxLines: 2,
+      text: `What this site keeps in this browser. Tap a part to keep it or clear it; the page then reloads${this.controls.presenting ? ', and you leave VR' : ''}.`,
+    });
+    y += 84;
+    for (const part of RESET_PARTS) {
+      const on = !!form[part.id];
+      p.add({
+        id: `reset-${part.id}`, type: 'button', x: pad, y, w: W - 2 * pad, h: 64, label: `${on ? 'Clear' : 'Keep'}: ${part.label}`, size: 24,
+        active: on,
+        onClick: () => {
+          form[part.id] = !on;
+          this._fillKiosk();
+        },
+      });
+      y += 76;
+    }
+    y += 16;
+    p.add({
+      id: 'reset-go', type: 'button', x: pad, y, w: 340, h: 60, label: 'Clear and reload', size: 26,
+      disabled: !Object.values(form).some(Boolean), onClick: () => this.onResetStored?.({ ...form }),
+    });
+    p.add({
+      id: 'reset-cancel', type: 'button', x: pad + 356, y, w: 220, h: 60, label: 'Cancel', size: 26,
+      onClick: () => {
+        this._resetForm = null;
+        this._fillKiosk();
+      },
+    });
+  }
+
   _fillShelvesTab(p, y0, pad, place) {
+    if (this._resetForm) return this._fillResetForm(p, y0, pad);
     const W = p.w;
     const shelved = this.world.shelves.books();
     const room = place && this.settings.rooms?.[place.id];
@@ -366,15 +415,23 @@ export class Interaction {
       id: 'smooth', type: 'button', x: pad + 560, y, w: W - 2 * pad - 560, h: 60, label: this.settings.smoothMove ? 'Stick walking' : 'Teleport only', size: 26,
       active: this.settings.smoothMove, onClick: () => this.toggleSmooth(),
     });
-    // Save / restore the scene (scene.js; the same as in the help dialog, for the headset).
+    // Save / restore the scene (scene.js; the same as in the help dialog, for the headset), and
+    // Reset… (reset.js): this tab becomes the choice of what to clear.
     y += 80;
-    p.add({ id: 'scene-save', type: 'button', x: pad, y, w: 250, h: 56, label: 'Save scene', size: 26, onClick: () => this.onSaveScene?.() });
+    p.add({ id: 'scene-save', type: 'button', x: pad, y, w: 220, h: 56, label: 'Save scene', size: 26, onClick: () => this.onSaveScene?.() });
     p.add({
-      id: 'scene-restore', type: 'button', x: pad + 266, y, w: 250, h: 56, label: 'Restore scene', size: 26,
+      id: 'scene-restore', type: 'button', x: pad + 234, y, w: 220, h: 56, label: 'Restore scene', size: 26,
       disabled: !this._savedScene, onClick: () => this.onRestoreScene?.(),
     });
     p.add({
-      id: 'scene-note', type: 'text', x: pad + 532, y: y + 4, w: W - 2 * pad - 532, h: 50, text: this._savedScene ?? 'No saved scene',
+      id: 'reset', type: 'button', x: pad + 468, y, w: 170, h: 56, label: 'Reset…', size: 26,
+      onClick: () => {
+        this._resetForm = defaultResetParts();
+        this._fillKiosk();
+      },
+    });
+    p.add({
+      id: 'scene-note', type: 'text', x: pad + 652, y: y + 4, w: W - 2 * pad - 652, h: 50, text: this._savedScene ?? 'No saved scene',
       size: 20, color: UI.muted, maxLines: 2,
     });
     const recent = this._recentBooks().slice(0, 3);

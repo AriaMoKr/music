@@ -1101,7 +1101,8 @@ public/
     rooms.js             which books are shelved: the current place (one library, or one room of a huge one).
     audio.js             tiny WebAudio synth: page turn, book slide/thud, UI click.
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
-    debug-info.js        "Copy debug info": the page's last 20 errors (startErrorLog) and a report (debugReport).
+    debug-info.js        "Copy debug info": the page's last 20 errors (startErrorLog) and a report (debugReport); "Save screenshot" (screenshot).
+    reset.js             "Reset stored data": the parts of what the site keeps in the browser (RESET_PARTS), cleared by resetStoredData.
     scene.js             scenes: sceneOf / restoreScene / saveScene / savedScene / parseScene (one saved in the browser).
     perf-scenarios.js    built-in performance scenarios, loaded only by perf.run().
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
@@ -1543,7 +1544,19 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   stays available (dimmed, in the corner) while a book is open. A lost WebGL context (the browser
   took the graphics memory back: the view goes black) shows an error toast until three gets it
   back, then "The 3D view is back". For a browser whose view stays blank, `?aa=0` turns
-  antialiasing off and `?dpr=<n>` caps the pixel ratio (2 by default).
+  antialiasing off and `?dpr=<n>` caps the pixel ratio (2 by default). Beside it, "Save
+  screenshot" saves the 3D view as a PNG (`vrlbry-<date>-<time>.png`): a frame drawn for it,
+  without the page's menus, so it shows what the GPU drew even where the screen stays blank.
+- "Reset stored data" (`reset.js`; the help dialog, and the kiosk's Shelves & settings tab as
+  "Reset…", which turns the tab into the same choice): four parts, each cleared or kept —
+  settings, reading positions, recently read and the saved scene (every other `vrlbry:` key);
+  the ZIM files and web addresses opened here (`zimUrls`, IndexedDB `vrlbry-files`); the indexes
+  (`vrlbry-local`, kept unless chosen: slow to rebuild); the parts of web ZIMs kept for faster
+  reading (`vrlbry-blocks`). "Clear and reload" stops all saving (`freezeStorage`) and the local
+  library's worker, clears the parts chosen (databases deleted: every store lets go on
+  `versionchange`; one another tab keeps open is reported and cleared when that tab closes it)
+  and reloads the page, so nothing held in memory is written back. All the app's flavours on the
+  origin share this storage, so their data goes too.
 - Scenes (`scene.js`): `view` (state, place, room, sort, bookcases, and the viewpoint from
   `controls.viewpoint()`: x, z, eye height, yaw, pitch), `book` (library, id, title, page label,
   block anchor `{ c, b }` and the side of the spread it is on), `settings` (fontScale, theme,

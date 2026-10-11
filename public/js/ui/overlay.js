@@ -8,6 +8,7 @@ import { KiwixDialog } from './kiwix-dialog.js';
 import { bookIndex, matchBooks, findArticles } from '../search.js';
 import { load, save } from '../util/storage.js';
 import { noteError } from '../debug-info.js';
+import { RESET_PARTS, defaultResetParts } from '../reset.js';
 
 const ARTICLE_RESULTS = 8; // per Wikipedia library
 
@@ -138,8 +139,14 @@ export class Overlay {
           </div>
           <label class="ov-update-pref"><input type="checkbox" checked> Tell me when this site has been updated</label>
           <footer class="ov-debug">
-            <div><button class="ov-debug-btn">Copy debug info</button><span class="ov-debug-note">Something wrong? Copy this and paste it into your bug report.</span></div>
+            <div><button class="ov-debug-btn">Copy debug info</button><button class="ov-shot-btn" title="The 3D view as a PNG, without this page's menus">Save screenshot</button><span class="ov-debug-note">Something wrong? Copy this and paste it into your bug report, with the screenshot.</span></div>
             <div><button class="ov-scene-save">Save scene</button><button class="ov-scene-restore" disabled>Restore scene</button><button class="ov-scene-paste">Paste a scene…</button><span class="ov-scene-note">No saved scene</span></div>
+            <div><button class="ov-reset-btn" aria-expanded="false">Reset stored data…</button><span class="ov-reset-note">Start afresh: clear what this site keeps in this browser.</span></div>
+            <fieldset class="ov-reset" hidden>
+              <legend>Clear</legend>
+              ${RESET_PARTS.map((p) => `<label><input type="checkbox" value="${esc(p.id)}"> ${esc(p.label)}</label>`).join('')}
+              <div><button class="ov-reset-go">Clear and reload</button><button class="ov-reset-cancel">Cancel</button><span class="ov-reset-note">What is not ticked is kept. The page then reloads.</span></div>
+            </fieldset>
             <textarea class="ov-debug-text" hidden aria-label="Debug info or a scene to restore" spellcheck="false" placeholder="Paste a debug report or a scene here"></textarea>
             <div class="ov-scene-text" hidden><button class="ov-scene-restore-text">Restore this scene</button><span class="ov-debug-note">Restores the place, view, book, page and dialogs in this text.</span></div>
           </footer>
@@ -271,6 +278,24 @@ export class Overlay {
       this._view?.toFront();
     };
     this.$('.ov-debug-btn').onclick = () => this._debug?.();
+    this.$('.ov-shot-btn').onclick = () => this._screenshot?.();
+    // "Reset stored data…" opens the choice of parts (the defaults ticked); "Clear and reload" acts.
+    const resetBoxes = () => [...this.$('.ov-reset').querySelectorAll('input[type=checkbox]')];
+    const showReset = (on) => {
+      this.$('.ov-reset').hidden = !on;
+      this.$('.ov-reset-btn').setAttribute('aria-expanded', String(on));
+      if (!on) return;
+      const parts = defaultResetParts();
+      for (const box of resetBoxes()) box.checked = parts[box.value];
+      this.$('.ov-reset-go').disabled = false;
+    };
+    this.$('.ov-reset-btn').onclick = () => showReset(this.$('.ov-reset').hidden);
+    this.$('.ov-reset-cancel').onclick = () => showReset(false);
+    this.$('.ov-reset').onchange = () => { this.$('.ov-reset-go').disabled = !resetBoxes().some((b) => b.checked); };
+    this.$('.ov-reset-go').onclick = () => {
+      const parts = Object.fromEntries(resetBoxes().map((b) => [b.value, b.checked]));
+      if (Object.values(parts).some(Boolean)) this._reset?.(parts);
+    };
     this.$('.ov-scene-save').onclick = () => this._scene?.save();
     this.$('.ov-scene-restore').onclick = () => this._scene?.restore();
     this.$('.ov-scene-paste').onclick = () => {
@@ -324,6 +349,12 @@ export class Overlay {
 
   /** cb() for "Copy debug info" (help dialog, error screen); it calls showDebugInfo. */
   onDebugInfo(cb) { this._debug = cb; }
+
+  /** cb() for "Save screenshot" (help dialog). */
+  onScreenshot(cb) { this._screenshot = cb; }
+
+  /** cb(parts) for "Reset stored data" (help dialog): { settings, remembered, indexes, cache } to clear (reset.js). */
+  onReset(cb) { this._reset = cb; }
 
   /** Handlers of the help dialog's view buttons: { reset(), toFront() }. */
   onView(handlers) { this._view = handlers; }

@@ -13,8 +13,19 @@ export function load(key, fallback = null) {
   }
 }
 
+let frozen = false;
+
+/**
+ * From now on nothing is stored: "Reset stored data" (reset.js) clears the storage and reloads
+ * the page, and what the page holds in memory must not be written back meanwhile.
+ */
+export function freezeStorage() {
+  frozen = true;
+}
+
 /** Stores `value` as JSON under `key`. Returns false if it could not be stored. */
 export function save(key, value) {
+  if (frozen) return false;
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
     return true;

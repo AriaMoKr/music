@@ -30,7 +30,14 @@ export function handleStore({ indexedDB: factory = globalThis.indexedDB } = {}) 
       opening = new Promise((resolve, reject) => {
         const req = factory.open(DB, 1);
         req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'name' });
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+          const db = req.result;
+          db.onversionchange = () => { // deleted ("Reset stored data", reset.js) or upgraded: let go
+            db.close();
+            opening = null;
+          };
+          resolve(db);
+        };
         req.onerror = () => reject(req.error ?? new Error(`cannot open IndexedDB ${DB}`));
         req.onblocked = () => reject(new Error(`IndexedDB ${DB} is blocked`));
       });

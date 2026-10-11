@@ -66,6 +66,15 @@ function start() {
   return worker;
 }
 
+/**
+ * Stops the worker at once, its requests left unanswered: "Reset stored data" (reset.js) clears
+ * the indexes and the cache it writes, and the page reloads right after.
+ */
+export function stop() {
+  worker?.terminate();
+  worker = null;
+}
+
 function call(method, args = {}, { onProgress } = {}) {
   start();
   return new Promise((resolve, reject) => {
