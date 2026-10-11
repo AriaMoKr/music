@@ -94,8 +94,11 @@ an API token with "Account Analytics: Read" and the account's ID in the environm
 hidden rather than on the command line:
 
 ```bash
-read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=<your account ID>
+read -rs CLOUDFLARE_ANALYTICS_TOKEN && export CLOUDFLARE_ANALYTICS_TOKEN CLOUDFLARE_ACCOUNT_ID=<your account ID>
 ```
+
+Not as `CLOUDFLARE_API_TOKEN`: wrangler uses that one instead of its login, and a deploy with this
+read-only token fails ("No access to the specified resource").
 
 Every read is a request, and a book opens with dozens of them, so the numbers measure activity,
 not visitors; only ZIMs read from the web go through the proxy, never the demo set.

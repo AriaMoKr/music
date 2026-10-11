@@ -4,9 +4,10 @@
 // of a book or an article is a request (a book opens with dozens), so this measures activity,
 // not visitors; the demo set never goes through the proxy.
 //
-// Needs an API token with "Account Analytics: Read" and the account's ID in the environment, under
-// wrangler's names; type the token in hidden, not on the command line (shell history):
-//   read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=<id>
+// Needs an API token with "Account Analytics: Read" and the account's ID in the environment; type
+// the token in hidden, not on the command line (shell history). Not in CLOUDFLARE_API_TOKEN:
+// wrangler deploys with that one instead of its login, and this token cannot deploy.
+//   read -rs CLOUDFLARE_ANALYTICS_TOKEN && export CLOUDFLARE_ANALYTICS_TOKEN CLOUDFLARE_ACCOUNT_ID=<id>
 //   node tools/zim-proxy/stats.mjs [options]
 //
 //   --days <n>      how far back (default 7)
@@ -153,10 +154,13 @@ async function main() {
     return;
   }
   // Trimmed: a pasted value can bring a space or a line end along, and the token is then refused.
-  const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  const token = process.env.CLOUDFLARE_ANALYTICS_TOKEN?.trim();
   const account = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
   if (!token || !account) {
-    console.error('Set CLOUDFLARE_API_TOKEN (a token with "Account Analytics: Read") and CLOUDFLARE_ACCOUNT_ID in the environment first.');
+    console.error('Set CLOUDFLARE_ANALYTICS_TOKEN (a token with "Account Analytics: Read") and CLOUDFLARE_ACCOUNT_ID in the environment first.');
+    if (process.env.CLOUDFLARE_API_TOKEN) {
+      console.error('(Not CLOUDFLARE_API_TOKEN: wrangler deploys with that one instead of its login. Unset it.)');
+    }
     process.exitCode = 2;
     return;
   }

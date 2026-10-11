@@ -22,7 +22,7 @@ npm run build:pages -- --zims <dir>   # … with the ZIMs in <dir> pre-rendered 
 npm run build:pages -- --indexes <dir>  # … with the indexes of <dir>'s Wikipedia/Wikisource ZIMs under indexes/ (for visitors who open those files)
 node tools/build-indexes.mjs --zims <dir>   # prebuilt indexes of tools/indexes.txt's current editions into .indexes/ (from local copies; --web: from Kiwix's mirror)
 node tools/zim-proxy/serve.mjs   # the edge proxy (tools/zim-proxy/worker.js, a Cloudflare Worker) on :8090; open the app with ?zimproxy=http://localhost:8090/
-node tools/zim-proxy/stats.mjs   # the deployed proxy's requests per day (--hours, --days n, --json) from Cloudflare's GraphQL API; CLOUDFLARE_API_TOKEN (Account Analytics: Read) and CLOUDFLARE_ACCOUNT_ID in the environment
+node tools/zim-proxy/stats.mjs   # the deployed proxy's requests per day (--hours, --days n, --json) from Cloudflare's GraphQL API; CLOUDFLARE_ANALYTICS_TOKEN (Account Analytics: Read; not CLOUDFLARE_API_TOKEN, which wrangler would deploy with) and CLOUDFLARE_ACCOUNT_ID in the environment
 node --test test/zim.test.js     # one test file
 node --test --test-name-pattern="redirect" test/zim.test.js   # tests matching a name
 ```
