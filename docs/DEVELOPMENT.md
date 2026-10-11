@@ -88,6 +88,18 @@ and the next Pages build names it in the page. To try it before that, add
 `?zimproxy=<its address>` to the site's address. `node tools/zim-proxy/serve.mjs` runs it on
 this machine instead, for `http://localhost:8080/?zimproxy=http://localhost:8090/`.
 
+How much it is used: `node tools/zim-proxy/stats.mjs` prints its requests per day (`--hours`:
+per hour, `--days <n>`: how far back, `--json`) from Cloudflare's GraphQL Analytics API. It needs
+an API token with "Account Analytics: Read" and the account's ID in the environment, typed in
+hidden rather than on the command line:
+
+```bash
+read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=<your account ID>
+```
+
+Every read is a request, and a book opens with dozens of them, so the numbers measure activity,
+not visitors; only ZIMs read from the web go through the proxy, never the demo set.
+
 Why only Kiwix's own mirror can be read from a page, and what the others would need, is in
 [MIRRORS.md](MIRRORS.md).
 

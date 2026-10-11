@@ -11,3 +11,7 @@ workers_dev = true
 # The pages that may read through it (worker.js allowOrigin): the Pages sites (all three share
 # this origin) and this machine's servers, any port, for trying. "*" would allow any site.
 ALLOWED_ORIGINS = "https://ariamokr.github.io, http://localhost:*, http://127.0.0.1:*"
+
+[observability]
+enabled = true
+
