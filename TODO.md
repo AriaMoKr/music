@@ -541,7 +541,12 @@
            for that order). A v4 index is upgraded where found (a store, a site, `--out`), so
            the workflow turns the release's v4 files into v5 by itself and nothing is rebuilt;
            uploading v5 files to the release (and deleting the v4 ones) only saves it that
-           step. Not yet measured on a Quest (the headset was not reachable). Possible next:
+           step. *On a Quest 3* (a test copy of the site with the v5 indexes, a fresh origin): the full
+           English Wikipedia (127 GB) opened from Kiwix's mirror in 17.3 s with its index fetched
+           from the site (24 s with v4 before), 7.0 s once the index was kept in the browser; the
+           index alone takes 1.55 s to fetch (20.5 MB, not gzipped, from this PC), 113 ms to read
+           from IndexedDB and ~220 ms to decode (Quest Browser has Uint8Array.fromBase64); the
+           rest is the ZIM read from the mirror. Possible next:
            deflate before base64 (20.5 → ~12.8 MB on disk, little less to download), and
            more indexes (which, and in what order: "Prebuilt indexes, which next" below).
            Later: other languages.
