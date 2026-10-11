@@ -73,8 +73,11 @@ describe('proxy stats (tools/zim-proxy/stats.mjs)', () => {
     assert.equal(timeField, 'datetime');
     assert.equal(summarize(rows, { start, end, hours: false, timeField }).buckets[1].requests, 5);
 
-    const denied = async () => ({ ok: false, status: 401, statusText: 'Unauthorized', json: async () => ({}) });
-    await assert.rejects(fetchRows({ token: 'bad', account: 'a', script: 's', start, end, fetchImpl: denied }), /Account Analytics: Read/);
+    // Cloudflare's own message is passed on, with what the status usually means.
+    const denied = async () => ({ ok: false, status: 401, statusText: 'Unauthorized', json: async () => ({ errors: [{ code: 10000, message: 'Authentication error' }] }) });
+    await assert.rejects(fetchRows({ token: 'bad', account: 'a', script: 's', start, end, fetchImpl: denied }), /401 Unauthorized: Authentication error \(10000\)\. The token was not accepted/);
+    const forbidden = async () => ({ ok: false, status: 403, statusText: 'Forbidden', json: async () => { throw new Error('not JSON'); } });
+    await assert.rejects(fetchRows({ token: 't', account: 'a', script: 's', start, end, fetchImpl: forbidden }), /403 Forbidden\. The token needs "Account Analytics: Read"/);
     const other = async () => ({ ok: true, status: 200, json: async () => ({ errors: [{ message: 'quota exceeded' }] }) });
     await assert.rejects(fetchRows({ token: 't', account: 'a', script: 's', start, end, fetchImpl: other }), /quota exceeded/);
     const none = async () => ({ ok: true, status: 200, json: async () => ({ data: { viewer: { accounts: [] } } }) });

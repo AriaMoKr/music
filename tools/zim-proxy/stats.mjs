@@ -102,10 +102,13 @@ export async function fetchRows({ token, account, script, start, end, fetchImpl 
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ query: statsQuery({ account, script, start, end, timeField }) }),
     });
-    if (res.status === 401 || res.status === 403) {
-      throw new Error(`Cloudflare said ${res.status}: the token needs "Account Analytics: Read" on this account, or the account ID is not that token's.`);
+    if (!res.ok) {
+      // Cloudflare's own words, when the answer has them ({ errors: [{ code, message }] }).
+      const said = await res.json().then((b) => (b?.errors ?? []).map((e) => `${e.message}${e.code ? ` (${e.code})` : ''}`).join('; '), () => '');
+      const hint = res.status === 401 ? ' The token was not accepted: an API token (not the Global API Key), copied whole, without spaces or line ends.'
+        : res.status === 403 ? ' The token needs "Account Analytics: Read" on this account, or the account ID is not one the token covers.' : '';
+      throw new Error(`Cloudflare said ${res.status} ${res.statusText}${said ? `: ${said}` : ''}.${hint}`);
     }
-    if (!res.ok) throw new Error(`Cloudflare said ${res.status} ${res.statusText}`);
     const body = await res.json();
     if (body.errors?.length) {
       lastErrors = body.errors;
@@ -149,8 +152,9 @@ async function main() {
     console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 16).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
     return;
   }
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+  // Trimmed: a pasted value can bring a space or a line end along, and the token is then refused.
+  const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  const account = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
   if (!token || !account) {
     console.error('Set CLOUDFLARE_API_TOKEN (a token with "Account Analytics: Read") and CLOUDFLARE_ACCOUNT_ID in the environment first.');
     process.exitCode = 2;
