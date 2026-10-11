@@ -122,7 +122,8 @@
   and addresses opened here; the indexes, kept by default; the web cache), then clear them and
   reload. On a Quest 3 in VR (2026-10-10): the kiosk's form fits and toggles, Cancel leaves it,
   and Clear and reload with the settings alone cleared them and kept the handles, indexes, cached
-  blocks and remembered address; the page was back in 1.4 s, out of VR. Possible later: each
+  blocks and remembered address; the page was back in 1.4-7.6 s (as polled over DevTools), out of
+  VR, after a head-locked "Clearing stored data" notice (seen in the headset's screenshots). Possible later: each
   part's size (`navigator.storage.estimate()` gives only the total).
 - **The kiosk opens on its Kiwix tab** (done 2026-10-10): the page starts on Kiwix's library,
   more to read being what a new visitor most likely wants. Possible later: remember a returning
