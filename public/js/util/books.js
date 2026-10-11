@@ -3,19 +3,31 @@
 
 import { BOOK } from '../config.js';
 
-/** FNV-1a 32-bit hash of a string -> unsigned int. */
-export function hashString(s) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
+const FNV_OFFSET = 0x811c9dc5;
+
+/** FNV-1a 32-bit, continued over the string's UTF-16 units from hash h. */
+function fnv(h, s) {
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return h;
 }
 
-/** Deterministic pseudo-random in [0,1) from a string + salt. */
+/** FNV-1a 32-bit hash of a string -> unsigned int. */
+export function hashString(s) {
+  return fnv(FNV_OFFSET, s) >>> 0;
+}
+
+/**
+ * Deterministic pseudo-random in [0,1) from a string + salt: the hash of salt + "\0" + s, without
+ * making that string (room builds hash every book several times; the strings were garbage).
+ */
 export function hash01(s, salt = '') {
-  return hashString(salt + '\u0000' + s) / 4294967296;
+  return (fnv(Math.imul(fnv(FNV_OFFSET, salt), 0x01000193), s) >>> 0) / 4294967296;
+}
+
+/** hash01(a + "|" + b, salt), without making the string. */
+function hash01Of(a, b, salt) {
+  const h = Math.imul(fnv(Math.imul(fnv(FNV_OFFSET, salt), 0x01000193), a) ^ 124, 0x01000193);
+  return (fnv(h, b) >>> 0) / 4294967296;
 }
 
 const LEADING_ARTICLE = /^(the|a|an)\s+/i;
@@ -47,22 +59,25 @@ export const SORT_MODES = ['title', 'author', 'popularity'];
 // kept here, off the book objects (which get serialized). Recomputed if a title/author changes.
 const keyCache = new WeakMap();
 
-/** A book's cached sort keys: { t: titleKey, a: authorKey, id, book }. */
+/** A book's cached sort keys: { t: titleKey, a: authorKey (made when first wanted: authorOf), id, book }. */
 function keysOf(book) {
   let k = keyCache.get(book);
   if (!k || k.title !== book.title || k.author !== book.author) {
-    k = { title: book.title, author: book.author, t: titleKey(book.title), a: authorKey(book.author), id: String(book.id), book };
+    k = { title: book.title, author: book.author, t: titleKey(book.title), a: null, id: String(book.id), book };
     keyCache.set(book, k);
   }
   return k;
 }
+
+/** The author key of keysOf's keys: only sorting or lettering by author needs it. */
+const authorOf = (k) => (k.a ??= authorKey(k.author));
 
 // The same order as String#localeCompare without arguments, without its per-call setup.
 const collator = new Intl.Collator();
 
 function compareKeys(mode) {
   const byTitle = (x, y) => collator.compare(x.t, y.t) || collator.compare(x.id, y.id);
-  if (mode === 'author') return (x, y) => collator.compare(x.a, y.a) || byTitle(x, y);
+  if (mode === 'author') return (x, y) => collator.compare(authorOf(x), authorOf(y)) || byTitle(x, y);
   if (mode === 'popularity') return (x, y) => (x.book.rank ?? 1e9) - (y.book.rank ?? 1e9) || byTitle(x, y);
   return byTitle;
 }
@@ -96,7 +111,7 @@ export function sortBooks(books, mode) {
 export function letterOf(book, mode) {
   if (mode === 'popularity') return null;
   const k = keysOf(book);
-  const key = mode === 'author' ? k.a : k.t;
+  const key = mode === 'author' ? authorOf(k) : k.t;
   const c = key.charAt(0).toUpperCase();
   return c >= 'A' && c <= 'Z' ? c : '#';
 }
@@ -142,17 +157,28 @@ export function thumbIndex(titles, stops) {
  */
 export function bookDims(book) {
   if (book.volume) return { w: BOOK.volume.w, h: BOOK.volume.h, d: BOOK.volume.h * BOOK.depthRatio };
-  const key = String(book.id) + '|' + (book.title || '');
-  const r1 = hash01(key, 'h');
-  const r2 = hash01(key, 't');
-  const h = BOOK.minH + (BOOK.maxH - BOOK.minH) * r1;
-  let t;
+  const id = String(book.id);
+  const title = book.title || '';
+  const h = BOOK.minH + (BOOK.maxH - BOOK.minH) * hash01Of(id, title, 'h');
+  return { w: thickness(book, hash01Of(id, title, 't')), h, d: h * BOOK.depthRatio };
+}
+
+/**
+ * bookDims(book).w alone, making nothing: a room build sums every book's thickness (the whole
+ * library, to count its bookcases). Not cached: a cache entry per book of a 60,000-book library
+ * made the full garbage collections, which also walk them, longer on a Quest.
+ */
+export function bookWidth(book) {
+  if (book.volume) return BOOK.volume.w;
+  return thickness(book, hash01Of(String(book.id), book.title || '', 't'));
+}
+
+/** Spine thickness: grows with the logarithm of the byte size when known, else from the hash r. */
+function thickness(book, r) {
   if (book.size && book.size > 0) {
     // ~20 KB -> min thickness, ~20 MB -> max thickness.
     const f = Math.min(1, Math.max(0, (Math.log10(book.size) - 4.3) / 3));
-    t = BOOK.minT + (BOOK.maxT - BOOK.minT) * (0.85 * f + 0.15 * r2);
-  } else {
-    t = BOOK.minT + (BOOK.maxT - BOOK.minT) * (0.2 + 0.5 * r2);
+    return BOOK.minT + (BOOK.maxT - BOOK.minT) * (0.85 * f + 0.15 * r);
   }
-  return { w: t, h, d: h * BOOK.depthRatio };
+  return BOOK.minT + (BOOK.maxT - BOOK.minT) * (0.2 + 0.5 * r);
 }

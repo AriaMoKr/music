@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BOOKCASE } from '../config.js';
-import { bookDims, hash01, titleKey, authorKey } from '../util/books.js';
+import { bookDims, bookWidth, hash01, titleKey, authorKey } from '../util/books.js';
 import { makeSpineCanvas, makeWoodCanvas } from './textures.js';
 import { canvasTexture, disposeTexture } from './canvas-texture.js';
 import { atlasLayout, atlasPainter, STRIPE } from './atlas.js';
@@ -31,6 +31,7 @@ const SHELF_BOARDS = Array.from({ length: ROWS - 1 }, (_, i) => {
   return new THREE.Box3(new THREE.Vector3(-W / 2 + SIDE, y - 0.034, -D / 2), new THREE.Vector3(W / 2 - SIDE, y, D / 2 - 0.01));
 });
 const _inner = new THREE.Ray();
+const _bookBox = new THREE.Box3(); // a book's box, made by raycast from its record
 
 /** Distance along a ray that starts inside (or on) a box to where it leaves the box. */
 function exitDistance(ray, box) {
@@ -94,16 +95,23 @@ export function rowSurface(r) {
 
 const keyOf = (book) => `${book.libId}\n${book.id}`;
 
+/** The small deterministic gap after a book on a shelf. */
+const bookGap = (book) => 0.0015 + 0.003 * hash01(String(book.id), 'gap');
+
+/** The shelf length a book takes, its thickness and the gap after it, making no objects. */
+const shelfWidth = (book) => bookWidth(book) + bookGap(book);
+
 /** A book's footprint on a shelf: its dimensions and the small deterministic gap after it. */
 function shelfEntry(book) {
-  return { book, dims: bookDims(book), gap: 0.0015 + 0.003 * hash01(String(book.id), 'gap') };
+  return { book, dims: bookDims(book), gap: bookGap(book) };
 }
 const ROW_FILL = USABLE * 0.85; // rows are filled to ~85 %, so shelves look lived-in
 
 /** How many bookcases packBookcases uses for these books. */
 export function bookcasesNeeded(books) {
   if (!books.length) return 0;
-  const total = books.reduce((s, b) => { const e = shelfEntry(b); return s + e.dims.w + e.gap; }, 0);
+  let total = 0;
+  for (let i = 0; i < books.length; i++) total += shelfWidth(books[i]);
   return Math.ceil(Math.max(1, Math.ceil(total / ROW_FILL)) / ROWS);
 }
 
@@ -113,9 +121,9 @@ export function prefixForBookcases(books, cases) {
   let total = 0;
   let n = 0;
   for (; n < books.length; n++) {
-    const e = shelfEntry(books[n]);
-    if (total + e.dims.w + e.gap > limit) break;
-    total += e.dims.w + e.gap;
+    const w = shelfWidth(books[n]);
+    if (total + w > limit) break;
+    total += w;
   }
   return books.slice(0, n);
 }
@@ -272,12 +280,66 @@ function bookcaseWood() {
 // ---------------------------------------------------------------------------------------------
 // Book geometry
 
-/** UV rect (normalized, v up) of a pixel rect in an atlas of size W×H. */
-function uvRect(r, aw, ah, inset = 0.5) {
+/** UV rect (normalized, v up) of a pixel rect (x, y, w, h) in an atlas of size aw×ah, into `out`. */
+function uvRect(x, y, w, h, aw, ah, inset = 0.5, out = {}) {
+  out.u0 = (x + inset) / aw;
+  out.u1 = (x + w - inset) / aw;
+  out.v0 = 1 - (y + h - inset) / ah;
+  out.v1 = 1 - (y + inset) / ah;
+  return out;
+}
+
+// A room's books are written straight into typed arrays of the right size: built by pushing into
+// growing arrays, with a few dozen small arrays per book for its faces, a room switch made ~300 MB
+// of garbage on a Quest (10,000 books), and garbage collection was most of its dropped frames.
+
+/** Vertices of one book: 6 faces of 4. */
+const BOOK_VERTICES = 24;
+/**
+ * A book's faces: the normal, the 4 corners (ccw seen from outside) as signs of half its
+ * thickness, height and depth, which atlas rect (0 spine, 1 cloth, 2 page edges) and the shade.
+ */
+const BOOK_FACES = [
+  { n: [0, 0, 1], c: [-1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1], r: 0, s: 1.0 }, // spine
+  { n: [0, 1, 0], c: [-1, 1, 1, 1, 1, 1, 1, 1, -1, -1, 1, -1], r: 2, s: 0.6 }, // top: page edges
+  { n: [1, 0, 0], c: [1, -1, 1, 1, -1, -1, 1, 1, -1, 1, 1, 1], r: 1, s: 0.6 }, // front cover
+  { n: [-1, 0, 0], c: [-1, -1, -1, -1, -1, 1, -1, 1, 1, -1, 1, -1], r: 1, s: 0.6 }, // back cover
+  { n: [0, 0, -1], c: [1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1], r: 1, s: 0.3 },
+  { n: [0, -1, 0], c: [-1, -1, -1, 1, -1, -1, 1, -1, 1, -1, -1, 1], r: 1, s: 0.3 },
+];
+
+/** Typed arrays for `vertices` vertices (quads); `v` and `i` count what has been written. */
+function geometryBuffers(vertices) {
   return {
-    u0: (r.x + inset) / aw, u1: (r.x + r.w - inset) / aw,
-    v0: 1 - (r.y + r.h - inset) / ah, v1: 1 - (r.y + inset) / ah,
+    pos: new Float32Array(vertices * 3), nrm: new Float32Array(vertices * 3),
+    uv: new Float32Array(vertices * 2), col: new Float32Array(vertices * 3),
+    idx: vertices > 65536 ? new Uint32Array(vertices * 1.5) : new Uint16Array(vertices * 1.5), v: 0, i: 0,
   };
+}
+
+/** Writes one vertex. */
+function putVertex(arr, x, y, z, nx, ny, nz, u, v, k) {
+  const i = arr.v++;
+  arr.pos[i * 3] = x;
+  arr.pos[i * 3 + 1] = y;
+  arr.pos[i * 3 + 2] = z;
+  arr.nrm[i * 3] = nx;
+  arr.nrm[i * 3 + 1] = ny;
+  arr.nrm[i * 3 + 2] = nz;
+  arr.uv[i * 2] = u;
+  arr.uv[i * 2 + 1] = v;
+  arr.col[i * 3] = arr.col[i * 3 + 1] = arr.col[i * 3 + 2] = k;
+}
+
+/** The two triangles of the quad whose first vertex is `base`. */
+function putQuad(arr, base) {
+  const idx = arr.idx;
+  idx[arr.i++] = base;
+  idx[arr.i++] = base + 1;
+  idx[arr.i++] = base + 2;
+  idx[arr.i++] = base;
+  idx[arr.i++] = base + 2;
+  idx[arr.i++] = base + 3;
 }
 
 /**
@@ -288,38 +350,28 @@ function appendBook(arr, cx, cy, cz, dims, spine, cloth, page, shade) {
   const hw = dims.w / 2;
   const hh = dims.h / 2;
   const hd = dims.d / 2;
-  const start = arr.pos.length / 3;
-  // [normal, 4 corners (ccw seen from outside), uv rect, uv mode, shade]
-  const faces = [
-    [[0, 0, 1], [[-hw, -hh, hd], [hw, -hh, hd], [hw, hh, hd], [-hw, hh, hd]], spine, 1.0], // spine
-    [[0, 1, 0], [[-hw, hh, hd], [hw, hh, hd], [hw, hh, -hd], [-hw, hh, -hd]], page, 0.6], // top: page edges
-    [[1, 0, 0], [[hw, -hh, hd], [hw, -hh, -hd], [hw, hh, -hd], [hw, hh, hd]], cloth, 0.6], // front cover
-    [[-1, 0, 0], [[-hw, -hh, -hd], [-hw, -hh, hd], [-hw, hh, hd], [-hw, hh, -hd]], cloth, 0.6], // back cover
-    [[0, 0, -1], [[hw, -hh, -hd], [-hw, -hh, -hd], [-hw, hh, -hd], [hw, hh, -hd]], cloth, 0.3],
-    [[0, -1, 0], [[-hw, -hh, -hd], [hw, -hh, -hd], [hw, -hh, hd], [-hw, -hh, hd]], cloth, 0.3],
-  ];
-  for (const [n, corners, r, s] of faces) {
-    const base = arr.pos.length / 3;
-    const uvs = [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]];
-    corners.forEach(([x, y, z], i) => {
-      arr.pos.push(cx + x, cy + y, cz + z);
-      arr.nrm.push(n[0], n[1], n[2]);
-      arr.uv.push(uvs[i][0], uvs[i][1]);
-      const k = s * shade;
-      arr.col.push(k, k, k);
-    });
-    arr.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  const start = arr.v;
+  for (let f = 0; f < BOOK_FACES.length; f++) {
+    const { n, c, r: which, s } = BOOK_FACES[f];
+    const r = which === 0 ? spine : which === 1 ? cloth : page;
+    const k = s * shade;
+    const base = arr.v;
+    for (let q = 0; q < 4; q++) {
+      putVertex(arr, cx + c[q * 3] * hw, cy + c[q * 3 + 1] * hh, cz + c[q * 3 + 2] * hd, n[0], n[1], n[2],
+        q === 0 || q === 3 ? r.u0 : r.u1, q < 2 ? r.v0 : r.v1, k);
+    }
+    putQuad(arr, base);
   }
-  return { start, count: arr.pos.length / 3 - start };
+  return { start, count: arr.v - start };
 }
 
 function buildGeometry(arr) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(arr.pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(arr.nrm, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(arr.uv, 2));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(arr.col, 3));
-  g.setIndex(arr.idx);
+  g.setAttribute('position', new THREE.BufferAttribute(arr.pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(arr.nrm, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(arr.uv, 2));
+  g.setAttribute('color', new THREE.BufferAttribute(arr.col, 3));
+  g.setIndex(new THREE.BufferAttribute(arr.idx, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;
@@ -428,17 +480,32 @@ export function hallRows(cases) {
  * front: the front, projected from the eye onto that row's plane, falls within one of its solid
  * stretches.
  */
+/** Insertion sort by `d`, in place: no allocation, and fast on the nearly sorted order it gets. */
+function sortByDistance(list) {
+  for (let i = 1; i < list.length; i++) {
+    const x = list[i];
+    let j = i - 1;
+    while (j >= 0 && list[j].d > x.d) {
+      list[j + 1] = list[j];
+      j--;
+    }
+    list[j + 1] = x;
+  }
+}
+
 export function behindRow(cs, cam, rows) {
   const { width: W, depth: D } = BOOKCASE;
   const fz = cs.position.z + (cs.yaw === 0 ? D / 2 : -D / 2); // the plane of its front
-  for (const r of rows) {
+  for (let ri = 0; ri < rows.length; ri++) {
+    const r = rows[ri];
     if (r.z === cs.rowZ || (r.z - cam.z) * (r.z - fz) >= 0) continue; // not in between
     const t = (r.z - cam.z) / (fz - cam.z);
     const xa = cam.x + (cs.position.x - W / 2 - cam.x) * t;
     const xb = cam.x + (cs.position.x + W / 2 - cam.x) * t;
     const lo = Math.min(xa, xb);
     const hi = Math.max(xa, xb);
-    for (const [s0, s1] of r.segments) if (lo >= s0 + ROW_MARGIN && hi <= s1 - ROW_MARGIN) return true;
+    const segs = r.segments; // indexed: for…of with destructuring allocated, every frame for every bookcase
+    for (let i = 0; i < segs.length; i++) if (lo >= segs[i][0] + ROW_MARGIN && hi <= segs[i][1] - ROW_MARGIN) return true;
   }
   return false;
 }
@@ -456,6 +523,7 @@ export class Bookshelves {
     this.group.name = 'bookshelves';
     this.cases = [];
     this._rows = null; // hall rows, for culling bookcases behind them (hallRows)
+    this._ranked = []; // the bookcases nearest first, for update() (built with the room)
     this._records = new Map(); // key -> record
     this._order = [];
     this._highlight = null;
@@ -487,26 +555,27 @@ export class Bookshelves {
 
       const layout = atlasLayout(cs.items);
       const mat = new THREE.MeshLambertMaterial({ map: placeholder(), vertexColors: true });
-      const arr = { pos: [], nrm: [], uv: [], col: [], idx: [] };
-      const pageUV = uvRect(layout.page, layout.width, layout.height, 2);
+      const arr = geometryBuffers(cs.items.length * BOOK_VERTICES + 4); // the books, and the label plate
+      const lp = layout.page;
+      const pageUV = uvRect(lp.x, lp.y, lp.w, lp.h, layout.width, layout.height, 2);
+      const spineUV = {};
+      const clothUV = {};
       const records = [];
       cs.items.forEach((it, i) => {
         const cell = layout.cells[i];
-        const spineUV = uvRect(cell, layout.width, layout.height);
-        const clothUV = uvRect({ x: cell.x + cell.w + 1, y: cell.y + 4, w: STRIPE - 2, h: cell.h - 8 }, layout.width, layout.height);
+        uvRect(cell.x, cell.y, cell.w, cell.h, layout.width, layout.height, 0.5, spineUV);
+        uvRect(cell.x + cell.w + 1, cell.y + 4, STRIPE - 2, cell.h - 8, layout.width, layout.height, 0.5, clothUV);
         const surface = rowSurface(it.row);
         const jitter = 0.012 * hash01(String(it.book.id), 'z');
         const cz = D / 2 - 0.022 - jitter - it.dims.d / 2;
         const cy = surface + it.dims.h / 2;
         const shade = 0.82 + 0.18 * (1 - it.row / (ROWS - 1)); // lower rows a little darker
         const range = appendBook(arr, it.x, cy, cz, it.dims, spineUV, clothUV, pageUV, shade);
+        // No box per book (raycast makes it from the centre and size when it needs it): a room's
+        // records all become garbage at the next room switch.
         const rec = {
           book: it.book, dims: it.dims, caseIndex: ci, row: it.row,
           center: new THREE.Vector3(it.x, cy, cz),
-          box: new THREE.Box3(
-            new THREE.Vector3(it.x - it.dims.w / 2, cy - it.dims.h / 2, cz - it.dims.d / 2),
-            new THREE.Vector3(it.x + it.dims.w / 2, cy + it.dims.h / 2, cz + it.dims.d / 2),
-          ),
           range, hidden: false,
         };
         records.push(rec);
@@ -514,18 +583,18 @@ export class Bookshelves {
         this._order.push(it.book);
       });
       // Range label plate on the frieze.
-      const lab = uvRect(layout.label, layout.width, layout.height);
+      const ll = layout.label;
+      const lab = uvRect(ll.x, ll.y, ll.w, ll.h, layout.width, layout.height);
       const py = H - TOP_TRIM + (TOP_TRIM - 0.06) / 2 + 0.002;
       const pz = D / 2 + 0.002;
-      const base = arr.pos.length / 3;
-      [[-PLATE.w / 2, -PLATE.h / 2, lab.u0, lab.v0], [PLATE.w / 2, -PLATE.h / 2, lab.u1, lab.v0],
-        [PLATE.w / 2, PLATE.h / 2, lab.u1, lab.v1], [-PLATE.w / 2, PLATE.h / 2, lab.u0, lab.v1]].forEach(([x, y, u, v]) => {
-        arr.pos.push(x, py + y, pz);
-        arr.nrm.push(0, 0, 1);
-        arr.uv.push(u, v);
-        arr.col.push(1.1, 1.1, 1.1);
-      });
-      arr.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      const base = arr.v;
+      const pw = PLATE.w / 2;
+      const ph = PLATE.h / 2;
+      putVertex(arr, -pw, py - ph, pz, 0, 0, 1, lab.u0, lab.v0, 1.1);
+      putVertex(arr, pw, py - ph, pz, 0, 0, 1, lab.u1, lab.v0, 1.1);
+      putVertex(arr, pw, py + ph, pz, 0, 0, 1, lab.u1, lab.v1, 1.1);
+      putVertex(arr, -pw, py + ph, pz, 0, 0, 1, lab.u0, lab.v1, 1.1);
+      putQuad(arr, base);
 
       const geo = buildGeometry(arr);
       const mesh = new THREE.Mesh(geo, mat);
@@ -542,6 +611,7 @@ export class Bookshelves {
       });
     });
     this._rows = hallRows(this.cases);
+    this._ranked = this.cases.map((cs) => ({ cs, d: 0 })); // update()'s nearest-first order
     if (woodParts.length) {
       const woodGeo = mergeGeometries(woodParts);
       woodParts.forEach((p) => p.dispose());
@@ -612,7 +682,10 @@ export class Bookshelves {
    * @returns {{ book: object|null, distance: number, point: THREE.Vector3 }|null}
    */
   raycast(raycaster, { books = true } = {}) {
-    let best = null;
+    // Every frame for every pointer: the winner's result is made once, at the end (GC on a Quest).
+    let bestDistance = Infinity;
+    let bestBook = null;
+    let bestCase = null;
     const ray = this._ray;
     const at = this._tmp;
     for (const cs of this.cases) {
@@ -621,7 +694,7 @@ export class Bookshelves {
       const inside = cs.box.containsPoint(ray.origin);
       if (!inside && !ray.intersectBox(cs.box, at)) continue;
       const entry = inside ? 0 : ray.origin.distanceTo(at);
-      if (entry > raycaster.far || (best && entry >= best.distance)) continue;
+      if (entry > raycaster.far || entry >= bestDistance) continue;
       const p = inside ? ray.origin : at;
       // In the opening: entering through the open front, or starting inside it (a hand reaching in).
       const throughFront = inside ? OPENING.containsPoint(p)
@@ -641,7 +714,11 @@ export class Bookshelves {
         }
         if (books) {
           for (const rec of cs.records) {
-            if (rec.hidden || !ray.intersectBox(rec.box, at)) continue;
+            if (rec.hidden) continue;
+            const { center: c, dims: size } = rec;
+            _bookBox.min.set(c.x - size.w / 2, c.y - size.h / 2, c.z - size.d / 2);
+            _bookBox.max.set(c.x + size.w / 2, c.y + size.h / 2, c.z + size.d / 2);
+            if (!ray.intersectBox(_bookBox, at)) continue;
             const d = ray.origin.distanceTo(at);
             if (d <= nearest) {
               nearest = d;
@@ -650,10 +727,16 @@ export class Bookshelves {
           }
         }
       }
-      if (nearest === Infinity || nearest < raycaster.near || nearest > raycaster.far || (best && nearest >= best.distance)) continue;
-      best = { book, distance: nearest, point: ray.at(nearest, new THREE.Vector3()).applyMatrix4(cs.group.matrixWorld) };
+      if (nearest === Infinity || nearest < raycaster.near || nearest > raycaster.far || nearest >= bestDistance) continue;
+      bestDistance = nearest;
+      bestBook = book;
+      bestCase = cs;
     }
-    return best;
+    if (!bestCase) return null;
+    // The ray in the winner's frame again (the loop moved on to other bookcases).
+    this._inv.copy(bestCase.group.matrixWorld).invert();
+    ray.copy(raycaster.ray).applyMatrix4(this._inv);
+    return { book: bestBook, distance: bestDistance, point: ray.at(bestDistance, new THREE.Vector3()).applyMatrix4(bestCase.group.matrixWorld) };
   }
 
   /**
@@ -812,30 +895,42 @@ export class Bookshelves {
     if (this._lodTimer > 0) return;
     this._lodTimer = 0.15;
     const cam = camera.getWorldPosition(this._tmp);
-    const ranked = this.cases
-      .map((cs) => ({ cs, d: Math.hypot(cs.position.x - cam.x, cs.position.z - cam.z) }))
-      .sort((x, y) => x.d - y.d);
+    // The bookcases nearest first: one array kept with the room, its entries' distances updated
+    // and put in order in place (~7 times a second; new arrays each time were garbage to collect).
+    const ranked = this._ranked;
+    for (let i = 0; i < ranked.length; i++) ranked[i].d = Math.hypot(ranked[i].cs.position.x - cam.x, ranked[i].cs.position.z - cam.z);
+    sortByDistance(ranked);
     // A small room fits the whole budget: every bookcase gets (and keeps) a sharp atlas, nearest
     // first, so titles are crisp from anywhere and the mid level is never needed.
     const small = this.cases.length <= HIGH_BUDGET;
-    const sharp = ranked.filter((r) => r.cs.textures.high);
-    const far = sharp[sharp.length - 1];
+    let sharpCount = 0;
+    let far = null; // the farthest with a sharp atlas
+    let want = null; // the nearest in range without one
+    for (let i = 0; i < ranked.length; i++) {
+      const r = ranked[i];
+      if (r.cs.textures.high) {
+        sharpCount++;
+        far = r;
+      } else if (!want && (small || r.d < HIGH_RANGE)) {
+        want = r;
+      }
+    }
     if (!small && far && far.d > HIGH_RANGE + HYSTERESIS) return this._drop(far.cs, 'high');
-    const want = ranked.find((r) => (small || r.d < HIGH_RANGE) && !r.cs.textures.high);
     if (want && (small || !this._moving)) {
-      if (sharp.length < HIGH_BUDGET) return this._startJob(want.cs, 'high');
+      if (sharpCount < HIGH_BUDGET) return this._startJob(want.cs, 'high');
       if (want.d < far.d - HYSTERESIS) {
         this._drop(far.cs, 'high');
         return this._startJob(want.cs, 'high');
       }
     }
     if (small) return;
-    let candidates = ranked;
+    let limit = ranked.length;
     if (this.cases.length > MID_BUDGET) {
-      for (const r of ranked.slice(MID_BUDGET + MID_SLACK)) if (r.cs.textures.mid) this._drop(r.cs, 'mid');
-      candidates = ranked.slice(0, MID_BUDGET);
+      for (let i = MID_BUDGET + MID_SLACK; i < ranked.length; i++) if (ranked[i].cs.textures.mid) this._drop(ranked[i].cs, 'mid');
+      limit = Math.min(limit, MID_BUDGET);
     }
-    const mid = candidates.find((r) => !r.cs.textures.mid);
+    let mid = null;
+    for (let i = 0; i < limit && !mid; i++) if (!ranked[i].cs.textures.mid) mid = ranked[i];
     if (!mid) return;
     if (this._moving && this.cases.length > MID_BUDGET && this._clock - (this._midAt ?? -Infinity) < MID_MOVING_INTERVAL) return;
     this._midAt = this._clock;
@@ -942,6 +1037,7 @@ export class Bookshelves {
     this.group.clear();
     this.cases = [];
     this._rows = null;
+    this._ranked = [];
     this._records.clear();
     this._order = [];
   }

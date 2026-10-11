@@ -40,6 +40,9 @@ const _toward = new THREE.Vector3();
 const _ray = new THREE.Ray();
 const _onPlane = new THREE.Vector3();
 const _normal = new THREE.Vector3();
+// Reused by _hitTest every frame (no new arrays per pointer per frame).
+const _meshes = [];
+const _hits = [];
 
 /** Where a ray meets a panel's plane, as panel uv (beyond 0..1 off the panel), or null. */
 function panelUv(panel, ray) {
@@ -83,7 +86,7 @@ export class Interaction {
     this.holder.name = 'holder';
     scene.add(this.holder);
     this._tweens = [];
-    this._hover = new Map(); // pointer id -> { panel }
+    this._hover = new Map(); // pointer id -> the panel under it, or null (no object per frame: GC on a Quest)
     this._hoveredBook = null;
     this._highlightUntil = 0;
     this._time = 0;
@@ -113,6 +116,10 @@ export class Interaction {
     this._buildInspectPanel();
     this._buildToolbar();
     this._buildToc();
+    // The panels a pointer can be over (all, or only the inspect panel while a book opens): fixed
+    // arrays, so the per-frame hit test and update make none.
+    this._panels = [this.kiosk, this.inspectPanel, this.toolbar, this.tocPanel];
+    this._openingPanels = [this.inspectPanel];
     this._buildExitRing();
     this._buildFade();
     // Compile the shaders of overlays that appear later (fade, exit ring) now, behind the loading
@@ -1027,9 +1034,11 @@ export class Interaction {
   _hitTest(pointer) {
     const rc = pointer.raycaster;
     let best = null;
-    const panels = (this.state === 'opening' ? [this.inspectPanel] : [this.kiosk, this.inspectPanel, this.toolbar, this.tocPanel])
-      .filter((p) => p.visible && p.mesh.parent);
-    const ph = rc.intersectObjects(panels.map((p) => p.mesh), false)[0];
+    const meshes = _meshes;
+    meshes.length = 0;
+    for (const p of this.state === 'opening' ? this._openingPanels : this._panels) if (p.visible && p.mesh.parent) meshes.push(p.mesh);
+    _hits.length = 0;
+    const ph = rc.intersectObjects(meshes, false, _hits)[0];
     if (ph) best = { kind: 'panel', panel: ph.object.userData.panel, uv: ph.uv, distance: ph.distance };
     if (this.book3d && (this.state === 'read' || this.state === 'inspect')) {
       if (this.state === 'read') {
@@ -1121,8 +1130,7 @@ export class Interaction {
       if (this.tocPanel.visible) this.tocPanel.scrollList('list', Math.sign(deltaY) * 2);
       else this._adjustDistance(deltaY * 0.0006);
     } else if (this.state === 'browse') {
-      const panelHover = [...this._hover.values()].find((h) => h.panel === this.kiosk);
-      if (!panelHover) return;
+      if (![...this._hover.values()].includes(this.kiosk)) return;
       // The list under the pointer, else the tab's own list.
       const el = this.kiosk.hover;
       const id = el?.type === 'list' && el.id ? el.id
@@ -2357,19 +2365,18 @@ export class Interaction {
       m.decompose(this.holder.position, this.holder.quaternion, new THREE.Vector3());
     }
 
-    // Pointer hover.
+    // Pointer hover. Per-frame code allocates as little as it can: garbage collection pauses were
+    // most of the dropped frames on a Quest.
     let hoverBook = null;
     let hoverLink = null;
-    const seen = new Set();
     for (const pointer of this.controls.pointers) {
       const hit = this.state === 'busy' || pointer.teleporting ? null : this._hitTest(pointer);
       pointer.setHitDistance(hit ? hit.distance : null);
       const prev = this._hover.get(pointer.id);
-      if (prev?.panel && prev.panel !== hit?.panel) prev.panel.pointerLeave();
+      if (prev && prev !== hit?.panel) prev.pointerLeave();
       let interactive = false;
       if (hit?.kind === 'panel') {
         interactive = hit.panel.pointerMove(hit.uv);
-        seen.add(hit.panel);
       } else if (hit?.kind === 'book') {
         hoverBook = hit.book;
         interactive = true;
@@ -2378,7 +2385,7 @@ export class Interaction {
         if (hit.kind === 'page' && !hoverLink) hoverLink = this._linkUnder(hit);
       }
       pointer.setHovering(interactive);
-      this._hover.set(pointer.id, { panel: hit?.kind === 'panel' ? hit.panel : null });
+      this._hover.set(pointer.id, hit?.kind === 'panel' ? hit.panel : null);
     }
     this._markLink(hoverLink);
     this.controls.textEntry = !!this._search.focus && this.state === 'browse' && this._kioskTab === 'search'
@@ -2399,9 +2406,9 @@ export class Interaction {
     } else if (this._hoveredBook) {
       this._setHover(null, true);
     }
-    if (this.tooltip.visible) this.tooltip.mesh.quaternion.copy(this.camera.getWorldQuaternion(new THREE.Quaternion()));
+    if (this.tooltip.visible) this.camera.getWorldQuaternion(this.tooltip.mesh.quaternion);
 
-    for (const p of [this.kiosk, this.inspectPanel, this.toolbar, this.tocPanel]) if (p.visible) p.update();
+    for (const p of this._panels) if (p.visible) p.update();
     if (this.tooltip.visible) this.tooltip.panel.update();
     if (this._notice?.visible && this._time >= this._noticeUntil) this._notice.visible = false;
   }

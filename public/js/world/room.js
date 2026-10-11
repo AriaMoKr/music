@@ -115,6 +115,29 @@ function windowParts(width, height) {
   return { sky: [glassGeo], darkWood: [frame, ...bars], wood: [sill] };
 }
 
+// One window's parts per size, made once (rooms use two sizes): triangulating the arches anew for
+// every window of every room switch was garbage to collect, and pauses for it dropped frames on
+// a Quest. Kept for the page's life; each window gets a transformed copy.
+const windowPrototypes = new Map();
+
+/** windowParts, non-indexed (mergeGeometries needs all-indexed or all-non-indexed input; ExtrudeGeometry is the latter). */
+function windowPrototype(width, height) {
+  const key = `${width}x${height}`;
+  let proto = windowPrototypes.get(key);
+  if (!proto) {
+    proto = {};
+    for (const [part, geos] of Object.entries(windowParts(width, height))) {
+      proto[part] = geos.map((g) => {
+        const flat = g.index ? g.toNonIndexed() : g;
+        if (flat !== g) g.dispose();
+        return flat;
+      });
+    }
+    windowPrototypes.set(key, proto);
+  }
+  return proto;
+}
+
 /**
  * Adds a room's windows as three meshes (glass, dark wood, wood) rather than four per window: a
  * long hall has dozens of windows, and draw calls are the Quest's bottleneck.
@@ -128,13 +151,8 @@ function addWindows(group, windows) {
   const m = new THREE.Matrix4();
   for (const w of windows) {
     m.makeRotationY(w.yaw).setPosition(w.x, w.y, w.z);
-    for (const [key, geos] of Object.entries(windowParts(w.width, w.height))) {
-      for (const g of geos) {
-        // mergeGeometries needs all-indexed or all-non-indexed input (ExtrudeGeometry is the latter).
-        const flat = g.index ? g.toNonIndexed() : g;
-        if (flat !== g) g.dispose();
-        parts[key].push(flat.applyMatrix4(m));
-      }
+    for (const [key, geos] of Object.entries(windowPrototype(w.width, w.height))) {
+      for (const g of geos) parts[key].push(g.clone().applyMatrix4(m));
     }
   }
   for (const [key, geos] of Object.entries(parts)) {

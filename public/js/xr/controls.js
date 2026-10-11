@@ -22,6 +22,11 @@ const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
+/** The xr-standard buttons that raise 'button' events, per hand (fixed: _pollXR runs every frame). */
+const BUTTON_NAMES = {
+  left: { 4: 'x', 5: 'y', 3: 'stick', 12: 'menu' },
+  right: { 4: 'a', 5: 'b', 3: 'stick', 12: 'menu' },
+};
 const SCREEN_CENTRE = new THREE.Vector2(0, 0);
 const PAD_LOOK = { yaw: 2.4, pitch: 1.6 }; // rad/s at full right-stick deflection
 
@@ -32,7 +37,8 @@ function makePointerVisual() {
   line.name = 'pointer-ray';
   const cursor = new THREE.Mesh(
     new THREE.RingGeometry(0.006, 0.011, 24),
-    new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.95, depthTest: false, side: THREE.DoubleSide }),
+    // forceSinglePass: one pass, not two with a program check each (see ui/panel.js); flat.
+    new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.95, depthTest: false, side: THREE.DoubleSide, forceSinglePass: true }),
   );
   cursor.renderOrder = 30;
   cursor.position.z = -RAY_LENGTH;
@@ -215,28 +221,34 @@ export class Controls extends EventTarget {
       e.stick.y = y;
       if (Math.abs(x) > DEADZONE || Math.abs(y) > DEADZONE) this._emit('axis', { hand, x, y });
       this._flicks(e.flicks, hand, x, y);
-      const names = { 4: hand === 'left' ? 'x' : 'a', 5: hand === 'left' ? 'y' : 'b', 3: 'stick', 12: 'menu' };
-      gp.buttons.forEach((b, bi) => {
-        const was = e.buttons[bi] || false;
-        if (b.pressed !== was) {
-          e.buttons[bi] = b.pressed;
-          if (names[bi]) this._emit('button', { hand, name: names[bi], pressed: b.pressed });
+      // Every frame, both controllers: no objects or closures made here (GC pauses on a Quest).
+      const names = BUTTON_NAMES[hand === 'left' ? 'left' : 'right'];
+      const buttons = gp.buttons;
+      for (let bi = 0; bi < buttons.length; bi++) {
+        const pressed = buttons[bi].pressed;
+        if (pressed !== (e.buttons[bi] || false)) {
+          e.buttons[bi] = pressed;
+          if (names[bi]) this._emit('button', { hand, name: names[bi], pressed });
         }
-      });
+      }
       if (this.locomotionEnabled) this._xrLocomotion(e, hand, x, y, dt);
       else if (e.aiming) this._endAim(e, false);
     }
   }
 
   _flicks(state, hand, x, y) {
-    const dirs = { left: -x, right: x, up: -y, down: y };
-    for (const [dir, v] of Object.entries(dirs)) {
-      if (!state[dir] && v > FLICK_ON) {
-        state[dir] = true;
-        this._emit('flick', { hand, dir });
-      } else if (state[dir] && v < FLICK_OFF) {
-        state[dir] = false;
-      }
+    this._flick(state, hand, 'left', -x);
+    this._flick(state, hand, 'right', x);
+    this._flick(state, hand, 'up', -y);
+    this._flick(state, hand, 'down', y);
+  }
+
+  _flick(state, hand, dir, v) {
+    if (!state[dir] && v > FLICK_ON) {
+      state[dir] = true;
+      this._emit('flick', { hand, dir });
+    } else if (state[dir] && v < FLICK_OFF) {
+      state[dir] = false;
     }
   }
 
@@ -272,7 +284,8 @@ export class Controls extends EventTarget {
     const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.85 }));
     line.frustumCulled = false;
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.27, 40),
-      new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+      // One pass (see ui/panel.js): of one colour, the arrow's faces blend the same in any order.
+      new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }));
     ring.rotation.x = -Math.PI / 2;
     const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 12), ring.material);
     arrow.rotation.x = -Math.PI / 2;
@@ -286,31 +299,37 @@ export class Controls extends EventTarget {
 
   _updateAim(e) {
     const t = this._teleport;
-    const origin = e.pointer.raycaster.ray.origin.clone();
-    const vel = e.pointer.raycaster.ray.direction.clone().multiplyScalar(ARC_SPEED);
+    // Every frame while aiming: vectors, raycaster and hit list reused (GC pauses on a Quest).
+    const a = (t.aim ||= {
+      origin: new THREE.Vector3(), vel: new THREE.Vector3(), prev: new THREE.Vector3(), p: new THREE.Vector3(),
+      seg: new THREE.Vector3(), point: new THREE.Vector3(), rc: new THREE.Raycaster(), hits: [],
+    });
+    const origin = a.origin.copy(e.pointer.raycaster.ray.origin);
+    const vel = a.vel.copy(e.pointer.raycaster.ray.direction).multiplyScalar(ARC_SPEED);
     const pos = t.line.geometry.attributes.position;
-    const rc = new THREE.Raycaster();
-    let prev = origin.clone();
+    const rc = a.rc;
+    const prev = a.prev.copy(origin);
     let hit = null;
     let count = 0;
     for (let i = 0; i < t.n; i++) {
       const tt = i * 0.035;
-      const p = origin.clone().addScaledVector(vel, tt);
+      const p = a.p.copy(origin).addScaledVector(vel, tt);
       p.y -= 0.5 * GRAVITY * tt * tt;
       if (i > 0 && !hit) {
-        const seg = p.clone().sub(prev);
+        const seg = a.seg.copy(p).sub(prev);
         const len = seg.length();
         rc.set(prev, seg.normalize());
         rc.far = len;
-        const h = rc.intersectObjects(this.world.teleportTargets, false)[0];
+        a.hits.length = 0;
+        const h = rc.intersectObjects(this.world.teleportTargets, false, a.hits)[0];
         if (h) {
-          hit = h.point;
+          hit = a.point.copy(h.point); // teleportTo copies it when the aim ends
           pos.setXYZ(count++, hit.x, hit.y, hit.z);
           break;
         }
       }
       pos.setXYZ(count++, p.x, p.y, p.z);
-      prev = p;
+      prev.copy(p);
       if (p.y < -1) break;
     }
     for (let i = count; i < t.n; i++) pos.setXYZ(i, prev.x, prev.y, prev.z);

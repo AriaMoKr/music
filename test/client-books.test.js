@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  titleKey, authorKey, compareBooks, sortBooks, letterOf, bookDims, hashString, inTitleOrder, thumbIndex,
+  titleKey, authorKey, compareBooks, sortBooks, letterOf, bookDims, bookWidth, hash01, hashString, inTitleOrder, thumbIndex,
 } from '../public/js/util/books.js';
 import { BOOK } from '../public/js/config.js';
 
@@ -79,6 +79,17 @@ describe('util/books', () => {
       assert.ok(Math.abs(d1.d - d1.h * BOOK.depthRatio) < 1e-12);
     }
     assert.ok(bookDims({ id: 'a', title: 't', size: 20e6 }).w > bookDims({ id: 'a', title: 't', size: 30e3 }).w);
+  });
+
+  it('bookWidth is bookDims().w, and hash01 is the hash of salt, NUL and the string', () => {
+    // The shelves count bookcases with bookWidth and pack them with bookDims: they must agree.
+    for (const b of [...books, { id: 12345, title: 'Émile', size: 123456 }, { id: 'x', title: '' }, { id: 'v', volume: 3 }, { id: 'u', title: 'ÿ\u{1F600}' }]) {
+      assert.equal(bookWidth(b), bookDims(b).w);
+    }
+    // hash01 hashes the parts without joining them: the same as hashing the joined string.
+    for (const [str, salt] of [['abc', 'gap'], ['', ''], ['12345', 'z'], ['\u{1F600}x', 'h']]) {
+      assert.equal(hash01(str, salt), hashString(`${salt}\u0000${str}`) / 4294967296);
+    }
   });
 
   it('thumbIndex labels evenly spaced stops by how their titles start', () => {

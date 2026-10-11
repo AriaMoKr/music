@@ -79,7 +79,11 @@ export class Panel {
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.anisotropy = anisotropy;
     this.texture.minFilter = THREE.LinearMipmapLinearFilter;
-    this.material = new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, side: THREE.DoubleSide });
+    // forceSinglePass: three draws a transparent double-sided material in two passes (back, then
+    // front), flagging it needsUpdate around each: its whole program parameters were rebuilt 4
+    // times a frame in VR (two eyes), the main garbage of a still frame on a Quest. A flat panel
+    // looks the same in one pass.
+    this.material = new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), this.material);
     this.mesh.userData.panel = this;
     this.mesh.renderOrder = 10;

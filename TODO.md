@@ -132,10 +132,29 @@
   atlas stalls are fixed (run 2026-10-05 03:37: walking the hall 9.1 % → 0.1 % dropped, an
   ordinary room 5.4 % → 1.8 %, no drop before an atlas arrived, down from 343 of 406), and of
   what is left, GC pauses were in 35 of 44 dropped frames walking an ordinary room, 72 of 86
-  switching filters, and 61 of 68 entering the all-libraries hall (its rebuild). Next: find what
-  allocates in those (`quest-perf run` traces GC per scenario; a heap profile of a room switch
-  and of a walk), and allocate less: reuse objects in per-frame code, build rooms with fewer
-  temporary arrays.
+  switching filters, and 61 of 68 entering the all-libraries hall (its rebuild).
+  *2026-10-10, step 1* (a sampling heap profile per scenario over DevTools, objects already
+  collected included): standing still allocated 4.1 MB/s, a filter switch 29 MB/s, entering the
+  hall 420 MB in 2.3 s. Most of a still frame was three rebuilding the kiosk's program parameters
+  4 times a frame (a transparent double-sided material is drawn in two passes, flagged
+  needsUpdate around each, per eye: `forceSinglePass` on panels and rings); most of a room switch
+  was the books' geometry pushed into growing arrays with a few dozen small arrays per book (now
+  written straight into typed arrays: identical geometry, checked attribute by attribute). Also:
+  hit tests, hover, controller polling, the teleport arc and the atlas LOD ranking reuse their
+  objects; `behindRow` lost a destructuring for…of; windows are triangulated once per size; a
+  book's box is made when a ray needs it; `hash01` hashes without joining strings; the author
+  sort key is made only when sorting by author. Allocation after: standing still 2.3 MB/s (most of
+  the rest is Chromium's WebGL bindings for three's uniforms: per draw call and eye), a filter
+  switch 7 MB/s, entering the hall 63 MB. Runs (the dev server's four ZIMs and a 60,000-book
+  Gutenberg from the web; `perf/quest-2026-10-11_*`): dropped frames 250 → 206 (1.4 → 1.2 %), GC
+  pauses 324 → 217, dropped frames in a GC pause 161 → 113; room-walk 36 → 28, filters 74 → 57,
+  entering the hall 41 → 28. Caching book sizes per book made it worse (a WeakMap entry per book
+  of every library: the full collections grew longer); sizes are computed without objects instead
+  (`bookWidth`). What is left: about one full collection (MajorGC) per scenario, 25-45 ms, after a
+  room switch, when the previous room's records, packed items and geometry arrays become old
+  garbage together. Next: which phases of those pauses take the time (a V8 trace with the GC
+  sub-phases), then keep less per room (the position copy for hidden books, smaller vertex
+  types) or fewer objects alive (the sort keys' WeakMap holds an entry per book).
 - **Reading: dropped frames while pages are prepared.** Reading in VR on a Quest 3 (2026-10-06,
   a local ZIM, step 2) dropped 2.6–2.7 % of frames at 72 Hz, while page turns themselves stayed
   smooth (1.3 %). The drops cluster where the reader prepares the next spreads on the main
