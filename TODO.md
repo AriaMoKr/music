@@ -117,6 +117,20 @@
   - *Other books' links:* Gutenberg links to other Gutenberg books, generic ZIMs' links between
     their articles, and EPUB links out of the book are dropped (in-book ones work).
   - *Long-press for where a link goes:* in VR a tooltip with the target's title before following.
+- **URL parameters for testing, and for settings** (asked 2026-10-11). Today there are a few,
+  scattered (`?xr=emulate`, `?perf`, `?hz=`, `?roomcap=`, `?zimproxy=`, `?atlas=gpu`, `?aa=0`,
+  `?dpr=`), read where each is used. Wanted:
+  - *Library loading turned off, part by part, for testing:* the site's own ZIM files, reopening
+    the remembered web addresses and files, the prebuilt indexes, the block cache (IndexedDB),
+    the edge proxy (the built-in one, not only another set with `?zimproxy=`), Kiwix's catalogue,
+    the server's libraries. Each optional layer (TODO, milestone 3) then has a switch that shows
+    the page working without it.
+  - *Opening straight into a place:* a given library (by id or ZIM name), room (genre, letter,
+    page), sort, and a number of books (only the first n of a library; `?roomcap=` caps a room).
+  - *Possibly as settings/preferences:* the same names as a link that opens a library sorted by
+    popularity, say, or a page of the help dialog. To decide: whether a parameter overrides the
+    saved settings for this visit only (a test link must not change the visitor's own place or
+    sort), and one module that reads them all, listed in the developer notes.
 - **Reset stored data** (done 2026-10-10, `reset.js`, SPEC §5.6). The help dialog's "Reset stored
   data…" and the kiosk's "Reset…" offer four parts to clear or keep (settings and reading; files
   and addresses opened here; the indexes, kept by default; the web cache), then clear them and
