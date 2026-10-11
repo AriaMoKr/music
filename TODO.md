@@ -120,7 +120,10 @@
 - **Reset stored data** (done 2026-10-10, `reset.js`, SPEC §5.6). The help dialog's "Reset stored
   data…" and the kiosk's "Reset…" offer four parts to clear or keep (settings and reading; files
   and addresses opened here; the indexes, kept by default; the web cache), then clear them and
-  reload. Possible later: each part's size (`navigator.storage.estimate()` gives only the total).
+  reload. On a Quest 3 in VR (2026-10-10): the kiosk's form fits and toggles, Cancel leaves it,
+  and Clear and reload with the settings alone cleared them and kept the handles, indexes, cached
+  blocks and remembered address; the page was back in 1.4 s, out of VR. Possible later: each
+  part's size (`navigator.storage.estimate()` gives only the total).
 - **The kiosk opens on its Kiwix tab** (done 2026-10-10): the page starts on Kiwix's library,
   more to read being what a new visitor most likely wants. Possible later: remember a returning
   visitor's last tab.
