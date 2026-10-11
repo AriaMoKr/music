@@ -100,6 +100,11 @@ read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_
 Every read is a request, and a book opens with dozens of them, so the numbers measure activity,
 not visitors; only ZIMs read from the web go through the proxy, never the demo set.
 
+The Worker also keeps Workers Logs (`[observability]` in `wrangler.toml`): a record of each recent
+request, searchable in the dashboard (Workers & Pages → the Worker → Logs, or Observability),
+within the free plan's daily quota and short retention. `npx wrangler tail vrlbry-zim-proxy`
+shows the same live.
+
 Why only Kiwix's own mirror can be read from a page, and what the others would need, is in
 [MIRRORS.md](MIRRORS.md).
 
