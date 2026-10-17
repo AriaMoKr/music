@@ -139,7 +139,13 @@
      read in 212 s; at that rate the 20 maxis read ~17 GB in ~5 hours: one or two runs of the
      workflow with "prebuilt indexes" ticked (a stopped build resumes). Then 43 of the 67
      English Wikipedias and Wikisources open from the web (23 now), every selection by at least
-     one flavour.
+     one flavour. *Run (2026-10-11):* one run built all 20 within its 5 hours and the site
+     shipped 28 indexes; within the week Kiwix published October editions of 11 of the topics
+     (chemistry, comics, cricket, geography, history, ice hockey, Indian cinema, molcell,
+     physics, sociology, tennis), so on 2026-10-17 32 of the 67 open (15 by the site's index, 17
+     built in the browser) and those 11 maxis (8.2 GB) need building again. Topics are
+     republished every three months or so, so keeping up means a run per batch of new editions
+     (the release holds what outlives the 7-day Actions cache).
   3. The nopic and mini flavours later, if at all: they help those who downloaded such a copy
      and open it from their device (the site's index saves them a build in the browser).
   4. New editions rebuilt by the workflow when Kiwix's catalogue lists them, so the shipped
