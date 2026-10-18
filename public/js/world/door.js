@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture } from './canvas-texture.js';
-import { openingGeometry, placePortal, portalMaterial } from './portal.js';
+import { openingGeometry, placePortal, portalMaterial, setPicture } from './portal.js';
 import { roomMaterials } from './room.js';
 
 export const DOOR = {
@@ -117,6 +117,22 @@ export function windowAnglesBesideDoor(half, R) {
     angles.push(a, 2 * Math.PI - a);
   }
   return angles;
+}
+
+/**
+ * An entry of the Hallway's views.json (its README, "The view from your door": the view out of
+ * this library's door there, and how to hang it), checked: { image, depth, pictureHeight, eye,
+ * horizon, aspect } with sizes in sensible ranges, else null.
+ */
+export function viewParams(entry) {
+  if (!entry || typeof entry.image !== 'string' || !entry.image) return null;
+  const n = (v, lo, hi) => (typeof v === 'number' && v >= lo && v <= hi ? v : null);
+  const v = {
+    image: entry.image,
+    depth: n(entry.depth, 0.3, 30), pictureHeight: n(entry.pictureHeight, 0.5, 40), eye: n(entry.eye, 0, 3),
+    horizon: n(entry.horizon, 0, 1), aspect: n(entry.aspect ?? 2, 0.25, 8),
+  };
+  return Object.values(v).every((x) => x !== null) ? v : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -360,6 +376,31 @@ export class Door {
     const u = this.portal.material.uniforms;
     u.uGlow.value = this._glow;
     u.uTime.value += dt;
+  }
+
+  /**
+   * The Hallway's own view out of this library's door there (`views` its views.json, `id` the
+   * door's), in place of the painted one. Optional: when it cannot be read (offline, or none for
+   * that door), the painting stays.
+   * @returns {Promise<boolean>} whether it is shown
+   */
+  async loadView(views, id) {
+    try {
+      const res = await fetch(views, { cache: 'no-cache' });
+      const v = res.ok ? viewParams((await res.json())?.views?.[id]) : null;
+      if (!v) return false;
+      const image = await fetch(new URL(v.image, res.url));
+      if (!image.ok) return false;
+      // Flipped and unconverted, as three would upload it (canvas-texture.js).
+      const bitmap = await createImageBitmap(await image.blob(), { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+      const painted = this.portal.material.uniforms.uMap.value;
+      setPicture(this.portal.material, canvasTexture(bitmap, { anisotropy: 4 }), v);
+      painted.dispose();
+      return true;
+    } catch (err) {
+      console.warn(`vrlbry: the Hallway's view from this door could not be shown (${err.message})`);
+      return false;
+    }
   }
 
   /** A ray against it (rayDoor): { distance, opening }, reused, or null. */

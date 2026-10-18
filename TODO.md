@@ -279,7 +279,11 @@
   through, clicked or triggered, it fades and leaves (`interaction.leave`), and Back to a cached
   page puts the viewer in front of it again. Checked in the browser (both rooms, pointing, walking
   in, coming back) and on a Quest 3 (`quest-perf handover` through `leave`: 2 of 2 in VR). Not yet
-  looked at in the headset by a person, nor measured with `quest-perf run`.
+  looked at in the headset by a person, nor measured with `quest-perf run`. *The view through it (2026-10-18):* the
+  Hallway now renders and publishes the view out of each of its doors (AriaMoKr/hallway,
+  `tools/door-views.mjs`, `views/views.json`), and the door shows vrlbry's (across the hall to the
+  door opposite, as one would see it standing in that doorway); the painted view stays for when it
+  cannot be read. To do there when the hall changes: run its tool again.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

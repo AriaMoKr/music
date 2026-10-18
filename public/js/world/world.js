@@ -204,6 +204,8 @@ export class World {
     if (this._doorSpec) {
       if (!this.door) {
         this.door = new Door(this._doorSpec);
+        // The Hallway's own picture of the view from its door, when it can be read.
+        if (this._doorSpec.views) this.door.loadView(this._doorSpec.views, this._doorSpec.viewId);
         this.group.add(this.door.group);
       }
       this.door.setRoom(this.room);

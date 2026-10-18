@@ -1238,8 +1238,13 @@ the room's wood), its opening a portal (the Hallway's shader: one picture as the
 room behind, its edges stretched back as floor, walls and ceiling, with parallax per eye; a veil
 and a rim glow in the door's colour, brighter when pointed at, a little when stood within
 1.7 m), a plaque on the wall to its right and a sign over it in the Hallway's green enamel and
-gold. Through it: a painted view down the Hallway (its lamps, its marble floor, this library's
-door glowing gold, dusk in the end window), or another place's glow and name. 4 draw calls in
+gold. Through it: the Hallway's own view out of this library's door there, which the Hallway
+renders and publishes (its README, "The view from your door": `views/views.json` beside its
+page, the entry named by `HALLWAY_URL`'s `?from=`, a 2:1 picture and how to hang it: `depth`,
+`pictureHeight`, `eye`, `horizon`, `aspect`, checked by `viewParams`; `Door.loadView`, `setPicture`),
+loaded after the room is built; until then, offline, or without one, a painted view down the
+Hallway (its lamps, its marble floor, this library's door glowing gold, dusk in the end window).
+A door to another place (`?back=`) shows that place's glow and name. 4 draw calls in
 all. Pure helpers for Node: `doorPlace(room)`, `doorLocal` / `doorWorld` (its frame: origin at
 the sill's middle at the portal, +z into the room, +x to the right of someone facing it),
 `doorCrossed` (a head 0.06 m past its front, between the jambs), `doorCorridor` (`constrain`

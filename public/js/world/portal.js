@@ -73,14 +73,12 @@ void main() {
  * @param {number} [o.aspect]     the picture's width / height
  */
 export function portalMaterial({ map, width, height, depth, pictureHeight, eye, horizon, color, aspect = 2 }) {
-  const bottom = eye - horizon * pictureHeight;
-  const half = (pictureHeight * aspect) / 2;
-  return new THREE.ShaderMaterial({
+  const material = new THREE.ShaderMaterial({
     uniforms: {
       uMap: { value: map },
       uColor: { value: new THREE.Color(color) },
-      uBoxMin: { value: new THREE.Vector3(-half, bottom, -depth) },
-      uBoxMax: { value: new THREE.Vector3(half, bottom + pictureHeight, 0) },
+      uBoxMin: { value: new THREE.Vector3() },
+      uBoxMax: { value: new THREE.Vector3() },
       uOpening: { value: new THREE.Vector2(width, height) },
       uTime: { value: 0 },
       uGlow: { value: 0 },
@@ -89,6 +87,21 @@ export function portalMaterial({ map, width, height, depth, pictureHeight, eye, 
     vertexShader,
     fragmentShader,
   });
+  setPicture(material, map, { depth, pictureHeight, eye, horizon, aspect });
+  return material;
+}
+
+/**
+ * Hangs another picture behind the opening (the parameters as portalMaterial takes them, as the
+ * Hallway's views.json gives them for the view from a door).
+ */
+export function setPicture(material, map, { depth, pictureHeight, eye, horizon, aspect = 2 }) {
+  const u = material.uniforms;
+  const bottom = eye - horizon * pictureHeight;
+  const half = (pictureHeight * aspect) / 2;
+  u.uMap.value = map;
+  u.uBoxMin.value.set(-half, bottom, -depth);
+  u.uBoxMax.value.set(half, bottom + pictureHeight, 0);
 }
 
 /** The quad for an opening, its origin at the middle of the sill, facing +z. */

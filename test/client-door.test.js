@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import * as THREE from 'three';
 import {
-  DOOR, doorCorridor, doorCrossed, doorLocal, doorPlace, doorWorld, rayDoor, wallBehind, windowAnglesBesideDoor,
+  DOOR, doorCorridor, doorCrossed, doorLocal, doorPlace, doorWorld, rayDoor, viewParams, wallBehind, windowAnglesBesideDoor,
 } from '../public/js/world/door.js';
 
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
@@ -85,5 +85,14 @@ describe('the door back', () => {
       }
     }
     assert.equal(windowAnglesBesideDoor(0, 3.8).length, 8);
+  });
+
+  it('takes the Hallway\'s view from its door when views.json gives one that makes sense', () => {
+    const entry = { image: 'vrlbry.jpg', depth: 2.94, pictureHeight: 6.5, eye: 1.6, horizon: 0.6154, aspect: 2 };
+    assert.deepEqual(viewParams(entry), entry);
+    assert.equal(viewParams({ ...entry, aspect: undefined }).aspect, 2, 'a 2:1 picture unless it says');
+    for (const bad of [null, {}, { ...entry, image: '' }, { ...entry, depth: -1 }, { ...entry, horizon: 2 }, { ...entry, eye: '1.6' }, { ...entry, pictureHeight: 1e6 }]) {
+      assert.equal(viewParams(bad), null, JSON.stringify(bad));
+    }
   });
 });

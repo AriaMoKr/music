@@ -41,7 +41,11 @@ export function wayOut(search = '') {
  * @param {ReturnType<typeof wayOut>} way
  */
 export function doorOf(way) {
-  return way.custom
-    ? { title: way.name, subtitle: way.host, sign: way.name, color: '#9cc6b4', view: 'plain' }
-    : { title: 'Hallway', subtitle: 'Doors to other places', sign: 'Hallway', color: '#9cc6b4', view: 'hallway' };
+  if (way.custom) return { title: way.name, subtitle: way.host, sign: way.name, color: '#9cc6b4', view: 'plain', views: null, viewId: null };
+  // The Hallway publishes the view out of each of its doors (its README, "The view from your
+  // door"): this library's is the one its ?from= names.
+  return {
+    title: 'Hallway', subtitle: 'Doors to other places', sign: 'Hallway', color: '#9cc6b4', view: 'hallway',
+    views: new URL('views/views.json', HALLWAY_URL).href, viewId: new URL(HALLWAY_URL).searchParams.get('from'),
+  };
 }

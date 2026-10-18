@@ -36,8 +36,11 @@ describe('the way out', () => {
   });
 
   it('puts the same place on the door back: the Hallway\'s corridor through it, or another place\'s name', () => {
-    assert.deepEqual(doorOf(wayOut('')), { title: 'Hallway', subtitle: 'Doors to other places', sign: 'Hallway', color: '#9cc6b4', view: 'hallway' });
+    assert.deepEqual(doorOf(wayOut('')), {
+      title: 'Hallway', subtitle: 'Doors to other places', sign: 'Hallway', color: '#9cc6b4', view: 'hallway',
+      views: 'https://ariamokr.github.io/hallway/views/views.json', viewId: 'vrlbry',
+    });
     const door = doorOf(wayOut(`?back=${encodeURIComponent('https://example.org/hall/')}&backname=Garden%20Hall`));
-    assert.deepEqual([door.title, door.subtitle, door.sign, door.view], ['Garden Hall', 'example.org', 'Garden Hall', 'plain']);
+    assert.deepEqual([door.title, door.subtitle, door.sign, door.view, door.views], ['Garden Hall', 'example.org', 'Garden Hall', 'plain', null]);
   });
 });
