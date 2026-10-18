@@ -103,18 +103,18 @@ describe('spreads', () => {
 
 describe('the single-page view on a flat screen', () => {
   const vt = Math.tan((35 * Math.PI) / 180); // a 70° vertical field of view, as main.js's camera
-  const base = { pageW: 0.318, pageH: 0.441, vt, toolbarW: 0.72, toolbarDrop: 0.15, near: 0.033 };
+  const base = { pageW: 0.318, pageH: 0.441, vt, toolbarW: 0.72, toolbarDrop: 0.15 };
   const EPS = 1e-9;
 
-  /** The page and toolbar within the screen, measured where the page is nearest. */
+  /** The page and toolbar within the screen. */
   function check(fit, aspect, { top = 0.03, foot = 0.18 } = {}) {
-    const h = (fit.dist - base.near) * vt;
+    const h = fit.dist * vt;
     const pageTop = -fit.drop + base.pageH / 2;
     const toolbarFoot = -fit.drop - base.pageH / 2 - base.toolbarDrop * fit.toolbar;
     assert.ok(base.pageW / 2 <= h * aspect + EPS, 'as wide as the screen at most');
     assert.ok(pageTop <= (1 - top) * h + EPS, 'below the top margin');
     assert.ok(toolbarFoot >= -(1 - foot) * h - EPS, 'the toolbar above the foot strip');
-    assert.ok((0.72 / 2) * fit.toolbar <= 0.96 * (fit.dist - base.near) * vt * aspect + EPS, 'the toolbar within the width');
+    assert.ok((0.72 / 2) * fit.toolbar <= 0.96 * fit.dist * vt * aspect + EPS, 'the toolbar within the width');
     return { h, pageTop, toolbarFoot };
   }
 
@@ -122,7 +122,7 @@ describe('the single-page view on a flat screen', () => {
     const aspect = 375 / 812;
     const fit = fitOnePage({ ...base, aspect });
     check(fit, aspect);
-    assert.ok(Math.abs(base.pageW / 2 - (fit.dist - base.near) * vt * aspect) < 1e-6, 'the width decides');
+    assert.ok(Math.abs(base.pageW / 2 - fit.dist * vt * aspect) < 1e-6, 'the width decides');
     assert.ok(fit.toolbar < 0.5);
     assert.ok(fit.drop < 0, 'the page above the eyes, the toolbar under it');
   });

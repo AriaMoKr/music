@@ -2,7 +2,7 @@
 // mapping of every input (XR, mouse, keyboard, touch) onto those states.
 
 import * as THREE from 'three';
-import { Book3D, V_TILT } from './world/book3d.js';
+import { Book3D } from './world/book3d.js';
 import { MAX_BOOKCASES } from './world/world.js';
 import { BookReader, THEMES } from './reader/reader.js';
 import {
@@ -1426,7 +1426,7 @@ export class Interaction {
     if (this._single) {
       const fit = fitOnePage({
         pageW: page * 1.06, pageH: page * (PAGE_PX.h / PAGE_PX.w) * 1.04, vt, aspect,
-        toolbarW: TOOLBAR_W, toolbarDrop: TOOLBAR_DROP, near: page * Math.sin(V_TILT),
+        toolbarW: TOOLBAR_W, toolbarDrop: TOOLBAR_DROP,
       });
       return { dist: fit.dist, drop: fit.drop, flat };
     }

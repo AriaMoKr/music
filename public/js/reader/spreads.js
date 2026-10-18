@@ -31,13 +31,12 @@ export function singlePage(setting, { presenting = false, aspect = 1 } = {}) {
  * scaled down to the screen's width (it is wider than a page), the two centred between a margin
  * at the top and a strip at the foot (the help button's corner). Lengths in metres, the page's
  * with a margin; `vt`: tan(half the vertical field of view); `toolbarW`: the toolbar's width,
- * `toolbarDrop`: how far its foot is below the page's at full size; `near`: how much nearer the
- * eyes the page's outer edge is (the open book's halves rise toward the reader), fitted there and
- * the rest, farther, smaller; `top` and `foot`: fractions of the screen's half-height.
+ * `toolbarDrop`: how far its foot is below the page's at full size; `top` and `foot`: fractions
+ * of the screen's half-height.
  * @returns {{ dist: number, drop: number, toolbar: number }} the distance; how far below the eyes
  *   the page's centre is (negative: above); the toolbar's scale
  */
-export function fitOnePage({ pageW, pageH, vt, aspect, toolbarW, toolbarDrop, near = 0, top = 0.03, foot = 0.18 }) {
+export function fitOnePage({ pageW, pageH, vt, aspect, toolbarW, toolbarDrop, top = 0.03, foot = 0.18 }) {
   const byWidth = pageW / 2 / (vt * aspect);
   const toolbarAt = (d) => Math.min(1, (0.96 * d * vt * aspect) / (toolbarW / 2));
   let dist = byWidth;
@@ -46,7 +45,7 @@ export function fitOnePage({ pageW, pageH, vt, aspect, toolbarW, toolbarDrop, ne
   const toolbar = toolbarAt(dist);
   const h = dist * vt;
   // The block's middle sits halfway between the margins; the page's centre is above the block's.
-  return { dist: dist + near, drop: -(((foot - top) * h) / 2 + (toolbarDrop * toolbar) / 2), toolbar };
+  return { dist, drop: -(((foot - top) * h) / 2 + (toolbarDrop * toolbar) / 2), toolbar };
 }
 
 /** The setting that gives `single` where `auto` (what 'auto' gives here) is the default: 'auto' when they agree. */

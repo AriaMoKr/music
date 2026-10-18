@@ -1447,7 +1447,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   the right) and turn two at a time. The single-page view shows only the right-hand page: the
   book's left half (the cover and its pages) is hidden once the cover has swung past edge-on
   (`Book3D.single`, `setSingle`), no left canvas is drawn (the spread's left, `'ex'` before the
-  first page or `'blank'`, is not shown), and the book slides half a page left so the page is in
+  first page or `'blank'`, is not shown), the page lies flat (a spread's halves rise toward the
+  reader; a lone page looked slanted), and the book slides half a page left so the page is in
   front (`_bookX`). A turn lifts the page toward the left and it goes as it passes edge-on (the
   leaf's back is not drawn), uncovering the next; turning back, the previous page comes in from
   there. The left part of the page (30 %) turns back, as the left page does. `settings.pageView`: `'auto'` (default: one page on a flat screen
@@ -1455,8 +1456,7 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   at the page being read and keeps the choice, as `'auto'` when that is what auto gives there. An
   open book follows a resize (a phone turned) while the setting is `'auto'`. On a flat screen the
   single-page view's page is as large as the screen's width and height allow with the toolbar
-  under it (`fitOnePage`, at the page's nearest edge: the open halves rise toward the reader by
-  `V_TILT`), and the book faces the screen square on; the toolbar is scaled down to the screen's
+  under it (`fitOnePage`), and the book faces the screen square on; the toolbar is scaled down to the screen's
   width where it would not fit, and the contents go over the page where they would be off the
   screen beside the book.
   Contents opens a scrollable TOC panel at the entry being read (highlighted). A list of more
