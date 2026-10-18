@@ -18,6 +18,7 @@ import { isLocal } from './local/local.js';
 import { resolveLink } from './api.js';
 import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
+import { wayOut as defaultWayOut } from './hallway.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
@@ -86,9 +87,10 @@ export class Interaction {
    * @param {object[]} o.libraries
    * @param {Record<string, object[]>} o.booksByLib
    * @param {object} o.settings persisted settings (mutated + saved here)
+   * @param {ReturnType<defaultWayOut>} [o.wayOut] where the catalogue stand's "← Hallway" leads (hallway.js)
    */
-  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings }) {
-    Object.assign(this, { renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings });
+  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut() }) {
+    Object.assign(this, { renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut });
     this.state = 'browse';
     this.book = null; // book descriptor in inspect/read
     this.book3d = null;
@@ -108,6 +110,8 @@ export class Interaction {
     this.onExitVR = null;
     /** Set by main.js: reloads the page (a headset's browser controls are out of reach in VR). */
     this.onReload = null;
+    /** Set by main.js: leaves by the way out (this.wayOut: the Hallway, or the place that linked here). */
+    this.onHallway = null;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
     this._outdated = false; // the site changed since this page loaded (setOutdated)
     this._savedScene = null; // "Saved …" of the browser's saved scene (setSavedScene), or null
@@ -187,19 +191,29 @@ export class Interaction {
     this._genresScroll = p.get('room-genres') ? { place: this._genresListFor, scroll: p.get('room-genres').scroll } : null;
     p.clear();
     p.add({ type: 'text', x: pad, y: 26, w: W - 2 * pad, h: 54, text: 'Catalogue', size: 46, weight: '600', serif: true, color: UI.accent });
+    // The header's buttons, right to left. With all of them (a server's library, in VR) Rescan is
+    // shortened, or the way out's would reach the title; that one takes the room left (another
+    // place's name is longer), at most 260.
     let right = W - pad;
     if (!this.staticSite) {
-      right -= 230;
-      p.add({ id: 'rescan', type: 'button', x: right, y: 24, w: 230, h: 56, label: '⟳ Rescan folder', size: 24, onClick: () => this.onRescan?.() });
+      const tight = this.controls.presenting;
+      right -= tight ? 150 : 230;
+      p.add({
+        id: 'rescan', type: 'button', x: right, y: 24, w: tight ? 150 : 230, h: 56, label: tight ? '⟳ Rescan' : '⟳ Rescan folder', size: 24,
+        onClick: () => this.onRescan?.(),
+      });
     }
     if (this.controls.presenting) {
       right -= 12 + 170;
       p.add({ id: 'exit-vr', type: 'button', x: right, y: 24, w: 170, h: 56, label: 'Exit VR', size: 24, onClick: () => this.onExitVR?.() });
     }
+    right -= 12 + 190;
     p.add({
-      id: 'reload', type: 'button', x: right - 12 - 190, y: 24, w: 190, h: 56, label: '↻ Reload page', size: 24,
+      id: 'reload', type: 'button', x: right, y: 24, w: 190, h: 56, label: '↻ Reload page', size: 24,
       active: this._outdated, onClick: () => this.onReload?.(),
     });
+    const hw = Math.min(260, right - 12 - 270);
+    p.add({ id: 'hallway', type: 'button', x: right - 12 - hw, y: 24, w: hw, h: 56, label: this.wayOut.label, size: 24, onClick: () => this.onHallway?.() });
     const place = this._place();
     // Rooms exist when there is more than one library, or a library too big to shelve whole.
     const hasRooms = this.libraries.length > 1 || (place && isFaceted(place, this.booksByLib[place.id]));

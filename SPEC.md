@@ -1484,8 +1484,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   ring below the line of sight fills up (shown after 0.15 s, so taps do not flash it); releasing
   early cancels. Both end the XRSession (`interaction.onExitVR`).
 - **Kiosk panel** (at `world.kiosk`, always available in browse; 1.0 × 1.0 m): "⟳ Rescan folder"
-  button (`POST /api/rescan`), "↻ Reload page" (`interaction.onReload` → `location.reload()`; in
-  VR the browser's own controls are out of reach, and a reload ends the session); at its foot,
+  button (`POST /api/rescan`; "⟳ Rescan" beside Exit VR, for room), "↻ Reload page"
+  (`interaction.onReload` → `location.reload()`; in VR the browser's own controls are out of
+  reach, and a reload ends the session), and the way out, "← Hallway" (below); at its foot,
   small and right-aligned, "Updated <date, time>" from `GET /api/version`, fetched once at load,
   so it tells which version the page is running. Tabs: *Shelves & settings*, *Rooms* (when there
   is more than one library or the current one is browsed by rooms), *Search* and *Kiwix* (§2.6,
@@ -1618,8 +1619,15 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   The banner has no timeout; × hides it for the page, "Don't show again" sets
   `settings.updateNotices = false` (no banner, no VR notice; the kiosk's note stays), and the help
   dialog's "Tell me when this site has been updated" checkbox turns it back on.
+- **The way out** (`hallway.js`, always shown: the card's header and the kiosk's): "← Hallway" leads
+  to the Hallway (https://ariamokr.github.io/hallway/, a WebXR corridor whose doors lead to other
+  places) as `config.HALLWAY_URL`, `?from=vrlbry`, so the visitor arrives at this library's door.
+  A place that has this library behind one of its doors names itself in the link that brings
+  visitors here, and the way out leads there instead: `?back=<its address>&backname=<its name>`
+  (URL-encoded; http(s) only, else the Hallway; the button shows the name, else the host, at most
+  24 characters). A plain navigation, so leaving in VR can keep the visitor in VR there.
 - DOM overlay (non-VR): see `ui/overlay.js` — title with the same "Updated …" stamp, library
-  cards (with indexing progress or "waiting to index"), a ⟳ rescan button, under the cards
+  cards (with indexing progress or "waiting to index"), a ⟳ rescan button, the way out, under the cards
   "Browse Kiwix's library…" first, on a line of its own (what a new visitor most likely wants),
   then "Open ZIM files…" on the next, and the web-address field, and a drop target over the page (local library, §2.6), search box (filters by title / author across *all* books of all libraries;
   picking a result = switch room if needed, teleport to it and select it; for Wikipedia
@@ -1642,6 +1650,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   `PLAYER.eyeHeight` applied as camera y when not presenting (XR provides real head height).
 - Session: `navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor',
   'bounded-floor', 'hand-tracking', 'layers'] })` from the Enter VR button; `renderer.xr.setSession`.
+  Also without a click when the browser grants one (`sessiongranted` on `navigator.xr`: Quest
+  Browser, after a navigation from another page's immersive session, such as the Hallway's door):
+  an inline script in `index.html` notes a grant made while the library loads
+  (`window.vrlbryXrGranted`), and `main.js` takes it, or a later one, once the frame loop runs, as
+  the Enter VR button would (never while a session is running: `enterVR` would end it).
 - Dev flag: `?xr=emulate` (or `?emulate=quest3`) dynamically imports `/vendor/iwer/iwer.module.js`
   and installs `new XRDevice(metaQuest3).installRuntime({ forceInstall: true })` **before**
   anything queries `navigator.xr` (Chromium has a native `navigator.xr` even without a headset);

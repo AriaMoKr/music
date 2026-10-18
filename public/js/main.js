@@ -15,6 +15,7 @@ import { fileNameOf, onKiwixMirror, zimUrl } from './local/zim-url.js';
 import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
+import { wayOut } from './hallway.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
@@ -23,7 +24,9 @@ import { parseScene, restoreScene, saveScene, savedScene } from './scene.js';
 
 startErrorLog(); // first: the debug report lists the page's last errors
 const params = new URLSearchParams(location.search);
-const overlay = new Overlay({ root: document.getElementById('overlay') });
+// The way out: to the Hallway, or to the place that linked here naming itself (?back=, hallway.js).
+const way = wayOut(location.search);
+const overlay = new Overlay({ root: document.getElementById('overlay'), wayOut: way });
 // Registered before anything can fail: the error screen offers the report too.
 overlay.onDebugInfo(async () => {
   const text = JSON.stringify(debugReport(window.__vrlbry, { overlay }), null, 2);
@@ -125,7 +128,7 @@ async function start() {
   const controls = new Controls({ renderer, camera, rig, scene, world, domElement: renderer.domElement });
   controls.smoothMove = settings.smoothMove;
   controls.teleportTo(world.spawn.position, world.spawn.yaw);
-  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings });
+  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way });
   if (catalog.static) {
     // A build without a server (GitHub Pages, tools/build-pages.mjs): nothing to rescan.
     interaction.setStatic(true);
@@ -171,6 +174,9 @@ async function start() {
   }
   interaction.onExitVR = () => renderer.xr.getSession()?.end();
   interaction.onReload = () => location.reload();
+  // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there (the
+  // Hallway takes a granted session, as this page does below).
+  interaction.onHallway = () => { location.href = way.url; };
   // Scenes (scene.js): one saved in the browser (Save / Restore scene in the help dialog and on the
   // kiosk), or pasted into the help dialog (a saved scene or a debug report).
   const tell = (msg, kind = 'info') => {
@@ -712,6 +718,12 @@ async function start() {
     renderer.render(scene, camera);
     if (perf.enabled) perf.afterFrame(time, start, renderer.info.render);
   });
+  // Walked in from another page's immersive session (a door of the Hallway): Quest Browser grants
+  // this page a session without a click (sessiongranted; index.html notes one that came while the
+  // library was loading), taken as the Enter VR button would, so the visitor stays in VR.
+  const takeGranted = () => { if (!session && !renderer.xr.isPresenting) enterVR(); };
+  if (window.vrlbryXrGranted) takeGranted();
+  navigator.xr?.addEventListener?.('sessiongranted', takeGranted);
 
   window.__vrlbry = {
     renderer, scene, camera, rig, world, controls, interaction, overlay, xrDevice, settings, enterVR,

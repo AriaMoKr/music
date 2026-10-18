@@ -42,3 +42,10 @@ export const PLAYER = {
 export const XR_FRAME_RATE = 72;
 
 export const STORAGE_PREFIX = 'vrlbry:';
+
+/**
+ * The Hallway (https://github.com/AriaMoKr/hallway): a WebXR corridor whose doors lead to other
+ * environments, this library behind one of them. The link back names this one (?from=vrlbry), so
+ * the visitor arrives in front of its door. Only a link: nothing is loaded from there.
+ */
+export const HALLWAY_URL = 'https://ariamokr.github.io/hallway/?from=vrlbry';

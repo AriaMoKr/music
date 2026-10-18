@@ -1,0 +1,32 @@
+// The way out (SPEC §5.6 "Kiosk panel"): the card's and the catalogue stand's "← Hallway" lead to
+// the Hallway this library was made for (config.js HALLWAY_URL), or to whatever place has it
+// behind one of its doors and says so in the link that brings visitors here:
+//   https://ariamokr.github.io/vrlbry/?back=<that place's address>&backname=<its name>
+// (both URL-encoded). Only http(s) addresses are taken, and another place is named on the button
+// (by `backname`, else its host), so a link cannot send visitors somewhere unsaid. Pure.
+
+import { HALLWAY_URL } from './config.js';
+
+/** The longest name shown on the button (characters). */
+const NAME_MAX = 24;
+
+/**
+ * Where the way out leads, from the page's query string.
+ * @param {string} search location.search
+ * @returns {{ url: string, label: string, title: string, custom: boolean }}
+ */
+export function wayOut(search = '') {
+  const params = new URLSearchParams(search);
+  let url = null;
+  try {
+    url = params.get('back') ? new URL(params.get('back')) : null;
+  } catch {
+    url = null;
+  }
+  if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) {
+    return { url: HALLWAY_URL, label: '← Hallway', title: 'Back to the Hallway, whose doors lead to other places', custom: false };
+  }
+  const name = (params.get('backname') || '').replace(/\s+/g, ' ').trim() || url.host;
+  const shown = name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1).trimEnd()}…` : name;
+  return { url: url.href, label: `← ${shown}`, title: `Back to ${name} (${url.host})`, custom: true };
+}

@@ -199,6 +199,23 @@ Chemistry, Medicine, Mathematics, Physics and Golf), opens more from Kiwix's lib
 device, and notices a new version within seconds and offers to reload. How it is built and
 deployed is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-online-version-github-pages).
 
+## The Hallway, or your own
+
+vrlbry is behind one of the doors of the [Hallway](https://ariamokr.github.io/hallway/), a WebXR
+corridor whose doors lead to other places. Its **← Hallway** link (on the library card, and on the
+catalogue stand in VR) leads back there, to vrlbry's door. Walking through the door in VR on a
+Meta Quest keeps you in VR, both ways.
+
+To put vrlbry behind a door of your own hallway, or link to it from anywhere, name your page in
+the link and the way out leads back to it instead:
+
+```
+https://ariamokr.github.io/vrlbry/?back=https%3A%2F%2Fexample.org%2Fhall%2F%3Ffrom%3Dvrlbry&backname=My%20Hall
+```
+
+`back` is your page's address and `backname` its name on the button (both URL-encoded; without a
+name the button shows your host). Only `http` and `https` addresses are taken.
+
 ## Developing
 
 Tests, the static site's build and workflow, the edge proxy and measuring performance on a Quest

@@ -9,6 +9,7 @@ import { bookIndex, matchBooks, findArticles } from '../search.js';
 import { load, save } from '../util/storage.js';
 import { noteError } from '../debug-info.js';
 import { RESET_PARTS, defaultResetParts } from '../reset.js';
+import { wayOut } from '../hallway.js';
 
 const ARTICLE_RESULTS = 8; // per Wikipedia library
 
@@ -78,7 +79,8 @@ const HELP = {
 
 export class Overlay {
   /** @param {{ root: HTMLElement }} o */
-  constructor({ root }) {
+  /** @param {{ root: HTMLElement, wayOut?: ReturnType<typeof wayOut> }} o wayOut: where "← Hallway" leads (hallway.js) */
+  constructor({ root, wayOut: way = wayOut() }) {
     this.root = root;
     this.mode = 'desktop';
     this._pick = null;
@@ -101,7 +103,7 @@ export class Overlay {
         <button class="ov-loading-debug" hidden>Copy debug info</button>
       </div>
       <section class="ov-card" aria-label="Library">
-        <header><span class="ov-brand">vrlbry</span><span class="ov-version"></span><span class="ov-tools"><button class="ov-rescan" aria-label="Rescan the ZIM folder" title="Rescan the ZIM folder">⟳</button><button class="ov-collapse" aria-label="Collapse" title="Collapse">–</button></span></header>
+        <header><span class="ov-brand">vrlbry</span><span class="ov-version"></span><span class="ov-tools"><a class="ov-hallway" href="${esc(way.url)}" title="${esc(way.title)}">${esc(way.label)}</a><button class="ov-rescan" aria-label="Rescan the ZIM folder" title="Rescan the ZIM folder">⟳</button><button class="ov-collapse" aria-label="Collapse" title="Collapse">–</button></span></header>
         <div class="ov-libs"></div>
         <div class="ov-open">
           <button class="ov-kiwix-btn" hidden title="The ZIMs this library reads well, from library.kiwix.org">Browse Kiwix's library…</button>
