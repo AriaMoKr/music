@@ -1663,7 +1663,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   the Hallway online: none), ~0.1 s after the page starts, and it lasts about 5 s: a request at
   4.7 s started a session, at 5.2 s it was refused ("requires user activation"). This page asks
   after its catalogue and room, at 1.6 s from a local server with many libraries; the online
-  version is up in 0.4–1.8 s. Whatever is added before the frame loop starts must keep it well
+  version is up in 0.4–1.8 s. Online, 3 of 3 stayed in VR each way: out to the Hallway (it takes
+  the session at 0.2–0.35 s) and into this library (at 0.4 s). Whatever is added before the frame loop starts must keep it well
   within those 5 s, or a visitor walking in lands on the 2D page.
 - Dev flag: `?xr=emulate` (or `?emulate=quest3`) dynamically imports `/vendor/iwer/iwer.module.js`
   and installs `new XRDevice(metaQuest3).installRuntime({ forceInstall: true })` **before**
