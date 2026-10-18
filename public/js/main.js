@@ -174,8 +174,8 @@ async function start() {
   }
   interaction.onExitVR = () => renderer.xr.getSession()?.end();
   interaction.onReload = () => location.reload();
-  // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there (the
-  // Hallway takes a granted session, as this page does below).
+  // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there, on
+  // this page's origin only (the Hallway takes a granted session, as this page does below).
   interaction.onHallway = () => { location.href = way.url; };
   // Scenes (scene.js): one saved in the browser (Save / Restore scene in the help dialog and on the
   // kiosk), or pasted into the help dialog (a saved scene or a debug report).
@@ -720,7 +720,8 @@ async function start() {
   });
   // Walked in from another page's immersive session (a door of the Hallway): Quest Browser grants
   // this page a session without a click (sessiongranted; index.html notes one that came while the
-  // library was loading), taken as the Enter VR button would, so the visitor stays in VR.
+  // library was loading), taken as the Enter VR button would, so the visitor stays in VR. A grant
+  // lasts ~5 s from the page's start (SPEC §5.7), so the startup above must stay well within that.
   const takeGranted = () => { if (!session && !renderer.xr.isPresenting) enterVR(); };
   if (window.vrlbryXrGranted) takeGranted();
   navigator.xr?.addEventListener?.('sessiongranted', takeGranted);

@@ -1625,7 +1625,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   A place that has this library behind one of its doors names itself in the link that brings
   visitors here, and the way out leads there instead: `?back=<its address>&backname=<its name>`
   (URL-encoded; http(s) only, else the Hallway; the button shows the name, else the host, at most
-  24 characters). A plain navigation, so leaving in VR can keep the visitor in VR there.
+  24 characters). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
+  on this page's origin (§5.7).
 - DOM overlay (non-VR): see `ui/overlay.js` — title with the same "Updated …" stamp, library
   cards (with indexing progress or "waiting to index"), a ⟳ rescan button, the way out, under the cards
   "Browse Kiwix's library…" first, on a line of its own (what a new visitor most likely wants),
@@ -1654,7 +1655,14 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   Browser, after a navigation from another page's immersive session, such as the Hallway's door):
   an inline script in `index.html` notes a grant made while the library loads
   (`window.vrlbryXrGranted`), and `main.js` takes it, or a later one, once the frame loop runs, as
-  the Enter VR button would (never while a session is running: `enterVR` would end it).
+  the Enter VR button would (never while a session is running: `enterVR` would end it). Measured
+  on a Quest 3 (Quest Browser 152, 2026-10-18, over adb and DevTools): a grant comes only after a
+  navigation within one origin (`localhost:8082` to itself: granted; to `127.0.0.1:8082`, or to
+  the Hallway online: none), ~0.1 s after the page starts, and it lasts about 5 s: a request at
+  4.7 s started a session, at 5.2 s it was refused ("requires user activation"). This page asks
+  after its catalogue and room, at 1.6 s from a local server with many libraries; the online
+  version is up in 0.4–1.8 s. Whatever is added before the frame loop starts must keep it well
+  within those 5 s, or a visitor walking in lands on the 2D page.
 - Dev flag: `?xr=emulate` (or `?emulate=quest3`) dynamically imports `/vendor/iwer/iwer.module.js`
   and installs `new XRDevice(metaQuest3).installRuntime({ forceInstall: true })` **before**
   anything queries `navigator.xr` (Chromium has a native `navigator.xr` even without a headset);
