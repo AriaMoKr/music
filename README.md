@@ -203,9 +203,11 @@ deployed is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-online-version-gith
 ## The Hallway, or your own
 
 vrlbry is behind one of the doors of the [Hallway](https://ariamokr.github.io/hallway/), a WebXR
-corridor whose doors lead to other places. Its **← Hallway** link (on the library card, and on the
-catalogue stand in VR) leads back there, to vrlbry's door. On a Meta Quest, walking through the
-door in VR keeps you in VR: Quest Browser hands the session to the next page when both are on one
+corridor whose doors lead to other places. A door like the Hallway's stands in the library, behind
+where you arrive: through it you see the Hallway, and walking through it (or clicking it, or
+pointing at it and pulling the trigger) takes you back there, to vrlbry's door. So does the
+**← Hallway** link on the library card and on the catalogue stand. On a Meta Quest, walking
+through the door in VR keeps you in VR: Quest Browser hands the session to the next page when both are on one
 origin, as the Hallway and vrlbry are (`ariamokr.github.io`).
 
 To put vrlbry behind a door of your own hallway, or link to it from anywhere, name your page in
@@ -215,8 +217,8 @@ the link and the way out leads back to it instead:
 https://ariamokr.github.io/vrlbry/?back=https%3A%2F%2Fexample.org%2Fhall%2F%3Ffrom%3Dvrlbry&backname=My%20Hall
 ```
 
-`back` is your page's address and `backname` its name on the button (both URL-encoded; without a
-name the button shows your host). Only `http` and `https` addresses are taken. Between your site
+`back` is your page's address and `backname` its name on the button and on the door (both
+URL-encoded; without a name they show your host). Only `http` and `https` addresses are taken. Between your site
 and vrlbry, a Quest visitor leaves VR and presses Enter VR again, since the two are on different
 origins.
 

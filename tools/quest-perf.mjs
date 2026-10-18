@@ -540,11 +540,15 @@ async function listPages(endpoint) {
   return (await res.json()).filter((p) => p.type === 'page');
 }
 
-/** Connects to the open vrlbry page (the one defining window.__vrlbry), waiting up to `waitMs`. */
-async function connectPage(endpoint, { waitMs = 0 } = {}) {
+/**
+ * Connects to the open vrlbry page (the one defining window.__vrlbry), waiting up to `waitMs`;
+ * with `prefer`, only one whose address starts with it (the page --open opened, not another tab).
+ */
+async function connectPage(endpoint, { waitMs = 0, prefer = null } = {}) {
   const until = Date.now() + waitMs;
   for (;;) {
     for (const page of await listPages(endpoint).catch(() => [])) {
+      if (prefer && !page.url.startsWith(prefer)) continue;
       // Rebuild the socket URL on our forwarded port (Android may report a different host).
       const url = `${endpoint.replace(/^http/, 'ws')}/devtools/page/${page.id}`;
       const cdp = await Cdp.connect(url).catch(() => null);
@@ -596,6 +600,8 @@ async function handover(cdp, opts) {
   const delay = Math.max(0, Number(opts.delay) || 0);
   const endSession = () => cdp.eval('window.__vrlbry?.renderer.xr.getSession()?.end(), true').catch(() => {});
   await cdp.send('Page.enable');
+  // VR starts only in the tab in front (another window's tab may be).
+  await cdp.send('Page.bringToFront').catch(() => {});
   const { identifier } = await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: handoverProbe(delay) });
   console.log(`Hand-over from ${start}${delay ? `, a granted request held back ${delay} ms` : ''}:`);
   let inVr = 0;
@@ -614,7 +620,9 @@ async function handover(cdp, opts) {
       const way = await cdp.eval('window.__vrlbry.interaction.wayOut ?? null');
       if (!way) throw new Error('this vrlbry has no way out (an older version)');
       const before = await cdp.eval('performance.timeOrigin');
-      cdp.eval('window.__vrlbry.interaction.onHallway(), true', { userGesture: true }).catch(() => {});
+      // As the door and the stand's button do (leave: a fade, then the way out), else (an older
+      // version) straight there.
+      cdp.eval('(I => (I.leave ? I.leave() : I.onHallway(), true))(window.__vrlbry.interaction)', { userGesture: true }).catch(() => {});
       const arrived = await pollPage(cdp, `performance.timeOrigin !== ${before} && document.readyState !== 'loading' && location.href`, 20000);
       if (!arrived) throw new Error(`the way out (${way.url}) did not navigate`);
       // A grant lasts about 5 s from the page's start: wait past that (and the delay) for the outcome.
@@ -739,7 +747,7 @@ async function main() {
       });
       return c;
     };
-    ({ cdp } = await connectPage(fwd.endpoint, { waitMs: opts.open ? 60000 : 0 }));
+    ({ cdp } = await connectPage(fwd.endpoint, { waitMs: opts.open ? 60000 : 0, prefer: opts.open ? `http://localhost:${opts.port}/?perf` : null }));
     if (command === 'handover') return await handover(cdp, opts);
     await attach(cdp);
 

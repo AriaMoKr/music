@@ -38,6 +38,7 @@ function tileUVs(geo, su, sv) {
  * re-uploads nothing to the GPU. Tiling is done in the geometry UVs, never by cloning textures.
  */
 let M = null;
+export { materials as roomMaterials };
 function materials() {
   if (M) return M;
   const plank = canvasTexture(makePlankCanvas({ w: 1024, h: 1024, boards: 8 }), { repeat: [1, 1], anisotropy: 8 });
@@ -502,7 +503,7 @@ export function createHall({ minX, maxX, minZ, maxZ, kiosk }) {
   const dust = makeDust(group, cx, maxZ - 3, 3, WALL_H - 1);
   const margin = 0.35;
   return {
-    group, floor, colliders, kind: 'hall',
+    group, floor, colliders, kind: 'hall', bounds: { minX, maxX, minZ, maxZ },
     // Laser stop: the four walls, the ceiling, the floor, the furniture.
     raycast: (ray) => Math.min(rayBoxExit(ray, minX, maxX, minZ, maxZ), rayFloor(ray), rayColliders(ray, colliders)),
     walkable: (x, z) => x > minX + margin && x < maxX - margin && z > minZ + margin && z < maxZ - margin,

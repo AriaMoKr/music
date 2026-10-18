@@ -47,6 +47,7 @@ const _normal = new THREE.Vector3();
 // Reused by _hitTest every frame (no new arrays per pointer per frame).
 const _meshes = [];
 const _hits = [];
+const _head = new THREE.Vector3();
 
 /** Where a ray meets a panel's plane, as panel uv (beyond 0..1 off the panel), or null. */
 function panelUv(panel, ray) {
@@ -114,6 +115,8 @@ export class Interaction {
     this.onHallway = null;
     /** Set by main.js: (place, room) after every rebuild of the shelves; the address names them (place-url.js). */
     this.onShelved = null;
+    this._leaving = false; // going out by the way out (leave)
+    this._leaveTimer = 0;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
     this._outdated = false; // the site changed since this page loaded (setOutdated)
     this._savedScene = null; // "Saved …" of the browser's saved scene (setSavedScene), or null
@@ -215,7 +218,7 @@ export class Interaction {
       active: this._outdated, onClick: () => this.onReload?.(),
     });
     const hw = Math.min(260, right - 12 - 270);
-    p.add({ id: 'hallway', type: 'button', x: right - 12 - hw, y: 24, w: hw, h: 56, label: this.wayOut.label, size: 24, onClick: () => this.onHallway?.() });
+    p.add({ id: 'hallway', type: 'button', x: right - 12 - hw, y: 24, w: hw, h: 56, label: this.wayOut.label, size: 24, onClick: () => this.leave() });
     const place = this._place();
     // Rooms exist when there is more than one library, or a library too big to shelve whole.
     const hasRooms = this.libraries.length > 1 || (place && isFaceted(place, this.booksByLib[place.id]));
@@ -1068,6 +1071,11 @@ export class Interaction {
     _hits.length = 0;
     const ph = rc.intersectObjects(meshes, false, _hits)[0];
     if (ph) best = { kind: 'panel', panel: ph.object.userData.panel, uv: ph.uv, distance: ph.distance };
+    // The door back (world/door.js): its opening leads out, its frame stops the laser as a wall does.
+    const door = this.state === 'browse' ? this.world.door?.raycast(rc.ray) : null;
+    if (door && door.distance < rc.far && (!best || door.distance < best.distance)) {
+      best = { kind: door.opening ? 'door' : 'solid', distance: door.distance };
+    }
     if (this.book3d && (this.state === 'read' || this.state === 'inspect')) {
       if (this.state === 'read') {
         const pg = this.book3d.hitTestPages(rc);
@@ -1127,6 +1135,8 @@ export class Interaction {
       if (hit.panel.click(hit.uv)) audio.click();
     } else if (hit.kind === 'book' && this.state === 'browse') {
       this.pick(hit.book);
+    } else if (hit.kind === 'door' && this.state === 'browse') {
+      this.leave();
     } else if (hit.kind === 'held' && this.state === 'inspect') {
       if (this.book.readable) this.read();
     } else if (hit.kind === 'page' && this.state === 'read') {
@@ -2404,6 +2414,40 @@ export class Interaction {
   }
 
   // ===========================================================================================
+  // The way out: the door back (world/door.js) and the stand's button
+
+  /**
+   * Goes out by the way out (this.wayOut: the Hallway, or the place that linked here): the view
+   * fades, then onHallway (main.js) goes there. In VR, Quest Browser keeps the visitor in VR there
+   * when it is on this origin (SPEC §5.7).
+   */
+  async leave() {
+    if (this._leaving || !this.onHallway || this.state !== 'browse') return;
+    this._leaving = true;
+    this.state = 'busy';
+    await this._fadeTo(1, this.controls.presenting ? 0.3 : 0.4);
+    this.onHallway();
+    // Still here a while later (the navigation was stopped, or failed): back in the room.
+    clearTimeout(this._leaveTimer);
+    this._leaveTimer = setTimeout(() => this.cameBack(), 12000);
+  }
+
+  /**
+   * Back from the way out without having left (a navigation that did not happen, or the browser's
+   * Back restoring this page from its cache: main.js, pageshow): in front of the door, facing the
+   * room, out of the dark.
+   */
+  cameBack() {
+    if (!this._leaving) return;
+    clearTimeout(this._leaveTimer);
+    this._leaving = false;
+    const spot = this.world.door?.inFront(1.1);
+    if (spot) this.controls.teleportTo(spot.position, spot.yaw);
+    this.state = 'browse';
+    this._fadeTo(0, 0.6);
+  }
+
+  // ===========================================================================================
   // Leaving VR: kiosk button, or hold B/Y while browsing (a filling ring shows the hold)
 
   _buildExitRing() {
@@ -2513,6 +2557,7 @@ export class Interaction {
     // most of the dropped frames on a Quest.
     let hoverBook = null;
     let hoverLink = null;
+    let hoverDoor = false;
     for (const pointer of this.controls.pointers) {
       const hit = this.state === 'busy' || pointer.teleporting ? null : this._hitTest(pointer);
       pointer.setHitDistance(hit ? hit.distance : null);
@@ -2524,6 +2569,9 @@ export class Interaction {
       } else if (hit?.kind === 'book') {
         hoverBook = hit.book;
         interactive = true;
+      } else if (hit?.kind === 'door') {
+        hoverDoor = true;
+        interactive = true;
       } else if (hit?.kind === 'page' || hit?.kind === 'held') {
         interactive = true;
         if (hit.kind === 'page' && !hoverLink) hoverLink = this._linkUnder(hit);
@@ -2532,6 +2580,12 @@ export class Interaction {
       this._hover.set(pointer.id, hit?.kind === 'panel' ? hit.panel : null);
     }
     this._markLink(hoverLink);
+    const door = this.world.door;
+    if (door) {
+      door.hover = hoverDoor;
+      // Walked (or leant) through the doorway: out.
+      if (this.state === 'browse' && !this._leaving && door.crossed(this.camera.getWorldPosition(_head).x, _head.z)) this.leave();
+    }
     this.controls.textEntry = !!this._search.focus && this.state === 'browse' && this._kioskTab === 'search'
       && this.kiosk.visible && !this.controls.presenting;
     // A scroll bar being dragged follows its pointer, also off the panel (onto its plane).

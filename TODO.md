@@ -266,13 +266,20 @@
   cut off at both sides and the contents were off the screen beside the book (now scaled to the
   width and shown over the page). Left: try it on a real phone and on the Quest (whether VR
   should default to it too).
-- **A door back to the Hallway** (asked 2026-10-18, for later). A door in the library, like the
+- **A door back to the Hallway** (asked 2026-10-18). A door in the library, like the
   doors of the Hallway (https://ariamokr.github.io/hallway/), leading where the way out leads
   (`hallway.js` `wayOut`): the Hallway (`?from=vrlbry`, so the visitor arrives at this library's
   door) unless the link that brought them names another place (`?back=`, `?backname=`), its name
   then on the door. Through it in VR the visitor stays in VR (one origin: SPEC §5.7). To look at
   first: the Hallway's door (frame, sign, how it is entered: walked through or clicked) and where
   one fits in the rotunda and in the hall.
+  *Done (2026-10-18; SPEC §5.3 "The door", §5.6):* `world/door.js` and the Hallway's portal
+  shader (`world/portal.js`), against the wall behind the spawn point in both room shapes, a
+  painted view down the Hallway through it, its plaque and sign in the Hallway's enamel; walked
+  through, clicked or triggered, it fades and leaves (`interaction.leave`), and Back to a cached
+  page puts the viewer in front of it again. Checked in the browser (both rooms, pointing, walking
+  in, coming back) and on a Quest 3 (`quest-perf handover` through `leave`: 2 of 2 in VR). Not yet
+  looked at in the headset by a person, nor measured with `quest-perf run`.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

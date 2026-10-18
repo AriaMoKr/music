@@ -15,7 +15,7 @@ import { fileNameOf, onKiwixMirror, zimUrl } from './local/zim-url.js';
 import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
-import { wayOut } from './hallway.js';
+import { doorOf, wayOut } from './hallway.js';
 import { placeFromSearch, placeHref } from './place-url.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
@@ -128,6 +128,7 @@ async function start() {
   // reopened below), so the first build falls back, and openLocalFiles puts it back afterwards.
   const savedPlace = settings.place;
   const world = new World({ renderer, scene });
+  world.setDoor(doorOf(way)); // the door back, in the wall behind the spawn point (world/door.js)
   if (catalog.static) world.emptyText = ['No books here yet', 'This online version has no libraries yet'];
   const firstShelved = collectionsFor(libraries, booksByLib, settings);
   await world.build(firstShelved, { sort: settings.sort });
@@ -185,6 +186,9 @@ async function start() {
   // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there, on
   // this page's origin only (the Hallway takes a granted session, as this page does below).
   interaction.onHallway = () => { location.href = way.url; };
+  // Back from there with the browser's Back, this page restored from its cache as it was left (dark,
+  // in the doorway): in front of the door again.
+  addEventListener('pageshow', (e) => { if (e.persisted) interaction.cameBack(); });
   // The address names the place and room shown (place-url.js), replaced as they change (no history
   // entry per room), so it can be bookmarked, shared or reloaded.
   const showPlace = (place, room) => {
