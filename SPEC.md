@@ -1656,7 +1656,7 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   an inline script in `index.html` notes a grant made while the library loads
   (`window.vrlbryXrGranted`), and `main.js` takes it, or a later one, once the frame loop runs, as
   the Enter VR button would (never while a session is running: `enterVR` would end it). Measured
-  on a Quest 3 (Quest Browser 152, 2026-10-18, over adb and DevTools): a grant comes only after a
+  on a Quest 3 (Quest Browser 152, 2026-10-18; `node tools/quest-perf.mjs handover`): a grant comes only after a
   navigation within one origin (`localhost:8082` to itself: granted; to `127.0.0.1:8082`, or to
   the Hallway online: none), ~0.1 s after the page starts, and it lasts about 5 s: a request at
   4.7 s started a session, at 5.2 s it was refused ("requires user activation"). This page asks
@@ -1708,6 +1708,10 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   - `tools/quest-perf.mjs` (Node, adb) forwards the Quest Browser's DevTools socket, runs or reads
     the recorder over CDP, adds the VrApi per-second log, `dumpsys meminfo` / `battery` snapshots
     (one at the end of each scenario) and device info, and writes `perf/quest-<time>.json`.
+    `handover` instead enters VR, takes the way out (`interaction.onHallway`, to `--to` or the page
+    itself) and reads what a probe (`Page.addScriptToEvaluateOnNewDocument`, on every document in
+    the tab) noted on the next page: load, `sessiongranted`, `requestSession` (held back
+    `--delay` ms), the session's start, refusal or end (§5.7).
   - The dump's `atlasStalls` (printed too) gives, per scenario, the spine atlas jobs and how many
     had a dropped frame in the 3 frames before the atlas was applied (the worker handing over its
     bitmap) or in its upload frame or the next, against chance.

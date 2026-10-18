@@ -147,6 +147,18 @@ node tools/quest-perf.mjs dump
 ```
 
 `dump` saves what was recorded while you used the library yourself (opened with `?perf`), and
-`status` just checks the connection. `node tools/quest-perf.mjs --help` lists all options;
+`status` just checks the connection.
+
+```bash
+node tools/quest-perf.mjs handover
+```
+
+`handover` checks that a visitor stays in VR when walking from one page to another (a door of the
+Hallway, the library's way out): it enters VR, takes the way out (back to the page itself, or
+`--to <url>`) and reports whether Quest Browser granted the next page a session and when it took
+it, three times (`--runs`). `--delay <ms>` holds the granted request back, to see how long a
+grant lasts (about 5 s). The first time, the headset asks to allow VR for the page's address.
+
+`node tools/quest-perf.mjs --help` lists all options;
 `--cdp http://127.0.0.1:9222` runs the same against a desktop browser started with
 `--remote-debugging-port=9222` (with `?xr=emulate&perf` for an emulated headset).
