@@ -1,8 +1,8 @@
 // Spreads (SPEC §5.6): what the open book shows, { left, right }, each a page (PageRef), 'ex'
-// (the ex-libris endpaper before the first page), 'blank' (the back of a leaf) or null (no page
-// after the last). Two pages: pages paired by their number, odd ones on the right, turned two at
-// a time. One page (the single-page view): the page on the right, the left side blank (the
-// ex-libris before the first page), turned one at a time, as if printed on one side of each leaf.
+// (the ex-libris endpaper before the first page), 'blank' or null (no page after the last). Two
+// pages: pages paired by their number, odd ones on the right, turned two at a time. One page (the
+// single-page view): the page on the right, turned one at a time; its left is 'ex' before the
+// first page, else 'blank', and is not shown (the book's left half is hidden, Book3D.single).
 // Pure: the reader (reader.js BookReader) is asked for neighbouring pages and page numbers.
 
 /** Below this width-to-height ratio a flat screen gets the single-page view by default (portrait). */

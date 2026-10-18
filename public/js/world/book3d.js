@@ -168,6 +168,12 @@ export class Book3D {
      * open around a fixed spine and the spread is centred on x = −d/2.
      */
     this.centerWhenOpen = true;
+    /**
+     * The single-page view: the front half (the cover and the left page) is hidden once the cover
+     * has swung past edge-on, so only the right-hand page shows; a leaf turned over to the left
+     * goes with it (pass no left canvas: the leaf's back is not drawn). setSingle() applies it.
+     */
+    this.single = false;
     this._openT = 0;
     this._applyOpen(0);
   }
@@ -210,12 +216,19 @@ export class Book3D {
     this._openT = t;
     const e = ease(t);
     this.frontPivot.rotation.y = -(Math.PI - V_TILT) * e;
+    this.frontPivot.visible = !this.single || e < 0.5;
     this.backPivot.rotation.y = -V_TILT * e;
     this.content.position.x = this.centerWhenOpen ? (D / 2) * e : 0;
     this.spine.visible = t < 0.35;
     const showPages = t > 0.02;
     this.leftPage.visible = showPages && !!this._left;
     this.rightPage.visible = showPages && !!this._right;
+  }
+
+  /** The single-page view on or off (see `single`), at once. */
+  setSingle(on) {
+    this.single = !!on;
+    this._applyOpen(this._openT);
   }
 
   _tween(duration, step) {

@@ -1444,11 +1444,13 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   "2 pages", theme, Close.
   **One page or two** (`reader/spreads.js`): a spread is `{ left, right }`, each a PageRef, `'ex'`
   (the ex-libris before the first page), `'blank'` or null. Two pages pair by page number (odd on
-  the right) and turn two at a time. The single-page view shows the page on the right and a blank
-  left side (the ex-libris before the first page), as if each leaf were printed on one side: the
-  book slides half a page left so that page is in front (`_bookX`), a turn lifts the page over to
-  the left (its back blank) and uncovers the next, and the left part of the page (30 %) turns
-  back as the left page does. `settings.pageView`: `'auto'` (default: one page on a flat screen
+  the right) and turn two at a time. The single-page view shows only the right-hand page: the
+  book's left half (the cover and its pages) is hidden once the cover has swung past edge-on
+  (`Book3D.single`, `setSingle`), no left canvas is drawn (the spread's left, `'ex'` before the
+  first page or `'blank'`, is not shown), and the book slides half a page left so the page is in
+  front (`_bookX`). A turn lifts the page toward the left and it goes as it passes edge-on (the
+  leaf's back is not drawn), uncovering the next; turning back, the previous page comes in from
+  there. The left part of the page (30 %) turns back, as the left page does. `settings.pageView`: `'auto'` (default: one page on a flat screen
   taller than wide, `singlePage`), `'single'` or `'spread'`; the toolbar's button (or P) switches
   at the page being read and keeps the choice, as `'auto'` when that is what auto gives there. An
   open book follows a resize (a phone turned) while the setting is `'auto'`. On a flat screen the

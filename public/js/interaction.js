@@ -1396,6 +1396,7 @@ export class Interaction {
     this.holder.attach(b3.group);
     b3.group.position.set(x, 0, 0);
     b3.group.quaternion.identity();
+    b3.setSingle(this._single);
 
     const shown = await this._renderSpread(await this._spreadAt(startRef, side));
     this._cur = shown;
@@ -1494,9 +1495,10 @@ export class Interaction {
     const { w, h } = this.book3d.pageSize;
     const sw = w * scale;
     const sh = (h * scale) / 2;
-    const spine = this._single ? -sw / 2 : 0;
+    const x0 = this._single ? -sw / 2 : -sw; // the right-hand page alone, or both
+    const x1 = this._single ? sw / 2 : sw;
     return this._poseOffsets(eye, target, [
-      [0, 0, 0], [spine - sw, -sh, 0], [spine + sw, -sh, 0], [spine - sw, sh, 0], [spine + sw, sh, 0],
+      [0, 0, 0], [x0, -sh, 0], [x1, -sh, 0], [x0, sh, 0], [x1, sh, 0],
       [-0.33, -sh - 0.15, 0.05], [0.33, -sh - 0.15, 0.05],
     ]);
   }
@@ -1667,7 +1669,7 @@ export class Interaction {
   }
 
   // Spreads (reader/spreads.js): { left, right }, each a PageRef, 'ex' (the ex-libris endpaper),
-  // 'blank' (the single-page view's left side) or null. this._single: one page at a time.
+  // 'blank' (the single-page view's left side, not shown) or null. this._single: one page at a time.
 
   /** The spread with page `ref` on `side` ('left' / 'right'; two pages only), or as the page number pairs it (null). */
   _spreadAt(ref, side = null) {
@@ -1702,12 +1704,17 @@ export class Interaction {
     return free.slice(0, n);
   }
 
+  /** Draws a spread on free canvases: { spread, left, right }; one page at a time has no left canvas (none shown). */
   async _renderSpread(spread) {
-    const [lc, rc] = this._freeCanvases(2);
     const r = this.reader;
+    if (this._single) {
+      const [rc] = this._freeCanvases(1);
+      await (isPage(spread.right) ? r.render(spread.right, rc, { side: 'right' }) : r.renderBlank(rc, { side: 'right' }));
+      return { spread, left: null, right: rc };
+    }
+    const [lc, rc] = this._freeCanvases(2);
     await Promise.all([
-      spread.left === 'ex' ? this._drawExLibris(lc)
-        : isPage(spread.left) ? r.render(spread.left, lc, { side: 'left' }) : r.renderBlank(lc, { side: 'left' }),
+      spread.left === 'ex' ? this._drawExLibris(lc) : r.render(spread.left, lc, { side: 'left' }),
       isPage(spread.right) ? r.render(spread.right, rc, { side: 'right' }) : r.renderBlank(rc, { side: 'right' }),
     ]);
     return { spread, left: lc, right: rc };
@@ -2069,6 +2076,7 @@ export class Interaction {
       this._single = single;
       this._showPagesButton();
       audio.click();
+      this.book3d.setSingle(single);
       await this._jumpInPlace(ref);
       await this._reframe();
     } finally {

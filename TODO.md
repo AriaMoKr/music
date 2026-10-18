@@ -242,18 +242,18 @@
   VR, drawing pages in a worker on an OffscreenCanvas (as the spine atlases are), and showing
   the first spread before the rest of the first chunk is laid out.
 - **Reading: a single-page view** (asked 2026-10-18). *Done (2026-10-18; SPEC §5.6 "One page or
-  two", `reader/spreads.js`):* one page at a time, on the right, its left side blank, as if each
-  leaf were printed on one side, so a turn is the book's own leaf turn, one page at a time (a
-  sliding page would have needed a second animation and looked wrong on a 3D book in VR). By
+  two", `reader/spreads.js`):* one page at a time, the page alone (the book's left half hidden
+  once open, not a blank page beside it: asked 2026-10-18); a turn is the book's own leaf turn, one
+  page at a time, the page going as it passes edge-on (a sliding page would have needed a second
+  animation and looked wrong on a 3D book in VR). By
   default on a flat screen taller than wide (`settings.pageView` 'auto'); the toolbar's "1 page" /
   "2 pages" and P switch at the page being read, and an open book follows a phone turned. Page
   counts, the saved place and the pool of 6 canvases are unchanged (a spread's left canvas holds
   the blank). On a phone upright the page now fills ~90 % of the width (text ~1.9× as large as in
   the spread); on a wide window it is ~1.7× as large. Fixed with it: on a phone the toolbar was
   cut off at both sides and the contents were off the screen beside the book (now scaled to the
-  width and shown over the page). Left: try it on a real phone and on the Quest (single page in
-  VR: the page in front, the blank half to the left; whether VR should rather default to it, or
-  hide the blank half).
+  width and shown over the page). Left: try it on a real phone and on the Quest (whether VR
+  should default to it too).
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.
