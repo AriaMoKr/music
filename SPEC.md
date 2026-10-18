@@ -46,7 +46,11 @@ Header (little-endian, 80 bytes): `magic u32 = 0x044D495A`, `major u16`, `minor 
   - otherwise: `clusterNumber u32`, `blobNumber u32`;
   then `url\0`, `title\0` (empty title ⇒ title = url), then `parameterLen` bytes.
 - Cluster pointer list: `clusterCount × u64`. A cluster runs from its offset to the next higher
-  known offset (next cluster, or one of the section positions / file end). Cluster byte 0:
+  known offset (next cluster, or one of the section positions / file end). A section position
+  can lie inside a cluster: libzim 7 (ZIM 6.1) stores the title pointer list as the blob of
+  `X/listing/titleOrdered/v0`, uncompressed, and points `titlePtrPos` at it; so an uncompressed
+  cluster that runs up to a section position takes its end from its last offset, bounded by the
+  next cluster or the file end. Cluster byte 0:
   low nibble = compression (0 or 1 none, 2 zlib, 3 bzip2 (unsupported → error), 4 xz/LZMA2,
   5 zstd); bit `0x10` = extended (u64 blob offsets instead of u32). After that byte: offset table
   (first offset / offsetSize = number of offsets = blobCount + 1), then blob data; blob *n* =
