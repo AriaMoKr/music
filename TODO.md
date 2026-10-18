@@ -155,7 +155,13 @@
      *Started (2026-10-18):* the second run above built Medicine nopic, the top and top 1M minis
      and nopics, and Simple English's mini and nopic. Left in `tools/indexes.txt`: 14 topic
      nopics and Wikisource's nopic (15 files, 14.8 GB), about one more run. The full English
-     mini and nopic (14 and 53 GB) are not listed.
+     mini and nopic (14 and 53 GB) are not listed. *Third run (2026-10-18, its full 5 hours):*
+     built nothing. Wikisource's nopic came first among those left and did not finish from
+     Kiwix's mirror in 5 hours (the first run had ended on it too), and a Wikisource build has no
+     checkpoint, so each run starts it again from nothing and the 14 topic nopics after it never
+     come. It is now last in `tools/indexes.txt`; to build from a downloaded copy (`--zims`, a
+     few minutes) and upload. Possibly later: a checkpoint for Wikisource builds, as Wikipedia's
+     sizes pass has.
   4. New editions rebuilt by the workflow when Kiwix's catalogue lists them, so the shipped
      indexes do not go stale one by one.
 - **URL parameters for testing, and for settings** (asked 2026-10-11). Today there are a few,
