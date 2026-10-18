@@ -112,6 +112,8 @@ export class Interaction {
     this.onReload = null;
     /** Set by main.js: leaves by the way out (this.wayOut: the Hallway, or the place that linked here). */
     this.onHallway = null;
+    /** Set by main.js: (place, room) after every rebuild of the shelves; the address names them (place-url.js). */
+    this.onShelved = null;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
     this._outdated = false; // the site changed since this page loaded (setOutdated)
     this._savedScene = null; // "Saved …" of the browser's saved scene (setSavedScene), or null
@@ -2213,6 +2215,7 @@ export class Interaction {
       if (this.world.isWalkable(viewer.x, viewer.z)) this.controls.followFrame(kiosk, to);
       else this.controls.teleportTo(this.world.spawn.position, this.world.spawn.yaw);
       this._fillKiosk();
+      this.onShelved?.(this.settings.place, collections.length === 1 ? collections[0].room : null);
       await this._tween(0.08, () => {}); // a few frames in the dark: the heavy first render
       await this._fadeTo(0, 0.3);
       perf.event('rebuild', {

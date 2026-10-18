@@ -1546,6 +1546,14 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   where it was scrolled while the place stays the same; a large library's filters follow it (the
   list is 4 rows then), else it takes the panel. A grid of buttons ran off the kiosk with 28
   libraries, hiding the demo set, all libraries and the filters.
+  - The address names the place and room shown (`place-url.js`): `?place=<library id>` (or
+    `demo`, `local`, `*`) and a large library's room, `&genre=`, `&letter=`, `&page=` (from 2;
+    none for the whole library), set with `history.replaceState` (no history entry per room) after
+    every rebuild (`interaction.onShelved(place, room)`) and at the start; the page's other
+    parameters stay. Opened with them, the page starts there (`placeFromSearch`): a library by
+    its id, else by its name without the edition's date (the newest edition here), a group or a
+    browser's library (`~…`) as it is (the latter, the site's own files included, put back once
+    they open); one not here is ignored.
   - No room has more than `MAX_BOOKCASES` = 200 bookcases (`world.js`); in practice only this
     hall reaches the limit.
   - Libraries share the limit fairly (`shareBookcases`, max-min fair): each gets an equal share,

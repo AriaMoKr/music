@@ -102,7 +102,8 @@ and a Gutenberg collection shelves its most-read books first. As an experiment, 
 puts all your libraries in one big hall of up to 200 bookcases: small libraries whole, and the
 first books of the large ones (each large library gets an equal share). You stay where you are
 while the shelves change around you. Search still covers every book of every library: picking
-one that is not on the shelves takes you to its room.
+one that is not on the shelves takes you to its room. The address bar names the room you are in
+(`?place=…&genre=…&letter=…`), so a bookmark or a shared link opens that room.
 
 ## Reading ZIM files in the browser
 

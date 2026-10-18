@@ -16,6 +16,7 @@ import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
 import { wayOut } from './hallway.js';
+import { placeFromSearch, placeHref } from './place-url.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
@@ -117,12 +118,19 @@ async function start() {
   await new Promise((r) => setTimeout(r, 0)); // let the overlay paint before the heavy build
   // Online (a static build), a first visit opens the demo set when the site has it.
   if (catalog.static && !load('settings', {}).place) settings.place = 'demo';
+  // A link naming a place and room (place-url.js; the address names the room shown) opens there.
+  const linked = placeFromSearch(location.search, libraries);
+  if (linked) {
+    settings.place = linked.place;
+    if (linked.room) (settings.rooms ||= {})[linked.place] = linked.room;
+  }
   // The place saved last time: one of the libraries read from the web is not open yet (they are
   // reopened below), so the first build falls back, and openLocalFiles puts it back afterwards.
   const savedPlace = settings.place;
   const world = new World({ renderer, scene });
   if (catalog.static) world.emptyText = ['No books here yet', 'This online version has no libraries yet'];
-  await world.build(collectionsFor(libraries, booksByLib, settings), { sort: settings.sort });
+  const firstShelved = collectionsFor(libraries, booksByLib, settings);
+  await world.build(firstShelved, { sort: settings.sort });
   const startPlace = settings.place; // what the first build shelved (savedPlace, or its fallback)
 
   const controls = new Controls({ renderer, camera, rig, scene, world, domElement: renderer.domElement });
@@ -177,6 +185,16 @@ async function start() {
   // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there, on
   // this page's origin only (the Hallway takes a granted session, as this page does below).
   interaction.onHallway = () => { location.href = way.url; };
+  // The address names the place and room shown (place-url.js), replaced as they change (no history
+  // entry per room), so it can be bookmarked, shared or reloaded.
+  const showPlace = (place, room) => {
+    const href = placeHref(location.href, place, room);
+    if (href !== location.href) {
+      try { history.replaceState(history.state, '', href); } catch { /* an address that cannot change (a sandbox) */ }
+    }
+  };
+  interaction.onShelved = showPlace;
+  showPlace(settings.place, firstShelved.length === 1 ? firstShelved[0].room : null);
   // Scenes (scene.js): one saved in the browser (Save / Restore scene in the help dialog and on the
   // kiosk), or pasted into the help dialog (a saved scene or a debug report).
   const tell = (msg, kind = 'info') => {
@@ -438,7 +456,8 @@ async function start() {
         // Not for the site's own files: the place saved may come from another of the sites that
         // share this origin (the same ZIM opened there has the same id), and a first visit of the
         // main site then showed Golf alone instead of its Demo set.
-        const back = reopening && !site && savedPlace !== startPlace && settings.place === startPlace
+        // The site's own files do count when the address names one of them (place-url.js).
+        const back = reopening && (!site || linked?.place === savedPlace) && savedPlace !== startPlace && settings.place === startPlace
           && (savedPlace === LOCAL_PLACE.id ? added.length > 1 : added.some((r) => r.id === savedPlace));
         if (back) settings.place = savedPlace;
         else if (!reopening) settings.place = added.length > 1 ? LOCAL_PLACE.id : added[0].id;

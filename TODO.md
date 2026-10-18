@@ -178,6 +178,8 @@
     the page working without it.
   - *Opening straight into a place:* a given library (by id or ZIM name), room (genre, letter,
     page), sort, and a number of books (only the first n of a library; `?roomcap=` caps a room).
+    *Place and room done (2026-10-18):* `?place=<id>&genre=&letter=&page=`, which the address
+    now shows as the room changes (`place-url.js`); a link opens there. Left: sort, the first n.
   - *What the page keeps (asked 2026-10-11), three switches:* ignore it (read nothing, write
     nothing: every load is a first visit, and nothing of it stays), read but do not write (try
     things on top of the saved state without changing it: `util/storage.js` `freezeStorage` from
