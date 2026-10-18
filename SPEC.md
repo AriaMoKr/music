@@ -268,8 +268,10 @@ whole. It works on GitHub Pages (no server) and beside a server's own libraries.
   its own repo's cache and release) ships on every run what it has: the indexes kept in
   the Actions cache by earlier runs and the assets of the release "indexes" (built on a PC from
   local copies, then `gh release upload indexes .indexes/*.json --clobber`), less old editions;
-  with "prebuilt indexes" ticked it first builds the missing ones from the mirror (up to 5 h,
-  then the cache is saved). Measured: from local copies, Wikipedia 100 in 2 s, Simple English
+  the missing ones are built from the mirror by a workflow of their own (main: `indexes.yml`, by
+  hand, up to 5 h, the quickest first: `buildOrder`, Wikipedias by article count, Wikisources
+  last), apart from the deploys so that a push is published at once; it saves the cache and,
+  when it has new ones, starts a deploy. Measured: from local copies, Wikipedia 100 in 2 s, Simple English
   (3.1 GB) 28 s and a 2.9 MB index, Wikisource (8.6 GB) 119 s and 3.4 MB, the top 1M 396 s and
   10.7 MB (5.6 MB compressed), the full English Wikipedia (maxi, 7.2 M articles) 32 min and
   77 MB (39 MB compressed); over the web from here, Cricket (379 MB) read 0.20 GB in 232 s. On a
