@@ -691,6 +691,7 @@ async function start() {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
+    interaction.onResize(); // an open book: one page upright, two across ('auto')
   };
   addEventListener('resize', resize);
   renderer.xr.addEventListener('sessionend', resize);

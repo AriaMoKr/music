@@ -1440,7 +1440,23 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   (also B/Esc), which cancels and puts the book back. Only that panel takes input. On failure →
   **inspect**, with the error on the panel (and a toast).
 - **read:** book moves to the reading pose (§`config.READ`), opens, shows the saved or first spread.
-  Toolbar panel under the book: ◀ ▶, progress bar (click to jump), Contents, A− A+, theme, Close.
+  Toolbar panel under the book: ◀ ▶, progress bar (click to jump), Contents, A− A+, "1 page" /
+  "2 pages", theme, Close.
+  **One page or two** (`reader/spreads.js`): a spread is `{ left, right }`, each a PageRef, `'ex'`
+  (the ex-libris before the first page), `'blank'` or null. Two pages pair by page number (odd on
+  the right) and turn two at a time. The single-page view shows the page on the right and a blank
+  left side (the ex-libris before the first page), as if each leaf were printed on one side: the
+  book slides half a page left so that page is in front (`_bookX`), a turn lifts the page over to
+  the left (its back blank) and uncovers the next, and the left part of the page (30 %) turns
+  back as the left page does. `settings.pageView`: `'auto'` (default: one page on a flat screen
+  taller than wide, `singlePage`), `'single'` or `'spread'`; the toolbar's button (or P) switches
+  at the page being read and keeps the choice, as `'auto'` when that is what auto gives there. An
+  open book follows a resize (a phone turned) while the setting is `'auto'`. On a flat screen the
+  single-page view's page is as large as the screen's width and height allow with the toolbar
+  under it (`fitOnePage`, at the page's nearest edge: the open halves rise toward the reader by
+  `V_TILT`), and the book faces the screen square on; the toolbar is scaled down to the screen's
+  width where it would not fit, and the contents go over the page where they would be off the
+  screen beside the book.
   Contents opens a scrollable TOC panel at the entry being read (highlighted). A list of more
   than 30 entries in title order (`inTitleOrder`: a Wikipedia volume's articles) gets a thumb
   index beside it: 9 evenly spaced stops, each labelled with the shortest start of its title
@@ -1581,15 +1597,15 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   origin share this storage, so their data goes too.
 - Scenes (`scene.js`): `view` (state, place, room, sort, bookcases, and the viewpoint from
   `controls.viewpoint()`: x, z, eye height, yaw, pitch), `book` (library, id, title, page label,
-  block anchor `{ c, b }` and the side of the spread it is on), `settings` (fontScale, theme,
-  readScale, readDistance) and `ui`: `page` (the overlay's `reportUi()`: library card, search box
+  block anchor `{ c, b }`, the side of the spread it is on, and `pages`: 1 or 2 at a time as shown),
+  `settings` (fontScale, theme, readScale, readDistance, pageView) and `ui`: `page` (the overlay's `reportUi()`: library card, search box
   and whether its results are open, update banner, loading/error screen, toasts; as they were
   when the help was opened, since opening it closes the search results) and the 3D panels
   (`interaction.uiState()`: the kiosk's tab, search and list scrolling; inspect panel, toolbar,
   contents and its scrolling; the book under the pointer). `restoreScene` puts the book back,
   applies place/room/sort/reading settings (saved), rebuilds, sets the viewpoint, takes the book
-  out and opens it at the anchor on the same side (`read({ at, side })`: page pairing depends on
-  how a page was reached), then restores the dialogs. One scene is kept in localStorage (`scene`,
+  out and opens it at the anchor on the same side, one page or two as it was (`read({ at, side,
+  pages })`: page pairing depends on how a page was reached), then restores the dialogs. One scene is kept in localStorage (`scene`,
   with `at` and a `label`): Save / Restore scene in the help dialog and on the kiosk's Shelves &
   settings tab. The help dialog also restores pasted text: a saved scene or a whole debug report
   (`parseScene`). `__vrlbry.reproduce(report)` is `restoreScene` for the console.

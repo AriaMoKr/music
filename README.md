@@ -155,6 +155,7 @@ Then press **Enter VR**.
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
 | Text size, theme, contents | + / −, toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |
+| One page or two | **P**, or **1 page** / **2 pages** | **1 page** / **2 pages** (one page while the phone is upright) | toolbar | toolbar |
 | Book distance / size | mouse wheel | pinch | triggers | right stick up/down · left stick up/down · grip to move the book |
 | Follow a link | click it | tap it | **A** on it | trigger on it |
 | Back (along links, then close) | Backspace, or **↩ Back** | **↩ Back** | **B** | **B** or **Y** |

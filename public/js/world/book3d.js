@@ -13,7 +13,8 @@ import { imageSource } from '../api.js';
 
 const OPEN_TIME = 0.65;
 const TURN_TIME = 0.55;
-const V_TILT = 0.11; // radians each half of the spread rises toward the reader
+/** Radians each half of the open spread rises toward the reader (about the spine). */
+export const V_TILT = 0.11;
 const LEAF_SEGMENTS = 24;
 const EPS = 0.0008;
 

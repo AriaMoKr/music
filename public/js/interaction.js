@@ -2,9 +2,12 @@
 // mapping of every input (XR, mouse, keyboard, touch) onto those states.
 
 import * as THREE from 'three';
-import { Book3D } from './world/book3d.js';
+import { Book3D, V_TILT } from './world/book3d.js';
 import { MAX_BOOKCASES } from './world/world.js';
 import { BookReader, THEMES } from './reader/reader.js';
+import {
+  currentRef, currentSide, fitOnePage, isPage, nextSpread, pageViewSetting, prevSpread, sameSpread, singlePage, spreadAt,
+} from './reader/spreads.js';
 import { bookIndex, matchBooks, findArticles } from './search.js';
 import { Panel, Label, UI } from './ui/panel.js';
 import { audio } from './audio.js';
@@ -55,10 +58,18 @@ function panelUv(panel, ray) {
   return { x: _onPlane.x / panel.width + 0.5, y: _onPlane.y / panel.height + 0.5 };
 }
 
+/** The reader's toolbar: its width (m), and how far below the page's foot its own foot is (m). */
+const TOOLBAR_W = 0.72;
+const TOOLBAR_DROP = 0.15;
+/** The contents panel's size (m). */
+const TOC_W = 0.42;
+const TOC_H = 0.56;
+
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 export const DEFAULT_SETTINGS = {
   sort: 'title', fontScale: 1, theme: 'paper', smoothMove: true, sound: true, readScale: 1, readDistance: READ.distance,
+  pageView: 'auto', // one page or two at a time (reader/spreads.js singlePage): 'auto', 'single' or 'spread'
   updateNotices: true, // tell when the site has been updated (main.js; "Don't show again" turns it off)
 };
 
@@ -910,7 +921,7 @@ export class Interaction {
   }
 
   _buildToolbar() {
-    const p = new Panel({ width: 0.66, height: 0.13, pxPerMeter: 1300 });
+    const p = new Panel({ width: TOOLBAR_W, height: 0.13, pxPerMeter: 1300 });
     p.visible = false;
     p.mesh.name = 'toolbar';
     this.toolbar = p;
@@ -923,25 +934,26 @@ export class Interaction {
     const by = 68;
     const bh = 84;
     const defs = [
-      ['prev', '◀', 100, () => this.turn(-1)],
-      ['next', '▶', 100, () => this.turn(1)],
-      ['toc', 'Contents', 160, () => this.toggleToc()],
-      ['smaller', 'A−', 86, () => this.changeFont(-1)],
-      ['larger', 'A+', 86, () => this.changeFont(1)],
-      ['theme', 'Theme', 120, () => this.cycleTheme()],
-      ['close', '✕', 86, () => this.closeBook()],
+      ['prev', '◀', 88, () => this.turn(-1)],
+      ['next', '▶', 88, () => this.turn(1)],
+      ['toc', 'Contents', 146, () => this.toggleToc()],
+      ['smaller', 'A−', 84, () => this.changeFont(-1)],
+      ['larger', 'A+', 84, () => this.changeFont(1)],
+      ['pages', '1 page', 136, () => this.togglePages()], // the other view (_showPagesButton)
+      ['theme', 'Theme', 108, () => this.cycleTheme()],
+      ['close', '✕', 84, () => this.closeBook()],
     ];
     const total = defs.reduce((s, d) => s + d[2], 0);
     const gap = (W - 2 * pad - total) / (defs.length - 1);
     let x = pad;
     for (const [id, label, w, fn] of defs) {
-      p.add({ id, type: 'button', x, y: by, w, h: bh, label, size: id === 'toc' || id === 'theme' ? 28 : 34, onClick: fn });
+      p.add({ id, type: 'button', x, y: by, w, h: bh, label, size: ['toc', 'pages', 'theme'].includes(id) ? 28 : 34, onClick: fn });
       x += w + gap;
     }
   }
 
   _buildToc() {
-    const p = new Panel({ width: 0.42, height: 0.56, pxPerMeter: 1300 });
+    const p = new Panel({ width: TOC_W, height: TOC_H, pxPerMeter: 1300 });
     p.visible = false;
     p.mesh.name = 'toc';
     this.tocPanel = p;
@@ -1104,7 +1116,8 @@ export class Interaction {
     } else if (hit.kind === 'page' && this.state === 'read') {
       const found = this._linkUnder(hit);
       if (found) this.followLink(found.link);
-      else this.turn(hit.side === 'left' ? -1 : 1);
+      // One page at a time, its left part turns back too: the left page is often off the screen.
+      else this.turn(hit.side === 'left' || (this._single && hit.uv && hit.uv.x < 0.3) ? -1 : 1);
     }
   }
 
@@ -1164,6 +1177,7 @@ export class Interaction {
       } else if (code === 'KeyT' || code === 'KeyC') this.toggleToc();
       else if (code === 'KeyF') this.bookToFront();
       else if (code === 'KeyN') this.cycleTheme();
+      else if (code === 'KeyP') this.togglePages();
     } else if (this.state === 'inspect') {
       if (key === 'Enter' || key === ' ') {
         if (this.book.readable) this.read();
@@ -1313,9 +1327,10 @@ export class Interaction {
    * from a link), or at a page (page: { c, p }, a link trail's, laid out at the same font size).
    * `side` ('left' or 'right') puts that page on that side of the spread, as it was when a debug report was made:
    * turning pairs pages one after another, while the page number decides otherwise, and page
-   * numbers are partly estimated, so the pairing depends on how the page was reached.
+   * numbers are partly estimated, so the pairing depends on how the page was reached. `pages`
+   * (1 or 2, a scene's) shows the book one page or two at a time, whatever the setting says.
    */
-  async read({ fromStart = false, at = null, side = null, page = null } = {}) {
+  async read({ fromStart = false, at = null, side = null, page = null, pages = null } = {}) {
     if (this.state !== 'inspect' || !this.book.readable) return;
     const book = this.book;
     const b3 = this.book3d;
@@ -1359,30 +1374,27 @@ export class Interaction {
     this.state = 'busy';
     this.inspectPanel.visible = false;
 
-    // Reading pose (_readingPose): in front of the eyes, a little below, facing them, with room for
-    // the spread and its toolbar made first (_makeRoom: nearer and smaller by k when needed).
-    const pose = this._readingPose();
+    // One page at a time or two (reader/spreads.js singlePage).
+    this._single = pages ? pages === 1 : this._singleWanted();
+    this._showPagesButton();
+    // Reading pose (_readingTarget): in front of the eyes, a little below, facing them, with room for
+    // the spread and its toolbar made first (nearer and smaller by k when needed).
     this._readScale = b3.readingScale * (this.settings.readScale || 1);
-    const k = await this._makeRoom(this._readOffsets(pose, this._readScale));
-    const { eye, fwd } = this._viewerFrame();
-    const target = eye.clone().addScaledVector(fwd, pose.dist * k);
-    target.y = eye.y - pose.drop * k;
-    if (pose.flat) this.controls.pitch = 0;
+    const { target, quat, k } = await this._readingTarget();
     this.overlay?.setReading(true);
-    const quat = this._faceQuat(target, eye);
     this.scene.attach(b3.group);
     this.holder.position.copy(target);
     this.holder.quaternion.copy(quat);
     this.holder.scale.setScalar(k);
     this.holder.updateMatrixWorld(true);
-    // The cover swings open around a fixed spine at the spread centre, so the closed book lands
-    // on the right half of where the spread will be.
+    // The cover swings open around a fixed spine (_bookX: at the spread's centre, or half a page
+    // left of the page read), so the closed book lands where the right-hand page will be.
     b3.centerWhenOpen = false;
-    const half = (b3.dims.d / 2) * this._readScale;
-    const flyTarget = target.clone().addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(quat), half * k);
+    const x = this._bookX();
+    const flyTarget = target.clone().addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(quat), x * k);
     await this._fly(b3.group, flyTarget, quat, this._readScale * k, 0.5, 0.05);
     this.holder.attach(b3.group);
-    b3.group.position.set(half, 0, 0);
+    b3.group.position.set(x, 0, 0);
     b3.group.quaternion.identity();
 
     const shown = await this._renderSpread(await this._spreadAt(startRef, side));
@@ -1399,20 +1411,53 @@ export class Interaction {
   /**
    * How far in front of the eyes (and below them) an open book sits: in a headset the distance
    * chosen with the stick (settings.readDistance); on a flat screen far enough that the whole
-   * spread fits the screen's width (portrait phones) and height, a little higher.
+   * spread fits the screen's width (portrait phones) and height, a little higher; in the
+   * single-page view, the page as large as the screen's width and height allow with its toolbar
+   * under it (fitOnePage).
    * @returns {{ dist: number, drop: number, flat: boolean }}
    */
   _readingPose() {
     const flat = !this.controls.presenting;
-    let dist = this.settings.readDistance || READ.distance;
-    if (flat) {
-      const half = READ.pageWidth * (this.settings.readScale || 1) * 1.06;
-      const vt = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-      const fitW = half / (vt * this.camera.aspect);
-      const fitH = (half * 1.45 * 0.5 + 0.36) / vt;
-      dist = Math.max(0.64, fitW, fitH);
+    if (!flat) return { dist: this.settings.readDistance || READ.distance, drop: READ.drop, flat };
+    const page = READ.pageWidth * (this.settings.readScale || 1);
+    const vt = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const aspect = this.camera.aspect;
+    if (this._single) {
+      const fit = fitOnePage({
+        pageW: page * 1.06, pageH: page * (PAGE_PX.h / PAGE_PX.w) * 1.04, vt, aspect,
+        toolbarW: TOOLBAR_W, toolbarDrop: TOOLBAR_DROP, near: page * Math.sin(V_TILT),
+      });
+      return { dist: fit.dist, drop: fit.drop, flat };
     }
-    return { dist, drop: flat ? 0.04 : READ.drop, flat };
+    const half = page * 1.06;
+    return { dist: Math.max(0.64, half / (vt * aspect), (half * 1.45 * 0.5 + 0.36) / vt), drop: 0.04, flat };
+  }
+
+  /**
+   * Where the open book goes, in front of the viewer, with room made first: { target, quat, k }
+   * (k ≤ 1: nearer and smaller, _makeRoom). It faces the eyes; on a flat screen, whose view is
+   * levelled, it faces the screen square on: tilted towards eyes below it, its top edge came
+   * nearer and larger (the single-page view's page, above the eyes, ran off the top).
+   */
+  async _readingTarget() {
+    const pose = this._readingPose();
+    const k = await this._makeRoom(this._readOffsets(pose, this._readScale));
+    const { eye, fwd } = this._viewerFrame();
+    const target = eye.clone().addScaledVector(fwd, pose.dist * k);
+    target.y = eye.y - pose.drop * k;
+    if (pose.flat) this.controls.pitch = 0;
+    const facing = pose.flat ? new THREE.Vector3(eye.x, target.y, eye.z) : eye;
+    return { target, quat: this._faceQuat(target, facing), k };
+  }
+
+  /**
+   * Where the open book sits in the holder (its x): the spine, about which it opens (at the book's
+   * x = −d/2), at the holder's centre; in the single-page view half a page left of it, so the page
+   * read (on the right) is in front.
+   */
+  _bookX() {
+    const b3 = this.book3d;
+    return ((b3.dims.d - (this._single ? b3.pageSize.w : 0)) / 2) * this._readScale;
   }
 
   /** Points of a pose (holder-local [x, y, z]) placed at `target` facing the eyes, as vectors from them. */
@@ -1449,8 +1494,9 @@ export class Interaction {
     const { w, h } = this.book3d.pageSize;
     const sw = w * scale;
     const sh = (h * scale) / 2;
+    const spine = this._single ? -sw / 2 : 0;
     return this._poseOffsets(eye, target, [
-      [0, 0, 0], [-sw, -sh, 0], [sw, -sh, 0], [-sw, sh, 0], [sw, sh, 0],
+      [0, 0, 0], [spine - sw, -sh, 0], [spine + sw, -sh, 0], [spine - sw, sh, 0], [spine + sw, sh, 0],
       [-0.33, -sh - 0.15, 0.05], [0.33, -sh - 0.15, 0.05],
     ]);
   }
@@ -1523,15 +1569,10 @@ export class Interaction {
         k = await this._makeRoom(this._inspectOffsets(this.book3d.dims));
         ({ target, quat } = this._inspectPose(k));
       } else {
-        const pose = this._readingPose();
-        k = await this._makeRoom(this._readOffsets(pose, this._readScale));
-        const { eye, fwd } = this._viewerFrame();
-        target = eye.clone().addScaledVector(fwd, pose.dist * k);
-        target.y = eye.y - pose.drop * k;
-        quat = this._faceQuat(target, eye);
-        if (pose.flat) this.controls.pitch = 0;
+        ({ target, quat, k } = await this._readingTarget());
       }
       await this._fly(this.holder, target, quat, k, 0.4, 0.02);
+      if (state === 'read') this._placeReadingPanels(); // a flat screen's toolbar fits its width there
     } finally {
       this.state = state;
     }
@@ -1555,15 +1596,43 @@ export class Interaction {
     this.controls.setViewpoint({ x: position.x, z: position.z, yaw, pitch: 0 });
   }
 
+  /**
+   * The toolbar under the page(s) and the contents beside them, on a flat screen kept within its
+   * width: the toolbar scaled down (it is wider than a page), the contents over the page when it
+   * would be off the screen beside the book (a phone upright).
+   */
   _placeReadingPanels() {
     const b3 = this.book3d;
     const s = this._readScale;
     const ph = b3.pageSize.h * s;
     const pw = b3.pageSize.w * s;
-    this.toolbar.mesh.position.set(0, -ph / 2 - 0.085, 0.03);
-    this.toolbar.mesh.rotation.set(-0.35, 0, 0);
-    this.tocPanel.mesh.position.set(-pw - 0.24, 0, 0.08);
-    this.tocPanel.mesh.rotation.set(0, 0.45, 0);
+    const half = this._viewHalfWidth();
+    const ts = Math.min(1, (0.96 * this._viewHalfWidth(0.03)) / (TOOLBAR_W / 2));
+    const bar = this.toolbar.mesh;
+    bar.scale.setScalar(ts);
+    bar.position.set(0, -ph / 2 - 0.085 * ts, 0.03);
+    bar.rotation.set(-0.35, 0, 0);
+    const toc = this.tocPanel.mesh;
+    const beside = (this._single ? -pw / 2 : -pw) - 0.24; // left of the page(s), turned towards the reader
+    if (beside - TOC_W / 2 >= -0.98 * half) {
+      toc.position.set(beside, 0, 0.08);
+      toc.rotation.set(0, 0.45, 0);
+      toc.scale.setScalar(1);
+    } else {
+      toc.position.set(0, 0, 0.06);
+      toc.rotation.set(0, 0, 0);
+      toc.scale.setScalar(Math.min(1, (0.96 * this._viewHalfWidth(0.06)) / (TOC_W / 2), (0.96 * ph) / TOC_H));
+    }
+  }
+
+  /**
+   * Half the width a flat screen shows at the open book (or `z` in front of it), in the holder's
+   * units; Infinity in a headset.
+   */
+  _viewHalfWidth(z = 0) {
+    if (this.controls.presenting) return Infinity;
+    const d = this.camera.getWorldPosition(_from).distanceTo(this.holder.position) / this.holder.scale.x;
+    return (d - z) * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect;
   }
 
   _adjustDistance(delta) {
@@ -1575,6 +1644,8 @@ export class Interaction {
     if (this.controls.presenting) {
       this.settings.readDistance = d;
       this._saveSettingsSoon();
+    } else {
+      this._placeReadingPanels(); // the toolbar and contents within the screen's width at the new distance
     }
   }
 
@@ -1584,6 +1655,7 @@ export class Interaction {
     const rel = Math.max(READ.minScale, Math.min(READ.maxScale, (this._readScale / base) * (1 + delta)));
     this._readScale = base * rel;
     this.book3d.group.scale.setScalar(this._readScale);
+    this.book3d.group.position.x = this._bookX(); // the spine (or the page read) stays in front
     this.settings.readScale = rel;
     this._placeReadingPanels();
     this._saveSettingsSoon();
@@ -1594,21 +1666,12 @@ export class Interaction {
     this._saveTimer = setTimeout(() => save('settings', this.settings), 400);
   }
 
-  // Spreads: { left: PageRef | 'ex' (ex-libris endpaper) , right: PageRef | null }.
+  // Spreads (reader/spreads.js): { left, right }, each a PageRef, 'ex' (the ex-libris endpaper),
+  // 'blank' (the single-page view's left side) or null. this._single: one page at a time.
 
-  async _spreadFor(ref) {
-    const r = this.reader;
-    const n = r.pageNumber(ref).n;
-    if (n % 2 === 1) return { left: (await r.prev(ref)) || 'ex', right: ref };
-    return { left: ref, right: await r.next(ref) };
-  }
-
-  /** The spread with page `ref` on `side` ('left' / 'right'), or as the page number pairs it (null). */
-  async _spreadAt(ref, side) {
-    const r = this.reader;
-    if (side === 'left') return { left: ref, right: await r.next(ref) };
-    if (side === 'right') return { left: (await r.prev(ref)) || 'ex', right: ref };
-    return this._spreadFor(ref);
+  /** The spread with page `ref` on `side` ('left' / 'right'; two pages only), or as the page number pairs it (null). */
+  _spreadAt(ref, side = null) {
+    return spreadAt(this.reader, ref, { single: this._single, side });
   }
 
   /** The page of a block anchor { c, b, f? }: f, a place's id (a link's #id), wins when found. */
@@ -1618,21 +1681,12 @@ export class Interaction {
     return reader.refForAnchor({ c: at.c, b });
   }
 
-  async _nextSpread(s) {
-    const r = this.reader;
-    const base = s.right || (s.left !== 'ex' ? s.left : null);
-    if (!base) return null;
-    const l = await r.next(base);
-    if (!l) return null;
-    return { left: l, right: await r.next(l) };
+  _nextSpread(s) {
+    return nextSpread(this.reader, s, { single: this._single });
   }
 
-  async _prevSpread(s) {
-    const r = this.reader;
-    if (s.left === 'ex') return null;
-    const rr = await r.prev(s.left);
-    if (!rr) return { left: 'ex', right: s.left };
-    return { left: (await r.prev(rr)) || 'ex', right: rr };
+  _prevSpread(s) {
+    return prevSpread(this.reader, s, { single: this._single });
   }
 
   /** Canvases not used by the shown spread or the prepared neighbours. */
@@ -1652,8 +1706,9 @@ export class Interaction {
     const [lc, rc] = this._freeCanvases(2);
     const r = this.reader;
     await Promise.all([
-      spread.left === 'ex' ? this._drawExLibris(lc) : r.render(spread.left, lc, { side: 'left' }),
-      spread.right ? r.render(spread.right, rc, { side: 'right' }) : r.renderBlank(rc, { side: 'right' }),
+      spread.left === 'ex' ? this._drawExLibris(lc)
+        : isPage(spread.left) ? r.render(spread.left, lc, { side: 'left' }) : r.renderBlank(lc, { side: 'left' }),
+      isPage(spread.right) ? r.render(spread.right, rc, { side: 'right' }) : r.renderBlank(rc, { side: 'right' }),
     ]);
     return { spread, left: lc, right: rc };
   }
@@ -1769,9 +1824,9 @@ export class Interaction {
       this._prev = null;
       const s = await this._spreadAt(ref, side);
       const shown = await this._renderSpread(s);
-      const curRef = this._cur.spread.right || this._cur.spread.left;
+      const curRef = currentRef(this._cur.spread);
       const r = this.reader;
-      const dir = curRef === 'ex' || r.progressOf(ref) >= r.progressOf(curRef) ? 1 : -1;
+      const dir = !isPage(curRef) || r.progressOf(ref) >= r.progressOf(curRef) ? 1 : -1;
       this._cur = shown;
       audio.pageTurn();
       await this.book3d.turn(dir, { left: shown.left, right: shown.right });
@@ -1785,7 +1840,7 @@ export class Interaction {
   _linkUnder(hit) {
     const r = this.reader;
     const ref = this._cur?.spread?.[hit.side];
-    if (!r || !ref || ref === 'ex' || !hit.uv || this._turnBusy) return null;
+    if (!r || !isPage(ref) || !hit.uv || this._turnBusy) return null;
     const found = r.linkAt(ref, hit.uv.x * r.width, (1 - hit.uv.y) * r.height);
     return found && { ...found, side: hit.side };
   }
@@ -1793,7 +1848,7 @@ export class Interaction {
   /** Where the reader is, to come back to (the trail). */
   _here() {
     const s = this._cur.spread;
-    const side = s.left !== 'ex' ? 'left' : 'right';
+    const side = currentSide(s);
     const page = s[side];
     return {
       libId: this.book.libId, id: this.book.id, at: this.reader.anchorOf(page), side,
@@ -1939,9 +1994,7 @@ export class Interaction {
   }
 
   _currentRef() {
-    const s = this._cur?.spread;
-    if (!s) return null;
-    return s.left !== 'ex' ? s.left : s.right;
+    return currentRef(this._cur?.spread);
   }
 
   /** After the shown spread changed: toolbar, saved position, recent list, neighbours. */
@@ -1949,7 +2002,7 @@ export class Interaction {
     const r = this.reader;
     const ref = this._currentRef();
     if (!r || !ref) return;
-    const label = r.labelOf(this._cur.spread.right || ref);
+    const label = r.labelOf(isPage(this._cur.spread.right) ? this._cur.spread.right : ref);
     this.toolbar.set('label', { text: label });
     this.toolbar.set('slider', { value: r.progressOf(ref) });
     this.toolbar.set('prev', { disabled: this._cur.spread.left === 'ex' });
@@ -1984,6 +2037,72 @@ export class Interaction {
     await this._jumpInPlace(this._currentRef());
   }
 
+  /** Whether the single-page view is wanted now: the setting, 'auto' deciding by the screen. */
+  _singleWanted(setting = this.settings.pageView) {
+    return singlePage(setting, { presenting: this.controls.presenting, aspect: this.camera.aspect });
+  }
+
+  /** The toolbar's button names the other view. */
+  _showPagesButton() {
+    this.toolbar.set('pages', { label: this._single ? '2 pages' : '1 page' });
+  }
+
+  /**
+   * One page at a time or two (the toolbar's button, P): the other view, at the page being read.
+   * Kept as the setting, or as 'auto' when it is what 'auto' gives on this screen.
+   */
+  async togglePages() {
+    if (this.state !== 'read' || this._turnBusy) return;
+    const single = !this._single;
+    this.settings.pageView = pageViewSetting(single, this._singleWanted('auto'));
+    save('settings', this.settings);
+    await this._showSingle(single);
+  }
+
+  /** Shows the open book one page (single) or two at a time, at the page being read. */
+  async _showSingle(single) {
+    if (this.state !== 'read' || this._turnBusy || single === this._single) return;
+    this.state = 'busy';
+    this._markLink(null);
+    try {
+      const ref = this._currentRef();
+      this._single = single;
+      this._showPagesButton();
+      audio.click();
+      await this._jumpInPlace(ref);
+      await this._reframe();
+    } finally {
+      this.state = 'read';
+    }
+  }
+
+  /**
+   * After the view changed: the book slides so the page read is in front (_bookX), and on a flat
+   * screen comes to where it fits again (a headset keeps where it was put).
+   */
+  async _reframe() {
+    const g = this.book3d.group;
+    const from = g.position.x;
+    const to = this._bookX();
+    const moves = [this._tween(0.35, (t) => { g.position.x = from + (to - from) * easeInOut(t); })];
+    if (!this.controls.presenting) {
+      const { target, quat, k } = await this._readingTarget();
+      moves.push(this._fly(this.holder, target, quat, k, 0.35, 0));
+    }
+    await Promise.all(moves);
+    this._placeReadingPanels();
+  }
+
+  /** The screen changed shape (main.js): an open book follows 'auto' (one page upright, two across). */
+  onResize() {
+    clearTimeout(this._resizeTimer);
+    this._resizeTimer = setTimeout(() => {
+      if (this.state === 'read' && !this.controls.presenting && this._singleWanted() !== this._single) {
+        this._showSingle(!this._single).catch((e) => console.warn('pages', e));
+      }
+    }, 300);
+  }
+
   /** Re-renders the current position without a turn animation (font / theme changes). */
   async _jumpInPlace(ref) {
     this._turnBusy = true;
@@ -1991,7 +2110,7 @@ export class Interaction {
       this._prepToken = (this._prepToken || 0) + 1;
       this._next = null;
       this._prev = null;
-      const shown = await this._renderSpread(await this._spreadFor(ref));
+      const shown = await this._renderSpread(await this._spreadAt(ref));
       this._cur = shown;
       this.book3d.setPages(shown.left, shown.right);
       this._afterTurn();
@@ -2412,15 +2531,5 @@ export class Interaction {
     if (this.tooltip.visible) this.tooltip.panel.update();
     if (this._notice?.visible && this._time >= this._noticeUntil) this._notice.visible = false;
   }
-}
-
-function sameRef(a, b) {
-  if (a === b) return true;
-  if (!a || !b || a === 'ex' || b === 'ex') return false;
-  return a.c === b.c && a.p === b.p;
-}
-
-function sameSpread(a, b) {
-  return !!a && !!b && sameRef(a.left, b.left) && sameRef(a.right, b.right);
 }
 
