@@ -343,6 +343,9 @@ export function handoverProbe(delayMs = 0) {
   return `(() => {
   const ho = window.__handover = {};
   addEventListener('load', () => { ho.load = performance.now(); });
+  const note = (m) => { (ho.errors ||= []).push(String(m).slice(0, 160)); };
+  addEventListener('error', (e) => note(e.message || e.type));
+  addEventListener('unhandledrejection', (e) => note(e.reason && e.reason.message || e.reason));
   const xr = navigator.xr;
   if (!xr || !xr.requestSession) return;
   xr.addEventListener('sessiongranted', () => { ho.granted = performance.now(); });
@@ -379,6 +382,7 @@ export function describeHandover(ho) {
   if (ho.started != null) parts.push(`started ${ms(ho.started)}`);
   if (ho.failed != null) parts.push(`refused ${ms(ho.failed)} (${ho.error})`);
   if (ho.ended != null) parts.push(`ended ${ms(ho.ended)}`);
+  if (ho.errors?.length) parts.push(`errors: ${ho.errors.join('; ')}`);
   return { inVr, line: `${inVr ? 'in VR' : '2D'} · ${parts.join(' · ')} (times from the page's start)` };
 }
 
