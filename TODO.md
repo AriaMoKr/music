@@ -145,9 +145,17 @@
      physics, sociology, tennis), so on 2026-10-17 32 of the 67 open (15 by the site's index, 17
      built in the browser) and those 11 maxis (8.2 GB) need building again. Topics are
      republished every three months or so, so keeping up means a run per batch of new editions
-     (the release holds what outlives the 7-day Actions cache).
+     (the release holds what outlives the 7-day Actions cache). *Second run (2026-10-18, its
+     full 5 hours):* the 11 October maxis built again, and 7 nopics and minis with them (step
+     3), so the site ships 35 indexes and 50 of the 67 open (33 by the site's index, 17 built in
+     the browser), every selection by at least one flavour. The 19 new indexes (9.3 MB) go
+     into the release.
   3. The nopic and mini flavours later, if at all: they help those who downloaded such a copy
      and open it from their device (the site's index saves them a build in the browser).
+     *Started (2026-10-18):* the second run above built Medicine nopic, the top and top 1M minis
+     and nopics, and Simple English's mini and nopic. Left in `tools/indexes.txt`: 14 topic
+     nopics and Wikisource's nopic (15 files, 14.8 GB), about one more run. The full English
+     mini and nopic (14 and 53 GB) are not listed.
   4. New editions rebuilt by the workflow when Kiwix's catalogue lists them, so the shipped
      indexes do not go stale one by one.
 - **URL parameters for testing, and for settings** (asked 2026-10-11). Today there are a few,
