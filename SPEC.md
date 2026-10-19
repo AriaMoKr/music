@@ -1676,7 +1676,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
     book's sounds under their headings, *▶ Play all*, *+ Add to queue*, *Find the book*),
     *Composers* (by birth: a timeline; a composer's sounds across books), *Periods* (in time
     order; a period's sounds under their composers) and *Queue* (tap one to play it, *✕ Clear*).
-    A sound tapped there plays its list from it on the gramophone. The lists come from the
+    Beside the views, *All* / *MIDI* / *MP3* (`settings.listenKind`: 'all', 'midi', 'audio'):
+    which sounds the books, composers, periods and a book's sounds list and count (`booksOfKind`,
+    `catalogOfKind`: one kind's from the sound catalogue), and Play all plays; not the queue,
+    which is what plays. The gramophone's book at random has sounds of that kind, and plays only
+    those. A sound tapped there plays its list from it on the gramophone. The lists come from the
     libraries' sound indexes (`api.getSounds`, kept once ready; while one is built the tab says
     how far). The kiosk is drawn again when what plays changes, not every second (a 1000 px
     canvas each second would be a texture upload each second).

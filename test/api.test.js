@@ -797,7 +797,9 @@ describe('CLI (server/index.js)', () => {
       await app?.close();
       blocker.close();
     }
-    await assert.rejects(fetch(`http://127.0.0.1:${busy + 1}/api/libraries`));
+    // Closed: the port it served on refuses (not busy + 1, which another test may hold: Windows
+    // gives out free ports in turn).
+    await assert.rejects(fetch(`http://127.0.0.1:${app.port}/api/libraries`));
   });
 
   it('prints only the URL with --quiet and returns null for --help', async () => {

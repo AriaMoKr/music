@@ -13,7 +13,7 @@ import { SoundPlayer } from '../public/js/media/player.js';
 import { PLAYING_PLACE, collectionsFor, groupPlaces, periodCollections, placeBookCount, playingBooks, playsSounds } from '../public/js/rooms.js';
 import { placeFromSearch, placeHref } from '../public/js/place-url.js';
 import { partGroups } from '../public/js/ui/music-stand.js';
-import { booksThatPlay } from '../public/js/ui/listen-tab.js';
+import { booksOfKind, booksThatPlay, catalogOfKind, isOfKind } from '../public/js/ui/listen-tab.js';
 import { TUNE } from './helpers/midi-writer.js';
 
 const link = (href) => ({ href });
@@ -230,6 +230,48 @@ describe('the books that play, on the shelves (rooms.js)', () => {
   it('is named by the address (place-url.js)', () => {
     assert.match(placeHref('http://x/?a=1', PLAYING_PLACE.id), /place=playing/);
     assert.deepEqual(placeFromSearch('?place=playing', [lib]), { place: 'playing', room: null });
+  });
+});
+
+describe('the Listen tab\'s kinds of sound: all, MIDI songs, recordings (ui/listen-tab.js)', () => {
+  const lib = { id: 'm', kind: 'gutenberg', sounds: { books: 2, count: 3 } };
+  const a = { id: 'a', libId: 'm', title: 'A', sounds: 2 };
+  const b = { id: 'b', libId: 'm', title: 'B', sounds: 1 };
+  const beethoven = { name: 'Ludwig van Beethoven', born: 1770, died: 1827 };
+  const catalog = {
+    items: [
+      { libId: 'm', bookId: 'a', sound: { k: 'midi' }, composer: beethoven, period: 'classical' },
+      { libId: 'm', bookId: 'a', sound: { k: 'audio' }, composer: null, period: 'folk' },
+      { libId: 'm', bookId: 'b', sound: { k: 'audio' }, composer: beethoven, period: 'classical' },
+    ],
+    composers: [{ ...beethoven, count: 2, books: new Set(['m\na', 'm\nb']) }],
+    periods: [{ id: 'classical', count: 2 }, { id: 'folk', count: 1 }],
+  };
+
+  it('tells a sound\'s kind', () => {
+    assert.equal(isOfKind({ k: 'midi' }, 'all'), true);
+    assert.equal(isOfKind({ k: 'midi' }, 'midi'), true);
+    assert.equal(isOfKind({ k: 'audio' }, 'midi'), false);
+    assert.equal(isOfKind({ k: 'audio' }, 'audio'), true);
+  });
+
+  it('lists the books with sounds of a kind, with how many, the most first; all from the books\' own counts', () => {
+    const of = (kind) => booksOfKind([lib], { m: [a, b] }, catalog, kind)?.map((x) => [x.book.id, x.count]);
+    assert.deepEqual(of('all'), [['a', 2], ['b', 1]]);
+    assert.deepEqual(of('midi'), [['a', 1]]);
+    assert.deepEqual(of('audio'), [['a', 1], ['b', 1]]);
+    assert.equal(booksOfKind([lib], { m: [a, b] }, null, 'midi'), null, 'one kind needs the catalogue');
+    assert.deepEqual(booksOfKind([lib], { m: [a, b] }, null, 'all').map((x) => x.count), [2, 1], 'all does not');
+  });
+
+  it('counts composers and periods again for a kind, and keeps what it counted', () => {
+    assert.equal(catalogOfKind(catalog, 'all'), catalog);
+    const midi = catalogOfKind(catalog, 'midi');
+    assert.equal(midi.items.length, 1);
+    assert.deepEqual(midi.composers.map((c) => [c.name, c.count, c.books.size]), [['Ludwig van Beethoven', 1, 1]]);
+    assert.deepEqual(midi.periods.map((p) => [p.id, p.count]), [['classical', 1]], 'no folk song is MIDI');
+    assert.equal(catalogOfKind(catalog, 'midi'), midi, 'counted once');
+    assert.deepEqual(catalogOfKind(catalog, 'audio').periods.map((p) => [p.id, p.count]), [['classical', 1], ['folk', 1]]);
   });
 });
 
