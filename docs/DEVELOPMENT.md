@@ -49,15 +49,17 @@ in the browser with every visit, reading them from the site as it reads ZIMs fro
 their indexes built at deploy time.
 
 The workflow in `.github/workflows/pages.yml` runs the tests, downloads the demo set (the ZIMs
-listed in `tools/demo-set.txt`: Gutenberg LCC-P, the Wikipedia Mathematics, Physics, Chemistry
-and Medicine minis, Wikipedia 100, and Golf with pictures, cached between runs) and publishes it
-on every push to `main`; enable it once in the repository's Settings → Pages → Source: *GitHub
-Actions*. Each demo ZIM is on the site in its smaller form: LCC-P, Chemistry, Medicine and
-Wikipedia 100 pre-rendered, Mathematics, Physics and Golf as ZIM files (the second word `file`
-in the list), about 460 MB (pre-rendering all seven made 605 MB in 176,000 files; Pages allows
-1 GB). The site also ships the prebuilt indexes this repository has (its release "indexes" and
-the workflow's cache), as many as fit in 950 MB, and reads Kiwix's files through the edge proxy
-when the repository variable `ZIM_PROXY` names one. It needs nothing from any other site.
+listed in `tools/demo-set.txt`: Gutenberg's Music class, `gutenberg_en_lcc-m`, 3.7 GB, cached
+between runs) and publishes it on every push to `main`; enable it once in the repository's
+Settings → Pages → Source: *GitHub Actions*. A demo ZIM is on the site pre-rendered, or as the
+ZIM file itself when the list's second word is `file`. The Music ZIM is pre-rendered: 799 MB in
+18,344 files (647 MB of images, 148 MB of text; built in 31 s here), since as a file it would not
+fit in the 1 GB Pages allows. Its 455 books with text are on the site (one has only an empty
+EPUB), but not its audio: links to its MIDI and MP3 files lead nowhere on a static site, so the
+build leaves them out (their text stays). The site also ships the prebuilt indexes this
+repository has (its release "indexes" and the workflow's cache), as many as fit in 950 MB (about
+150 MB beside the Music ZIM), and reads Kiwix's files through the edge proxy when the repository
+variable `ZIM_PROXY` names one. It needs nothing from any other site.
 
 ## Reading ZIMs from the web
 

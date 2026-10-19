@@ -195,8 +195,8 @@ someone sent you, and restore it: you see what they saw.
 ## The online version
 
 <https://ariamokr.github.io/vrlbry/> is the same app as a static website, without the Node server.
-It has a demo set of Kiwix's ZIM files (a Gutenberg collection, Wikipedia 100, and Wikipedia's
-Chemistry, Medicine, Mathematics, Physics and Golf), opens more from Kiwix's library or from your
+It has a demo set of Kiwix's ZIM files (Project Gutenberg's Music class: scores, writing about
+music, and music instruction), opens more from Kiwix's library or from your
 device, and notices a new version within seconds and offers to reload. How it is built and
 deployed is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-online-version-github-pages).
 

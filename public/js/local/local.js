@@ -20,9 +20,9 @@ const ZIM_PROXY = zimProxyOf();
  * one the Pages workflow keeps using; a test checks), and where more like it are.
  */
 export const EXAMPLE_ZIM = Object.freeze({
-  title: 'Gutenberg · Language and literature',
-  url: 'https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-p_2026-03.zim',
-  size: '37 MB',
+  title: 'Gutenberg · Music and books on music',
+  url: 'https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-m_2026-03.zim',
+  size: '3.7 GB',
 });
 export const MORE_ZIMS_URL = 'https://download.kiwix.org/zim/gutenberg/';
 

@@ -138,11 +138,10 @@ describe('rooms', () => {
   it('falls back to the Demo set, when there is one, from a place that is not here', () => {
     // The main site's first visit with Golf saved as the place (by another site sharing the
     // origin, where the same ZIM has the same id): Golf is not open yet, so the Demo set.
-    const demoP = { id: 'gutenberg_en_lcc-p_2026-03', kind: 'gutenberg', title: 'P' };
-    const demoW = { id: 'wikipedia_en_100_2026-08', kind: 'wikipedia', title: 'W', articles: 100 };
-    const books = { [demoP.id]: pgBooks, [demoW.id]: [{ id: 'v1', title: 'A', volume: 1 }] };
+    const demoM = { id: 'gutenberg_en_lcc-m_2026-03', kind: 'gutenberg', title: 'M' };
+    const books = { [demoM.id]: pgBooks };
     const settings = { place: '~wikipedia_en_golf_maxi_2026-07', sort: 'title' };
-    assert.equal(currentPlace([demoP, demoW], books, settings), DEMO_PLACE);
+    assert.equal(currentPlace([demoM], books, settings), DEMO_PLACE);
     assert.equal(settings.place, DEMO_PLACE.id);
     // Without a demo set: the first library with books, as before.
     const other = { place: 'gone', sort: 'title' };
@@ -190,9 +189,10 @@ describe('rooms', () => {
   });
 
   it('has no all-libraries place where it would be the demo set again', () => {
+    // Two editions of the demo ZIM (a folder holding a newer one beside the old).
     const demo = [
-      { id: 'gutenberg_en_lcc-p_2026-03', kind: 'gutenberg', title: 'P' },
-      { id: 'wikipedia_en_100_2026-08', kind: 'wikipedia', title: '100' },
+      { id: 'gutenberg_en_lcc-m_2025-12', kind: 'gutenberg', title: 'M' },
+      { id: 'gutenberg_en_lcc-m_2026-03', kind: 'gutenberg', title: 'M' },
     ];
     assert.deepEqual(groupPlaces(demo), [DEMO_PLACE]);
     const books = { [demo[0].id]: [{ id: 'b' }], [demo[1].id]: [{ id: 'v1' }] };
@@ -203,13 +203,13 @@ describe('rooms', () => {
   });
 
   it('shelves the libraries opened here together, once there are two', () => {
-    const a = { id: '~gutenberg_en_lcc-p_2026-03', kind: 'gutenberg', title: 'P' };
-    const b = { id: '~wikipedia_en_chemistry_mini_2026-07', kind: 'wikipedia', title: 'Chemistry', articles: 9254 };
+    const a = { id: '~wikipedia_en_chemistry_mini_2026-07', kind: 'wikipedia', title: 'Chemistry', articles: 9254 };
+    const b = { id: '~gutenberg_en_lcc-m_2026-03', kind: 'gutenberg', title: 'M' };
     const server = { id: 'gutenberg_en_lcc-pe_2026-03', kind: 'gutenberg', title: 'PE' };
     assert.equal(isLocalLibrary(a), true);
     assert.equal(isLocalLibrary(server), false);
     assert.equal(isDemoLibrary(b), false, 'a file opened here is not the demo set, even with its name');
-    // The site's own ZIM files (the main site ships part of its demo set as files) are.
+    // The site's own ZIM files (demo-set lines marked "file") are.
     const siteFile = { ...b, site: true };
     assert.equal(isDemoLibrary(siteFile), true);
     assert.equal(isLocalLibrary(siteFile), false, 'not "Opened here"');
@@ -218,7 +218,7 @@ describe('rooms', () => {
     assert.deepEqual(groupPlaces([a, b]), [LOCAL_PLACE], 'no all-libraries place: it would be the same');
     assert.deepEqual(groupPlaces([server, a, b]), [LOCAL_PLACE, ALL_PLACE]);
     const vols = [1, 2].map((v) => ({ id: 'v' + v, title: 'Range ' + (3 - v), volume: v }));
-    const books = { [a.id]: pgBooks, [b.id]: vols, [server.id]: pgBooks };
+    const books = { [a.id]: vols, [b.id]: pgBooks, [server.id]: pgBooks };
     const settings = { sort: 'title', place: LOCAL_PLACE.id };
     assert.equal(currentPlace([server, a, b], books, settings), LOCAL_PLACE);
     const cols = collectionsFor([server, a, b], books, settings);
@@ -232,30 +232,25 @@ describe('rooms', () => {
   });
 
   it('shelves the demo set together when its libraries are here', () => {
-    const demoPg = { id: 'gutenberg_en_lcc-p_2026-03', kind: 'gutenberg', title: 'Language and literature' };
-    const demoWp = { id: 'wikipedia_en_mathematics_mini_2026-06', kind: 'wikipedia', title: 'Mathematics', articles: 23326 };
+    // The demo ZIM in two editions (a folder holding a newer one beside the old).
+    const demoM = { id: 'gutenberg_en_lcc-m_2026-03', kind: 'gutenberg', title: 'Music and books on music' };
+    const demoM2 = { id: 'gutenberg_en_lcc-m_2025-12', kind: 'gutenberg', title: 'Music and books on music' };
     const other = { id: 'gutenberg_en_lcc-pe_2026-03', kind: 'gutenberg', title: 'PE' };
-    assert.equal(isDemoLibrary(demoPg), true);
-    assert.equal(isDemoLibrary(other), false, 'lcc-pe is not lcc-p');
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_physics_mini_2026-07' }), true);
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_chemistry_mini_2026-07' }), true);
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_physics_nopic_2026-07' }), false, 'only the mini editions');
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_100_2026-08' }), true);
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_100_2027-01' }), true, 'a newer edition');
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_100_mini_2026-08' }), false, 'another flavour');
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_medicine_mini_2026-04' }), true);
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_golf_maxi_2026-07' }), true);
-    assert.equal(isDemoLibrary({ id: 'wikipedia_en_golf_mini_2026-07' }), false, 'only the edition in the demo set');
-    const vols = [1, 2].map((v) => ({ id: 'v' + v, title: 'Range ' + (3 - v), volume: v }));
-    const books = { [demoPg.id]: pgBooks, [demoWp.id]: vols, [other.id]: pgBooks };
-    const libs = [other, demoPg, demoWp];
+    assert.equal(isDemoLibrary(demoM), true);
+    assert.equal(isDemoLibrary(demoM2), true, 'an older edition');
+    assert.equal(isDemoLibrary({ id: 'gutenberg_en_lcc-m_2027-01' }), true, 'a newer edition');
+    assert.equal(isDemoLibrary(other), false, 'another class');
+    assert.equal(isDemoLibrary({ id: 'gutenberg_en_lcc-ml_2026-03' }), false, 'lcc-ml is not lcc-m');
+    assert.equal(isDemoLibrary({ id: 'gutenberg_fr_lcc-m_2026-03' }), false, 'another language');
+    assert.equal(isDemoLibrary({ id: 'gutenberg_en_lcc-m' }), false, 'a name without its date');
+    const books = { [demoM.id]: pgBooks, [demoM2.id]: pgBooks.slice(0, 2), [other.id]: pgBooks };
+    const libs = [other, demoM, demoM2];
     assert.deepEqual(groupPlaces(libs), [DEMO_PLACE, ALL_PLACE]);
     assert.deepEqual(groupPlaces([other]), [], 'no demo set without its ZIMs, no hall with one library');
     const settings = { sort: 'title', place: DEMO_PLACE.id };
     assert.equal(currentPlace(libs, books, settings), DEMO_PLACE);
     const cols = collectionsFor(libs, books, settings);
-    assert.deepEqual(cols.map((c) => [c.library.id, c.books.length, c.ordered]), [[demoPg.id, 10, false], [demoWp.id, 2, true]]);
-    assert.equal(cols[1].subtitle, '2 volumes · 23,326 articles');
+    assert.deepEqual(cols.map((c) => [c.library.id, c.books.length, c.ordered]), [[demoM.id, 10, false], [demoM2.id, 2, false]]);
     assert.equal(placeBookCount(DEMO_PLACE, libs, books), 12);
     // Without its ZIMs the place falls back to a library.
     const s2 = { sort: 'title', place: DEMO_PLACE.id };

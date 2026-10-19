@@ -314,7 +314,8 @@
   - *How the books use them:* links in the text (`<a href="music/music011.mid">`), not `<audio>`
     (which `html.js` drops anyway). The converter keeps them as links, and since a Gutenberg link
     resolves only within the book (`resolveLink`), tapping one says "Not in this library", though
-    the file has it.
+    the file has it. On the static site, whose demo set is now `lcc-m` (pre-rendered), the build
+    drops them as links that lead nowhere (`resolveLinks`), and no audio file is on the site.
   - *Where they are:* the class ZIM `gutenberg_en_lcc-m_2026-03` (Music, 3.99 GB) holds about
     70 % of the files and 79 % of their bytes (103 books: 2,932 MIDI, 1,750 MP3, 744 MB;
     *Principles of Orchestration*, *The Complete Opera Book*). The next are `lcc-g` (479 MIDI),
@@ -356,6 +357,11 @@
   - *The demo set:* the ZIMs in `tools/demo-set.txt` (what the workflow downloads), which the Demo
     set place (`DEMO_LIBRARIES` in `rooms.js`) shelves together; a test checks that the two name
     the same ZIMs. ZIM size, then size on the site:
+    - Gutenberg LCC-M, Music (456 books), the whole demo set since 2026-10-18: 3.7 GB, 799 MB in
+      18,344 files (647 MB of images, 148 MB of text; built in 31 s), 0.2× the ZIM, whose 744 MB of
+      audio and EPUB copies are not used. That leaves ~150 MB of the 950 for prebuilt indexes. Its
+      book 30156 (*Second Overture In Solomon*) has only an EPUB of no bytes: the build stopped on
+      it (HTTP 500) until an empty EPUB counted as none. The seven before it:
     - Gutenberg LCC-P, Language and literature (19 books): 37 MB, 22 MB.
     - Wikipedia Mathematics, introductions (24 volumes, 23,326 articles): 56 MB, 117 MB (18,000
       formula images).
