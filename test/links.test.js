@@ -12,6 +12,7 @@ import { after, before, describe, it } from 'node:test';
 import { ArchiveLibrary, Library } from '../server/library.js';
 import { createApp } from '../server/http.js';
 import { resolveLinks } from '../tools/build-pages.mjs';
+import { htmlToBlocks } from '../public/js/core/content/html.js';
 import { redirectPage, writeWikisourceZim } from './helpers/zim-fixtures.js';
 import { writeZim } from './helpers/zimwriter.js';
 
@@ -156,6 +157,20 @@ describe('links in a Wikisource', () => {
   });
 });
 
+describe('sound links (SPEC §3.5 media)', () => {
+  const runs = (html) => htmlToBlocks(html, { docPath: 'C/Song Book.7' }).blocks.map((b) => b.r);
+
+  it('turns an <audio> player into a link to its sound, named by its title, without its fallback text', () => {
+    // Gutenberg's newer books: the brackets are the page's, the player's title the link's text.
+    assert.deepEqual(runs('<p>[<span class="pg_audiospan"><audio controls="controls" title="Listen"><source id="id-1" src="music/music101.mp3" type="audio/mpeg">Audio content is not supported by your browser.</audio></span>]</p>'),
+      [[['[', 0], ['Listen', 0, { href: 'C/music/music101.mp3' }], [']', 0]]]);
+    assert.deepEqual(runs('<p><audio src="m/a.mid"></audio> and <audio controls title="  [Listen] "><source src="b.mp3"><source src="b.ogg"></audio></p>'),
+      [[['[Listen]', 0, { href: 'C/m/a.mid' }], [' and ', 0], ['[Listen]', 0, { href: 'C/b.mp3' }]]], 'the first source; [Listen] when it has no title');
+    assert.deepEqual(runs('<p>No <audio controls>player</audio>sound.</p>'), [[['No sound.', 0]]], 'a player that names no sound: nothing');
+    assert.deepEqual(runs('<p><i><audio title="Hear it" src="c.wav"></audio></i></p>'), [[['Hear it', 1, { href: 'C/c.wav' }]]], 'as the text around it');
+  });
+});
+
 describe('static build', () => {
   it('resolves the links a reader would ask about (to), drops those that lead nowhere', async () => {
     const blocks = [
@@ -172,5 +187,12 @@ describe('static build', () => {
     assert.deepEqual(blocks[0].r, [['See ', 0], ['Insect', 0, { to: { book: 'v2', c: 1 } }], [' and Missing.', 0], ['[1]', 8, { at: [0, 3] }]]);
     assert.deepEqual(blocks[1].c, [[['￼', 0, { src: '/zim/wl/C/flag.png', w: 20, h: 12 }]], [['Bee', 0, { to: { book: 'v1', c: 1 } }]]]);
     assert.equal(await resolveLinks([{ t: 'p', r: [['x', 0]] }], () => null), false, 'nothing to resolve');
+  });
+
+  it('writes a sound a link names into it (media), as the reader plays it', async () => {
+    const media = { src: '/zim/m/C/7_tune.mid', mime: 'audio/midi', name: 'tune.mid' };
+    const blocks = [{ t: 'p', r: [['Listen', 0, { href: 'C/music/tune.mid' }], [' or ', 0], ['not', 0, { href: 'C/music/gone.mid' }]] }];
+    await resolveLinks(blocks, async (href) => (href === 'C/music/tune.mid' ? { media } : null));
+    assert.deepEqual(blocks[0].r, [['Listen', 0, { media }], [' or not', 0]]);
   });
 });

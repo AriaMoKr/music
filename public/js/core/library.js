@@ -11,6 +11,7 @@
  */
 import { parseEpub } from './content/epub.js';
 import { blockChars, chunkBlocks, htmlToBlocks, imageSize, isImageRun, linkDocs, linkTarget, placeLinks } from './content/html.js';
+import { SOUND_MIME, SOUND_PATH } from './content/sounds.js';
 import { platform } from './platform.js';
 import { LRUCache } from './util/lru.js';
 import * as wikipedia from './wikipedia.js';
@@ -494,13 +495,14 @@ export class ArchiveLibrary {
 
   /**
    * Where a link that is resolved when followed (`href`, §3.5) leads: a Wikipedia article (its
-   * volume and chunk), a Wikisource work (and the part). ZIM redirects and mwoffliner's redirects
-   * to a section (a tiny page whose <meta http-equiv="refresh"> names it) are followed. Null when
-   * it leads to nothing on the shelves (a file, a page that is not an article, another library).
+   * volume and chunk), a Wikisource work (and the part), or a sound to play (`media`, _sound). ZIM
+   * redirects and mwoffliner's redirects to a section (a tiny page whose <meta http-equiv="refresh">
+   * names it) are followed. Null when it leads to nothing on the shelves (a file, a page that is not
+   * an article, another library).
    * @param {string} bookId the book the link is in
    * @param {string} href an archive path, with '#id' for a place in it
-   * @returns {Promise<{ book: string, c: number, b?: number, f?: string } | null>} f: the id of
-   *   the place in chunk c (the reader looks for the block that has it)
+   * @returns {Promise<{ book: string, c: number, b?: number, f?: string } | { media: object } | null>}
+   *   f: the id of the place in chunk c (the reader looks for the block that has it)
    */
   async resolveLink(bookId, href) {
     await this.books();
@@ -509,6 +511,10 @@ export class ArchiveLibrary {
     let path = hash < 0 ? href : href.slice(0, hash);
     let f = hash < 0 ? '' : href.slice(hash + 1);
     const withF = (to) => (f ? { ...to, f } : to);
+    if (SOUND_PATH.test(path)) {
+      const media = await this._sound(String(bookId), path);
+      return media && { media };
+    }
     if (this.kind === 'wikipedia') {
       const idx = this._wikipedia;
       if (!idx) return null;
@@ -537,6 +543,25 @@ export class ArchiveLibrary {
         const at = (await this.content(id))?.parts?.get(entry.path);
         return at ? withF({ book: id, c: at[0], b: at[1] }) : { book: id, c: 0, b: 0 };
       }
+    }
+    return null;
+  }
+
+  /**
+   * The sound a link names (§3.5 `media`): { src (client URL), path (archive path), mime, name,
+   * bytes? }, or null when the archive has no sound there. gutenberg2zim stores a book's files as
+   * '<id>_<name>' while its pages still say music/<name>, as for its images (_convert).
+   */
+  async _sound(bookId, path) {
+    const tried = [path];
+    const slash = path.indexOf('/');
+    if (this.kind === 'gutenberg' && slash > 0) tried.push(`${path.slice(0, slash)}/${bookId}_${path.slice(path.lastIndexOf('/') + 1)}`);
+    for (const p of tried) {
+      const entry = await this._linkEntry(p);
+      if (!entry || entry.cluster === null || !SOUND_MIME.test(entry.mime ?? '')) continue;
+      const bytes = await this.archive.getBlobSize(entry, { cheapOnly: true }).catch(() => null);
+      const name = path.slice(path.lastIndexOf('/') + 1); // archive paths are decoded (linkTarget)
+      return { src: zimUrl(this.id, entry.path), path: entry.path, mime: entry.mime, name, ...(bytes !== null ? { bytes } : {}) };
     }
     return null;
   }
@@ -1308,7 +1333,8 @@ export class ArchiveLibrary {
       // Relative links resolve against the entry that actually holds the HTML (after redirects).
       const doc = htmlToBlocks(decodeHtml(content.data), { docPath: content.entry.path });
       ({ blocks } = doc);
-      linkDocs([{ path: content.entry.path, blocks, ids: doc.ids }]); // links within the book only
+      // Links within the book, and to its sounds (played when followed: resolveLink).
+      linkDocs([{ path: content.entry.path, blocks, ids: doc.ids }], { keep: (p) => SOUND_PATH.test(p) });
       source = 'html';
       images(0);
       await this._fixImages(blocks, {

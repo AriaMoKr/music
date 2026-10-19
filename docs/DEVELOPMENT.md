@@ -52,14 +52,16 @@ The workflow in `.github/workflows/pages.yml` runs the tests, downloads the demo
 listed in `tools/demo-set.txt`: Gutenberg's Music class, `gutenberg_en_lcc-m`, 3.7 GB, cached
 between runs) and publishes it on every push to `main`; enable it once in the repository's
 Settings → Pages → Source: *GitHub Actions*. A demo ZIM is on the site pre-rendered, or as the
-ZIM file itself when the list's second word is `file`. The Music ZIM is pre-rendered: 799 MB in
-18,344 files (647 MB of images, 148 MB of text; built in 31 s here), since as a file it would not
-fit in the 1 GB Pages allows. Its 455 books with text are on the site (one has only an empty
-EPUB), but not its audio: links to its MIDI and MP3 files lead nowhere on a static site, so the
-build leaves them out (their text stays). The site also ships the prebuilt indexes this
-repository has (its release "indexes" and the workflow's cache), as many as fit in 950 MB (about
-150 MB beside the Music ZIM), and reads Kiwix's files through the edge proxy when the repository
-variable `ZIM_PROXY` names one. It needs nothing from any other site.
+ZIM file itself when the list's second word is `file`. The Music ZIM is pre-rendered: 804 MB in
+21,312 files (647 MB of images, 148 MB of text, 4.3 MB of MIDI files; built in 42 s here), since
+as a file it would not fit in the 1 GB Pages allows. Its 455 books with text are on the site (one
+has only an empty EPUB), and their sounds play: the MIDI files from the site, the MP3s (879 MB,
+too many for it) from the ZIM on Kiwix's mirror, a range request each, at the address
+`tools/demo-set.txt` gives (`--sources`; without it, links to MP3s are left out, their text
+staying). The site also ships the prebuilt indexes this repository has (its release "indexes" and
+the workflow's cache), as many as fit in 950 MB (about 145 MB beside the Music ZIM), and reads
+Kiwix's files through the edge proxy when the repository variable `ZIM_PROXY` names one. Apart
+from those MP3s it needs nothing from any other site.
 
 ## Reading ZIMs from the web
 

@@ -307,24 +307,42 @@
   - leave them off the shelves, or mark their spines, so that nobody takes one out for nothing;
   - show the PDF: pdf.js drawing each page onto the book's pages (a large library, and PDF pages
     do not reflow to the book's page size).
-- **Possible: audio in Gutenberg books** (counted 2026-10-18). Of the local ZIMs only
-  Gutenberg's has audio or video: `gutenberg_en_all_2023-08` holds 6,586 files (about 1 GB) in 402
-  books, nearly all MIDI (4,465, 6.4 MB) and MP3 (2,069, 942 MB), plus a few M4A, Ogg, WAV, AVI
-  and MPEG. Wikipedia `top1m_maxi` and Wikisource declare no audio or video type.
-  - *How the books use them:* links in the text (`<a href="music/music011.mid">`), not `<audio>`
-    (which `html.js` drops anyway). The converter keeps them as links, and since a Gutenberg link
-    resolves only within the book (`resolveLink`), tapping one says "Not in this library", though
-    the file has it. On the static site, whose demo set is now `lcc-m` (pre-rendered), the build
-    drops them as links that lead nowhere (`resolveLinks`), and no audio file is on the site.
-  - *Where they are:* the class ZIM `gutenberg_en_lcc-m_2026-03` (Music, 3.99 GB) holds about
-    70 % of the files and 79 % of their bytes (103 books: 2,932 MIDI, 1,750 MP3, 744 MB;
-    *Principles of Orchestration*, *The Complete Opera Book*). The next are `lcc-g` (479 MIDI),
-    `lcc-e` (251) and `lcc-pz` (203 MIDI, 88 MP3), mostly folk and traditional songs. The tests'
-    reference ZIM `lcc-pe` has 14 MP3s in one book (*The Haliburton Primer*), and `lcc-pm`
-    (0.05 GB) 8 MIDI files. Kiwix's current class ZIMs carry the files themselves.
-  - *Ideas:* play MP3 (and M4A, Ogg, WAV) through the browser's `<audio>` or WebAudio from the
-    entry's bytes (the server already answers `Range` requests on `/zim/`); MIDI needs a
-    synthesizer (no browser plays it), so at most a small soundfont player, or nothing.
+- **Done (2026-10-18): the sounds of Gutenberg's books play** (SPEC §3.5 `media`, §5). Of the
+  local ZIMs only Gutenberg's have audio or video: `gutenberg_en_all_2023-08` holds 6,586 files
+  (about 1 GB) in 402 books, nearly all MIDI (4,465, 6.4 MB) and MP3 (2,069, 942 MB), plus a few
+  M4A, Ogg, WAV, AVI and MPEG. Wikipedia `top1m_maxi` and Wikisource declare no audio or video type.
+  - *How the books use them:* links (`<a href="music/music011.mid">Listen</a>`) in the older
+    books, an `<audio controls title="[Listen]"><source src="music/….mp3">` player in the newer
+    ones (*Handbook of violin playing*, *The Evolution of Modern Orchestration*), and gutenberg2zim
+    stores them as `<id>_<name>`. Before, the converter dropped both (`linkDocs` kept only links
+    within the book; `<audio>` was skipped): "Listen" was plain text.
+  - *Where they are:* the class ZIM `gutenberg_en_lcc-m_2026-03` (Music, 3.99 GB, this
+    repository's demo set): 2,985 MIDI files (4.3 MB, the largest 236 KB) and 2,231 MP3s (879 MB,
+    the largest 4.4 MB), every one in an uncompressed cluster. Converted, 116 of its 455 readable
+    books link 5,287 sounds; 5,222 links reach 5,194 of the 5,216 files. The other 65 are book
+    76017's (*A Croatian composer*), whose sounds the ZIM does not have. The next class ZIMs are
+    `lcc-g` (479 MIDI), `lcc-e` (251) and `lcc-pz` (203 MIDI, 88 MP3); the tests' `lcc-pe` has 14
+    MP3s in one book (*The Haliburton Primer*).
+  - *Done:* sound links are kept and `<audio>` becomes one (`html.js` audioLink); `resolveLink`
+    answers them with `media`; the reader plays one at a time with ▶ / ❚❚, ■ and its time on the
+    toolbar. MIDI through a synthesizer of our own (`media/`: no sound font to download, a timbre
+    per General MIDI family and noise drums): all 2,985 files parse (0.07 ms each, the slowest
+    36 ms; 389,451 notes, at most 28,932 in one, 10:45 the longest), and a note-off ends the
+    earliest note of its key, since Gutenberg's symphonies put two parts on one channel (the
+    first rule tried, a note struck again ends the one before, cut 16,923 notes to nothing).
+    MP3 through `<audio>`: streamed from the server, a blob of the worker's bytes for a local file.
+    The static site has the MIDI files (2,963 linked, 4.3 MB: 804 MB in all instead of 799) and
+    reads each MP3 from Kiwix's mirror by its range of the ZIM there (`--sources`; 1.3 s to start
+    an 8 s MP3 of 220 KB here): its 879 MB would not fit. Checked in the browser (server and
+    static site): MIDI and MP3 playing, pause, resume, stop, and the book put back.
+  - *Not checked:* on the Quest, in VR. The synthesizer runs on the audio thread and a 200 ms
+    timer, not the frame loop, but a dense passage (138 notes at once in one file, 40 voices at
+    most) should be measured there (`quest-perf.mjs`, with a scenario playing a symphony).
+  - *Next:* a better sound for MIDI (a small General MIDI sound font, if one fits the site and the
+    Quest; a choice for the reader); seeking within a sound (the time could become a bar); the
+    sounds inside an EPUB-only book's EPUB (none in `lcc-m`; its links are still dropped);
+    reading MP3s through the edge proxy when the site has one (now only from Kiwix's mirror);
+    showing which links are sounds before they are tapped (a ♪).
 - **Possible: more in "Copy debug info"** (`debug-info.js`; it has browser, GPU, version, state,
   place, viewpoint, the open book and page, the dialogs and the last 20 errors; pasting it into
   the help dialog, or `__vrlbry.reproduce(report)`, restores that scene, see `scene.js`).
@@ -359,7 +377,9 @@
     the same ZIMs. ZIM size, then size on the site:
     - Gutenberg LCC-M, Music (456 books), the whole demo set since 2026-10-18: 3.7 GB, 799 MB in
       18,344 files (647 MB of images, 148 MB of text; built in 31 s), 0.2× the ZIM, whose 744 MB of
-      audio and EPUB copies are not used. That leaves ~150 MB of the 950 for prebuilt indexes. Its
+      audio and EPUB copies are not used (since its sounds play, its MIDI files are on the site
+      too: 804 MB in 21,312 files; its MP3s are read from Kiwix's mirror). That leaves ~145 MB of
+      the 950 for prebuilt indexes. Its
       book 30156 (*Second Overture In Solomon*) has only an EPUB of no bytes: the build stopped on
       it (HTTP 500) until an empty EPUB counted as none. The seven before it:
     - Gutenberg LCC-P, Language and literature (19 books): 37 MB, 22 MB.

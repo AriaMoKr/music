@@ -703,6 +703,21 @@ export class ZimArchive {
   }
 
   /**
+   * Where an entry's content lies in the file, [start, end) (redirects followed), when it is stored
+   * as it is (an uncompressed cluster: libzim keeps images, MP3s and the like so); null when it must
+   * be decompressed or there is none. A copy of the file elsewhere (Kiwix's mirror) answers a range
+   * request for those bytes with the content.
+   * @param {Entry} entry
+   * @returns {Promise<[number, number] | null>}
+   */
+  async contentRange(entry) {
+    const target = await this.resolveRedirect(entry);
+    if (target.cluster === null) return null;
+    const info = await this._getClusterInfo(target.cluster);
+    return info.compressed ? null : this._uncompressedBlobRange(info, target.blob);
+  }
+
+  /**
    * The sizes of some blobs of one cluster, and the first `head` bytes of each (all of a smaller
    * one), from one decompression and without directory entries: for passes over a whole archive
    * in cluster order (the Wikipedia index), where re-reading each entry cost more than the

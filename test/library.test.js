@@ -10,9 +10,10 @@ import {
   ArchiveLibrary, Library, LibraryError, gutenbergBase, libraryIdFor, libraryTitle, parseIndexScript, splitTitle, zimUrl,
 } from '../server/library.js';
 import {
-  LONG_TITLE, bookHtml, js, png, writeGenericZim, writeGutenbergZim, writeOldGutenbergZim,
+  AIR_MP3, LONG_TITLE, bookHtml, js, png, writeGenericZim, writeGutenbergZim, writeOldGutenbergZim, writeSoundsZim,
 } from './helpers/zim-fixtures.js';
 import { writeZim } from './helpers/zimwriter.js';
+import { TUNE } from './helpers/midi-writer.js';
 import { ZimArchive } from '../public/js/core/zim/reader.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -329,6 +330,53 @@ describe('ArchiveLibrary: a Gutenberg EPUB of no bytes', () => {
     } finally {
       await lib.close();
     }
+  });
+});
+
+describe('ArchiveLibrary: sounds a book links (SPEC §3.5 media)', () => {
+  let file;
+  let lib;
+  before(async () => {
+    file = path.join(tmp, 'songs.zim');
+    writeSoundsZim(file);
+    lib = await ArchiveLibrary.open(file, { log: quietLog });
+  });
+  after(async () => {
+    await lib?.close();
+  });
+  const linksOf = async (id) => {
+    const out = [];
+    for (const c of (await lib.content(id)).chunks) {
+      for (const b of c.blocks) for (const r of b.r ?? []) if (r[2]) out.push([r[0], r[2].href]);
+    }
+    return out;
+  };
+
+  it('keeps a link to a sound as the book is converted (resolved when followed), and drops one to any other file', async () => {
+    assert.deepEqual(await linksOf('7'), [
+      ['tune', 'C/music/tune.mid'], ['air', 'C/music/air.mp3'], ['Gone', 'C/music/gone.mid'], ['a page', 'C/music/page.mp3'],
+    ], 'notes.txt is no sound: its link goes, its text stays');
+  });
+
+  it('resolves a sound link to its file: at the path the page names, or as gutenberg2zim stores it (<id>_<name>)', async () => {
+    assert.deepEqual(await lib.resolveLink('7', 'C/music/tune.mid'), {
+      media: { src: '/zim/songs/C/7_tune.mid', path: 'C/7_tune.mid', mime: 'audio/midi', name: 'tune.mid', bytes: TUNE.length },
+    });
+    assert.deepEqual(await lib.resolveLink('7', 'C/music/air.mp3'), {
+      media: { src: '/zim/songs/C/music/air.mp3', path: 'C/music/air.mp3', mime: 'audio/mpeg', name: 'air.mp3', bytes: AIR_MP3.length },
+    });
+    assert.equal(await lib.resolveLink('7', 'C/music/gone.mid'), null, 'not in the archive');
+    assert.equal(await lib.resolveLink('7', 'C/music/page.mp3'), null, 'a page, whatever its name');
+    assert.equal(await lib.resolveLink('999', 'C/music/tune.mid'), null, 'no such book');
+  });
+
+  it('knows where an uncompressed entry lies in the file (contentRange), for reading it from a copy elsewhere', async () => {
+    const { archive } = lib;
+    const range = await archive.contentRange(await archive.findPath('C/music/air.mp3'));
+    assert.ok(range);
+    const bytes = fs.readFileSync(file).subarray(range[0], range[1]);
+    assert.deepEqual(Buffer.from(bytes), AIR_MP3, 'those very bytes');
+    assert.equal(await archive.contentRange(await archive.findPath('C/7_tune.mid')), null, 'compressed: it must be decompressed');
   });
 });
 

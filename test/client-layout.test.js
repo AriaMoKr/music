@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { makeMetrics, layoutBoxes, layoutChunk, paginate, ChunkLayout, blockChars as clientChars } from '../public/js/reader/layout.js';
+import { makeMetrics, layoutBoxes, layoutChunk, paginate, ChunkLayout, blockChars as clientChars, runLink } from '../public/js/reader/layout.js';
 import { blockChars as serverChars } from '../public/js/core/content/html.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +45,14 @@ function checkPages(pages, blocks) {
 }
 
 describe('reader layout', () => {
+  it('takes every kind of link a run can hold as a link (SPEC §3.5), and nothing else', () => {
+    for (const x of [{ at: [0, 1] }, { to: { book: 'v1', c: 0 } }, { href: 'C/a' }, { media: { src: 'zim/m/C/7_a.mid', mime: 'audio/midi' } }]) {
+      assert.equal(runLink(x), x, Object.keys(x)[0]);
+    }
+    assert.equal(runLink({ src: 'zim/a.png', w: 1, h: 1 }), null, 'an image run without a link');
+    assert.equal(runLink(undefined), null);
+  });
+
   it('blockChars matches the server (progress maths depends on it)', () => {
     const samples = [p('hello'), { t: 'h', l: 1, r: [['Title', 0]] }, { t: 'img', src: 'x' }, { t: 'hr' },
       { t: 'pre', x: 'a\nb' }, { t: 'tr', c: [[['ab', 0]], [['cde', 1]]], g: 1 }, { t: 'li', r: [['x', 0]], d: 1, m: '•' }];

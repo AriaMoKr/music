@@ -204,6 +204,52 @@ export async function imageSource(url) {
   return { url: blobUrl, release: () => URL.revokeObjectURL(blobUrl) };
 }
 
+/**
+ * A sound's bytes (SPEC §3.5 `media`; MIDI is played from them): a local library's from the
+ * worker, a static site's from the site (`src`) or from Kiwix's mirror (`remote`: its range of the
+ * ZIM there, which the site did not have room for), a server's from /zim/.
+ * @returns {Promise<Uint8Array>}
+ */
+export async function soundBytes(media) {
+  if (media.remote) return remoteBytes(media.remote);
+  if (local.isLocalUrl(media.src)) {
+    const found = await local.image(media.src); // any entry's bytes, not only an image's
+    if (!found) throw new Error(`${media.name || 'The sound'} is not in the file.`);
+    return found.bytes;
+  }
+  const res = await fetch(media.src);
+  if (!res.ok) throw new Error(`${media.name || 'The sound'}: HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+/**
+ * Where an <audio> plays a sound from: the server's or the site's URL (the server answers range
+ * requests, so it streams and seeks), else a blob URL of its bytes (release() once done with it).
+ * @returns {Promise<{ url: string, release: () => void }>}
+ */
+export async function soundUrl(media) {
+  if (!media.remote && !local.isLocalUrl(media.src)) return { url: media.src, release() {} };
+  const bytes = await soundBytes(media);
+  const url = URL.createObjectURL(new Blob([bytes], { type: media.mime || 'audio/mpeg' }));
+  return { url, release: () => URL.revokeObjectURL(url) };
+}
+
+/**
+ * A sound's bytes from its ZIM on Kiwix's mirror (`remote`: { url, start, end, size }, written by
+ * the static build): one range request. The mirror's file must still be the edition the site was
+ * built from: the same size (when the browser may read Content-Range) and bytes where they were.
+ */
+async function remoteBytes({ url, start, end, size }) {
+  // no-store: a browser keeps range answers of a URL it has cached one at a time (http-source.js).
+  const res = await fetch(url, { headers: { range: `bytes=${start}-${end - 1}` }, cache: 'no-store' });
+  if (res.status !== 206) throw new Error(`Kiwix's mirror did not send the sound (HTTP ${res.status}).`);
+  const total = /\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '');
+  if (size && total && Number(total[1]) !== size) throw new Error('Kiwix\'s mirror has another edition of this ZIM now.');
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length !== end - start) throw new Error(`Kiwix's mirror sent ${bytes.length} bytes of the sound's ${end - start}.`);
+  return bytes;
+}
+
 /** Drop cached chunks for a book (e.g. after closing it, to free memory). */
 export function forgetBook(libId, bookId) {
   const prefix = `${libId}\n${bookId}\n`;

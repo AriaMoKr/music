@@ -15,7 +15,8 @@ or from ZIM files on your own device.
 It understands three kinds of [Kiwix ZIM files](https://library.kiwix.org/) especially well:
 
 - **Project Gutenberg** (gutenberg2zim): real covers, authors, popularity ranks and the books' own
-  illustrations.
+  illustrations. The music in its music books plays: tap **Listen** beside an example to hear it
+  (MIDI files through a small built-in synthesizer, MP3 recordings through the browser).
 - **Wikisource** (mwoffliner): every multi-part work — novels, collections, histories; 17,693 in
   the English ZIM — becomes one book with all its chapters in order, its cover, author, year and
   genre.
@@ -159,6 +160,7 @@ Then press **Enter VR**.
 | One page or two | **P**, or **1 page** / **2 pages** | **1 page** / **2 pages** (one page while the phone is upright) | toolbar | toolbar |
 | Book distance / size | mouse wheel | pinch | triggers | right stick up/down · left stick up/down · grip to move the book |
 | Follow a link | click it | tap it | **A** on it | trigger on it |
+| Play a sound (**Listen**) | click it; **❚❚** / **▶** and **■** on the toolbar | tap it; the same | **A** on it | trigger on it |
 | Back (along links, then close) | Backspace, **↩ Back**, or the browser's Back | **↩ Back**, or the back gesture | **B** | **B** or **Y** |
 | Close / put back | Esc | **✕** / **Put back** | **B** | **B** or **Y** |
 | Book out of sight | **F** | **Bring the book in front of me** (in **?**) | press the right stick | press a thumbstick |

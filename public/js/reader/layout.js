@@ -152,9 +152,9 @@ function smallCapsFlagged(f) {
  * @typedef {{ k: 'w', pieces: Piece[], w: number } | { k: 's', w: number } | { k: 'br' }} Token
  */
 
-/** A run's link (its third element, when that holds `at`, `to` or `href`: SPEC §3.5), or null. */
+/** A run's link (its third element, when that holds `at`, `to`, `href` or `media`: SPEC §3.5), or null. */
 export function runLink(x) {
-  return x && (x.at !== undefined || x.to !== undefined || x.href !== undefined) ? x : null;
+  return x && (x.at !== undefined || x.to !== undefined || x.href !== undefined || x.media !== undefined) ? x : null;
 }
 
 /** Inline image sizes are CSS px at this font size (SPEC §3.5); they scale with the text. */

@@ -6,6 +6,7 @@ import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { writeZim } from './zimwriter.js';
+import { TUNE } from './midi-writer.js';
 
 /**
  * A fixture's UUID from its file name: each ZIM has its own, as real ones do (Wikipedia and
@@ -302,4 +303,29 @@ export function writeWikisourceZim(file) {
     { ns: 'M', url: 'Language', mime: 'text/plain', content: 'eng' },
   ];
   return writeZim(file, { entries, scheme: 'new', mainPage: 'C/Main_Page', uuid: uuidOf(file) });
+}
+
+/** The MP3 of writeSoundsZim (any bytes: nothing decodes it in the tests). */
+export const AIR_MP3 = Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 13) & 0xff));
+
+/**
+ * A gutenberg2zim-like archive whose book links sounds, as Gutenberg's music books do: a MIDI
+ * file stored as '<id>_<name>' while the page says music/<name> (compressed), an MP3 at the path
+ * the page names (uncompressed, as libzim stores MP3s), one missing, a page with a sound's name,
+ * and a link to a file that is no sound.
+ */
+export function writeSoundsZim(file) {
+  const rows = [['Song Book', 'Ann Author', '100', 7, 'M']];
+  const body = `<p>Hear the <a href="music/tune.mid">tune</a> and the <a href="music/air.mp3">air</a>.</p>
+<p><a href="music/gone.mid">Gone</a>, <a href="music/page.mp3">a page</a>, <a href="notes.txt">notes</a>.</p>`;
+  const entries = [
+    { ns: 'C', url: 'full_by_popularity.js', mime: 'text/javascript', content: js('json_data', rows) },
+    { ns: 'C', url: 'Song Book.7', mime: 'text/html', content: bookHtml('Song Book', body) },
+    { ns: 'C', url: '7_tune.mid', mime: 'audio/midi', content: Buffer.from(TUNE) },
+    { ns: 'C', url: 'music/air.mp3', mime: 'audio/mpeg', content: AIR_MP3, compression: 'none' },
+    { ns: 'C', url: 'music/page.mp3', mime: 'text/html', content: '<p>not a sound</p>' },
+    { ns: 'C', url: 'notes.txt', mime: 'text/plain', content: 'notes' },
+    { ns: 'M', url: 'Title', mime: 'text/plain', content: 'Songs' },
+  ];
+  return writeZim(file, { entries, scheme: 'new', uuid: uuidOf(file) });
 }

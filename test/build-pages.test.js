@@ -7,9 +7,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { blockImages, buildIndexes, importsOf, prerender, relativeUrls, staticFile, staticPath, staticUrl, storableName, tagModuleUrls } from '../tools/build-pages.mjs';
+import {
+  blockImages, buildIndexes, importsOf, prerender, readSources, relativeUrls, siteSound, staticFile, staticPath, staticUrl, storableName, tagModuleUrls,
+} from '../tools/build-pages.mjs';
 import { fileName } from '../public/js/util/file-names.js';
 import { writeZim } from './helpers/zimwriter.js';
+import { AIR_MP3, writeSoundsZim } from './helpers/zim-fixtures.js';
+import { TUNE } from './helpers/midi-writer.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let out;
@@ -179,6 +183,71 @@ describe('GitHub Pages build: ZIM files shipped on the site (--zim-files)', () =
       fs.rmSync(zims, { recursive: true, force: true });
       fs.rmSync(site, { recursive: true, force: true });
     }
+  });
+});
+
+describe('GitHub Pages build: sounds (--sources)', () => {
+  const MIRROR = 'https://mirror.download.kiwix.org/zim/gutenberg/songs_2026-01.zim';
+  let zims;
+  const sites = [];
+  before(() => {
+    zims = fs.mkdtempSync(path.join(os.tmpdir(), 'vrlbry-pages-sounds-'));
+    writeSoundsZim(path.join(zims, 'songs_2026-01.zim'));
+  });
+  after(() => {
+    fs.rmSync(zims, { recursive: true, force: true });
+    for (const s of sites) fs.rmSync(s, { recursive: true, force: true });
+  });
+  const build = async (sources) => {
+    const site = fs.mkdtempSync(path.join(os.tmpdir(), 'vrlbry-pages-sounds-site-'));
+    sites.push(site);
+    const stats = await prerender(zims, site, { log: () => {}, sources });
+    const chunk = JSON.parse(fs.readFileSync(path.join(site, 'api', 'library', 'songs_2026-01', 'books', '7', 'chunks', '0.json'), 'utf8'));
+    const links = chunk.blocks.flatMap((b) => b.r ?? []).filter((r) => r[2]).map((r) => [r[0], r[2]]);
+    return { site, stats, links, text: chunk.blocks.flatMap((b) => b.r ?? []).map((r) => r[0]).join('') };
+  };
+
+  it('reads the ZIMs\' addresses from a list (tools/demo-set.txt), as Kiwix\'s mirror has them', () => {
+    const list = '# comment\nhttps://download.kiwix.org/zim/gutenberg/songs_2026-01.zim\n\nhttps://download.kiwix.org/zim/wikipedia/w_2026-02.zim file\n';
+    assert.deepEqual([...readSources(list)], [
+      ['songs_2026-01.zim', MIRROR],
+      ['w_2026-02.zim', 'https://mirror.download.kiwix.org/zim/wikipedia/w_2026-02.zim'],
+    ]);
+  });
+
+  it('has MIDI files on the site, reads other sounds from Kiwix\'s mirror by their range, or leaves them out', () => {
+    const midi = { src: '/zim/s/C/7_tune.mid', path: 'C/7_tune.mid', mime: 'audio/midi', name: 'tune.mid', bytes: 75 };
+    assert.deepEqual(siteSound(midi), { media: { src: midi.src, mime: 'audio/midi', name: 'tune.mid', bytes: 75 }, ship: true });
+    const mp3 = { src: '/zim/s/C/a.mp3', path: 'C/a.mp3', mime: 'audio/mpeg', name: 'a.mp3', bytes: 10 };
+    assert.deepEqual(siteSound(mp3, { zimUrl: MIRROR, range: [100, 110], zimSize: 5000 }), {
+      media: { mime: 'audio/mpeg', name: 'a.mp3', bytes: 10, remote: { url: MIRROR, start: 100, end: 110, size: 5000 } }, ship: false,
+    });
+    assert.equal(siteSound(mp3, { zimUrl: MIRROR, range: null }), null, 'compressed in the ZIM: no range to read');
+    assert.equal(siteSound(mp3), null, 'no address for its ZIM');
+  });
+
+  it('pre-renders the sound links as media: a MIDI file saved, an MP3 as its range of the ZIM on the mirror', async () => {
+    const { site, stats, links, text } = await build(readSources(`${MIRROR.replace('mirror.', '')}\n`));
+    assert.deepEqual(links.map(([t, x]) => [t, Object.keys(x)]), [['tune', ['media']], ['air', ['media']]], 'no href left; Gone and the page dropped');
+    assert.match(text, /Gone, a page, notes\./, 'their text stays');
+    const [[, tune], [, air]] = links;
+    assert.deepEqual(tune.media, { src: 'zim/songs_2026-01/C/7_tune.mid', mime: 'audio/midi', name: 'tune.mid', bytes: TUNE.length });
+    assert.deepEqual(fs.readFileSync(path.join(site, ...tune.media.src.split('/'))), Buffer.from(TUNE), 'saved where the page asks for it');
+    const { remote } = air.media;
+    assert.equal(remote.url, MIRROR);
+    const zimFile = path.join(zims, 'songs_2026-01.zim');
+    assert.equal(remote.size, fs.statSync(zimFile).size);
+    assert.deepEqual(fs.readFileSync(zimFile).subarray(remote.start, remote.end), AIR_MP3, 'the range holds the MP3');
+    assert.equal(air.media.src, undefined, 'not on the site');
+    assert.ok(!fs.existsSync(path.join(site, 'zim', 'songs_2026-01', 'C', 'music', 'air.mp3')));
+    assert.deepEqual([stats.sounds, stats.soundBytes, stats.soundsRemote, stats.soundsLeft], [1, TUNE.length, 1, 0]);
+  });
+
+  it('leaves out a sound it has no way to: an MP3 of a ZIM whose address is not given', async () => {
+    const { stats, links, text } = await build(new Map());
+    assert.deepEqual(links.map(([t]) => t), ['tune']);
+    assert.match(text, /the air\./);
+    assert.equal(stats.soundsLeft, 1);
   });
 });
 

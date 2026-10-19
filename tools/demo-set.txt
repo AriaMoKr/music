@@ -1,7 +1,8 @@
 # The demo set: one ZIM per line, its address and how the main site has it: pre-rendered (no word
 # after the address; tools/build-pages.mjs --zims) or "file" (the ZIM file itself on the site,
-# opened in the browser: --zim-files). Gutenberg's Music class (TODO, "audio in Gutenberg books"):
-# a 3.7 GB ZIM, 799 MB pre-rendered (its audio is not on the site; Pages publishes at most 1 GB,
-# so it cannot go as a file). rooms.js DEMO_LIBRARIES names the same ZIMs (a test checks). Lines
-# starting with # are comments.
+# opened in the browser: --zim-files). Gutenberg's Music class (TODO, "the sounds of Gutenberg's
+# books play"): a 3.7 GB ZIM, 804 MB pre-rendered with its MIDI files, its MP3s read from Kiwix's
+# mirror at these addresses (build-pages.mjs --sources; Pages publishes at most 1 GB, so it cannot
+# go as a file). rooms.js DEMO_LIBRARIES names the same ZIMs (a test checks). Lines starting with
+# # are comments.
 https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-m_2026-03.zim
