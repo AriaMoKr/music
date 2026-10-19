@@ -25,7 +25,10 @@ import { idbStore } from '../public/js/local/idb-store.js';
 import { createLocalLibraries } from '../public/js/local/local-handler.js';
 import { memoryStore, withPrebuilt } from '../public/js/local/prebuilt.js';
 import { fileStore } from '../server/cache-store.js';
-import { png, writeGenericZim, writeGutenbergZim, writeOldGutenbergZim, writeWikipediaZim, writeWikisourceZim } from './helpers/zim-fixtures.js';
+import {
+  AIR_MP3, png, writeGenericZim, writeGutenbergZim, writeOldGutenbergZim, writeSoundsZim, writeWikipediaZim, writeWikisourceZim,
+} from './helpers/zim-fixtures.js';
+import { TUNE } from './helpers/midi-writer.js';
 import { writeZim } from './helpers/zimwriter.js';
 import { startRangeServer } from './helpers/range-server.js';
 
@@ -178,6 +181,23 @@ describe('local library (ZIM files read in the browser)', () => {
     assert.deepEqual(Buffer.from(logo.bytes), png(120, 60));
     assert.equal((await local.call('image', { url: `/zim/${id}/C/nothing.png` })).value, null);
     assert.equal((await local.call('image', { url: '/zim/gutenberg/C/106_logo.png' })).value, null, 'not a local library');
+  });
+
+  it('answers like the server for a book that links sounds, and gives a sound\'s bytes (SPEC §3.5 media)', async () => {
+    const { local, id } = await sameAnswers(writeSoundsZim(path.join(tmp, 'songs.zim')).filePath);
+    provide(browser);
+    const link = async (href) => (await local.call('link', { lib: id, book: '7', href })).value;
+    const tune = await link('C/music/tune.mid');
+    // Its size when its cluster is at hand (here it shares the page's): never read for that alone.
+    const { bytes, ...rest } = tune.media;
+    assert.deepEqual(rest, { src: `/zim/${id}/C/7_tune.mid`, path: 'C/7_tune.mid', mime: 'audio/midi', name: 'tune.mid' });
+    assert.ok(bytes === undefined || bytes === TUNE.length, String(bytes));
+    const air = await link('C/music/air.mp3');
+    assert.equal(air.media.src, `/zim/${id}/C/music/air.mp3`);
+    assert.equal(await link('C/music/gone.mid'), null);
+    // api.soundBytes asks the worker for an entry's bytes as for an image's.
+    assert.deepEqual(Buffer.from((await local.call('image', { url: tune.media.src })).value.bytes), Buffer.from(TUNE));
+    assert.deepEqual(Buffer.from((await local.call('image', { url: air.media.src })).value.bytes), AIR_MP3);
   });
 
   it('answers like the server for an old-scheme Gutenberg ZIM (zlib clusters)', async () => {

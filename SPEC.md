@@ -456,6 +456,7 @@ public/js/core/       shared by the server and the browser's local library
   zim/xz.js           Pure-JS .xz (LZMA2) decoder.
   content/html.js     HTML → blocks, chunking, TOC, image size sniffing.
   content/epub.js     ZIP + EPUB parsing (for EPUB-only books).
+  content/sounds.js   which links name a sound, which entries are one, which are MIDI (§3.5 media).
   library.js          ArchiveLibrary: catalog building, content conversion + caching.
   wikisource.js       Wikisource works index (build, store), genres, work assembly (§2.4, §3.8).
   wikipedia.js        Wikipedia article index (build, store, search) (§2.5).
@@ -774,9 +775,21 @@ carries the link's fields beside its own. `link` holds one of:
 - `to: { book, c, b?, f? }`: elsewhere, already resolved (a static build resolves every `href`,
   since its site has no server to ask): book id, chunk, block (0 when absent), and `f` the id of
   the place in that chunk (the reader looks for the block with that `id`, or a heading whose text
-  is the id with spaces for "_").
+  is the id with spaces for "_");
+- `media: { src?, mime, name, bytes?, remote? }`: a sound to play, already resolved (a static
+  build's; `resolveLink` answers a sound's `href` with `{ media }` too, with its archive `path`).
+  `src` is its client URL (`/zim/<lib>/…`, or the site's own file); `remote: { url, start, end,
+  size }` (instead of `src`) names its bytes [start, end) in its ZIM on Kiwix's mirror, a file of
+  `size` bytes (a range request: Kiwix's mirror allows a browser's). MIDI is played by the
+  reader's synthesizer (`media/`), any other sound by the browser.
 Links that lead nowhere are dropped and their text merged with the plain runs around it.
-Gutenberg, EPUB and generic books keep only links within the book.
+Gutenberg, EPUB and generic books keep only links within the book, and in Gutenberg and generic
+HTML links to sounds (`SOUND_PATH` in `core/content/sounds.js`: .mid, .midi, .mp3, .ogg, .wav, …),
+which keep their `href`. An `<audio>` player (Gutenberg's newer books: `<audio controls
+title="[Listen]"><source src="music/….mp3">`) becomes such a link, its title its text (else
+"[Listen]"), its `src` or first `<source>` its `href`; the browser's text inside it is dropped.
+gutenberg2zim stores a book's sounds as `<id>_<name>` while its pages say `music/<name>`: a
+sound's `href` is looked up as written, then so (`_sound`).
 Optional fields are omitted when default (`a` absent = justified/left, `q` absent = 0).
 
 `TocEntry` = `{ title: string, level: 1–6, c: chunkIndex, b: blockIndexWithinChunk }`.
@@ -1064,10 +1077,14 @@ accepts it (recommended: large chunks compress ~4×).
 **`GET /api/libraries/:lib/books/:id/res/<path>`** → raw EPUB-internal file with its mime.
 
 **`GET /api/libraries/:lib/books/:id/link?to=<href>`** → `{ "library": lib, "to": { "book", "c",
-"b"?, "f"? } }`: where a link run's `href` (§3.5) leads (`resolveLink`); 404 when it leads to
-nothing in the library. A static build has no such route: it resolves every `href` of the chunks
-it saves into `to` (`resolveLinks` in `tools/build-pages.mjs`) and drops the links that lead
-nowhere.
+"b"?, "f"? } }`: where a link run's `href` (§3.5) leads (`resolveLink`); for a sound `"to": {
+"media": { "src", "path", "mime", "name", "bytes"? } }`; 404 when it leads to nothing in the
+library. A static build has no such route: it resolves every `href` of the chunks it saves into
+`to` or `media` (`resolveLinks` in `tools/build-pages.mjs`) and drops the links that lead
+nowhere. Its sounds (`siteSound`): MIDI files are on the site (Gutenberg's Music ZIM: 2,963
+files, 4.3 MB); any other sound is read from its ZIM on Kiwix's mirror (`remote`), when the build
+knows that ZIM's address there (`--sources tools/demo-set.txt`) and the sound is stored
+uncompressed (`ZimArchive.contentRange`: libzim stores MP3s so), else its link is dropped.
 
 **`GET /api/libraries/:lib/articles?q=<prefix>&limit=<n>`** (Wikipedia libraries only, 404
 otherwise) → `{ "library": lib, "articles": [ { "title", "book": "v<N>", "n", "from"? } ] }`:
@@ -1125,7 +1142,10 @@ public/
     ui/overlay.js        DOM overlay: library info, search, help (non-VR); setReading(bool) fades it while a book is open.
     interaction.js       app state machine: browse → inspect → opening → read; wires everything.
     rooms.js             which books are shelved: the current place (one library, or one room of a huge one).
-    audio.js             tiny WebAudio synth: page turn, book slide/thud, UI click.
+    audio.js             tiny WebAudio synth: page turn, book slide/thud, UI click; the audio context (`audio.context`).
+    media/midi.js        Standard MIDI Files → a song: notes in seconds with their instrument, loudness, pan, bend (pure).
+    media/synth.js       MidiSynth: plays a song through WebAudio (oscillators, envelopes, noise drums; ≤ 40 voices).
+    media/player.js      SoundPlayer: the one sound a book plays (MIDI through MidiSynth, else <audio>).
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
     debug-info.js        "Copy debug info": the page's last 20 errors (startErrorLog) and a report (debugReport); "Save screenshot" (screenshot).
     reset.js             "Reset stored data": the parts of what the site keeps in the browser (RESET_PARTS), cleared by resetStoredData.
@@ -1507,7 +1527,17 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   place in the book or in another of the library's books, which is swapped in: this one is put
   back and that one taken out and opened there (a Wikipedia volume, a Wikisource work), at the
   block with the link's `f` when that chunk has one. A link that leads nowhere says so in a
-  notice. Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
+  notice. A link to a sound (`media`, or an `href` resolved to one) plays it instead, and goes on
+  no trail (`_playSound`, `interaction.sound`: media/player.js): one sound at a time, its name in
+  a notice; while it is loaded the toolbar's top row has ▶ / ❚❚, ■ and its time ("0:12 / 1:30",
+  redrawn when the second changes) between a shorter progress bar and the page label. A MIDI file
+  is played by the synthesizer (media/synth.js: an oscillator timbre per General MIDI family,
+  filtered noise and falling tones for the drums of channel 10, notes scheduled 1 s ahead from a
+  timer, never from the frame loop, at most 40 voices); any other sound by an `<audio>` element
+  (the server's URL, which streams; a blob of its bytes for a local file or a sound read from
+  Kiwix's mirror). The audio context is made or resumed on the tap itself (`audio.init`, before
+  anything is awaited); a browser that refuses to start an `<audio>` without a recent tap leaves
+  it waiting for ▶ ("tap ▶"). The sound stops when the book is put back. Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
   the font size), kept while links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
   to the same spread while the font size is the same. So does the browser's Back (its button, a

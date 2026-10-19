@@ -573,6 +573,7 @@ const K_ROW = 16;
 const K_CELL = 32;
 const K_PRE = 64;
 const K_NESTED = 128; // structure of a table nested in a cell, flattened into that cell
+const K_AUDIO = 256; // <audio>: a link to its sound on close (audioLink)
 
 // Block structure that cannot live in a table cell's runs. Meeting it in a row that is not part
 // of a data grid means the table lays out the page (old PG books wrap whole chapters in one
@@ -1046,6 +1047,19 @@ class Converter {
     if (pctx.skip) {
       if (pctx.skip === 2) this.noteId(attribs.id || (name === 'a' ? attribs.name : undefined));
       if ((name === 'svg' || name === 'math') && !pctx.foreign) frame.ctx = { ...pctx, foreign: true };
+      // An <audio>'s sound may be named by its first <source> instead.
+      if (name === 'source' && pctx.audio && !pctx.audio.src && attribs.src) pctx.audio.src = linkTarget(attribs.src, this.docPath);
+      this.stack.push(frame);
+      return;
+    }
+
+    if (name === 'audio') {
+      // A player (Gutenberg's newer books: <audio controls title="[Listen]"><source src=
+      // "music/….mp3">): a link to its sound in its place, named by its title (onclosetag:
+      // audioLink); what is inside, a browser's text for when it plays no audio, is skipped.
+      frame.kind = K_AUDIO;
+      frame.audio = { src: attribs.src ? linkTarget(attribs.src, this.docPath) : null, title: attribs.title };
+      frame.ctx = { ...skipCtx(pctx, 1), audio: frame.audio };
       this.stack.push(frame);
       return;
     }
@@ -1288,6 +1302,20 @@ class Converter {
     (this.cur ?? this.startBlock(ctx)).runs.text(text, ctx.bits, ctx.link);
   }
 
+  /**
+   * An <audio>'s link (onclosetag): its title ("[Listen]"; "Listen" when the page brackets it)
+   * linking to its sound, as text of what is around it. Nothing when it names no sound.
+   */
+  audioLink(audio, ctx) {
+    if (!audio.src || audio.src[0] === '#' || ctx.skip) return;
+    const label = String(audio.title ?? '').replace(WS_RUN, ' ').trim() || '[Listen]';
+    const link = { href: own(audio.src) };
+    const cell = liveCell(ctx);
+    if (cell) cell.runs.text(label, ctx.bits, link);
+    else if (ctx.pre) this.pre.buf += label;
+    else (this.cur ?? this.startBlock(ctx)).runs.text(label, ctx.bits, link);
+  }
+
   onclosetag(name) {
     const frame = this.stack.pop();
     if (this.stack.length === 0) { // never pop the root (defensive: unbalanced events)
@@ -1306,6 +1334,10 @@ class Converter {
       }
       this.capture = null;
       this.capBuf = '';
+      return;
+    }
+    if (kind & K_AUDIO) {
+      this.audioLink(frame.audio, this.top.ctx);
       return;
     }
     const ctx = frame.ctx; // the element's own context

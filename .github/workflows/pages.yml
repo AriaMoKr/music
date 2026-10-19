@@ -74,7 +74,7 @@ jobs:
       - name: Build the site
         env:
           ZIM_PROXY: ${{ vars.ZIM_PROXY }}
-        run: npm run build:pages -- --zims .demo/render --zim-files .demo/files ${ZIM_PROXY:+--zim-proxy "$ZIM_PROXY"}
+        run: npm run build:pages -- --zims .demo/render --sources tools/demo-set.txt --zim-files .demo/files ${ZIM_PROXY:+--zim-proxy "$ZIM_PROXY"}
       # Prebuilt indexes: the cache (indexes.yml's builds) and the release's assets.
       - uses: actions/cache/restore@v6
         with:

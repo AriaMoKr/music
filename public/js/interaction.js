@@ -15,7 +15,8 @@ import { perf } from './perf.js';
 import { load, save } from './util/storage.js';
 import { progressText } from './util/progress.js';
 import { isLocal } from './local/local.js';
-import { resolveLink } from './api.js';
+import { resolveLink, soundBytes, soundUrl } from './api.js';
+import { SOUND_PATH, SoundPlayer, clock, isMidi } from './media/player.js';
 import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { wayOut as defaultWayOut } from './hallway.js';
@@ -63,6 +64,9 @@ function panelUv(panel, ray) {
 /** The reader's toolbar: its width (m), and how far below the page's foot its own foot is (m). */
 const TOOLBAR_W = 0.72;
 const TOOLBAR_DROP = 0.15;
+/** A sound's controls on the toolbar's top row (px): ▶ / ❚❚ and ■ (64 each), its time, the gaps. */
+const SOUND_TIME_W = 150;
+const SOUND_ROW_W = 10 + 64 + 8 + 64 + 8 + SOUND_TIME_W;
 /** The contents panel's size (m). */
 const TOC_W = 0.42;
 const TOC_H = 0.56;
@@ -130,6 +134,19 @@ export class Interaction {
     this.backHistory = null;
     this._following = false; // a link being looked up (resolveLink)
     this._linkMarks = null; // the bands over the link under a pointer (_markLink)
+    // The sound a book plays (a link to a MIDI or MP3 file: _playSound), its controls on the
+    // toolbar's top row while it is loaded (_showSound). It stops when the book is put back.
+    this.sound = new SoundPlayer({
+      context: () => {
+        audio.init();
+        return audio.context;
+      },
+      bytes: soundBytes,
+      url: soundUrl,
+    });
+    this.sound.onChange = () => this._showSound();
+    this.sound.onError = (message) => this.notice('The sound cannot be played', message, 5);
+    this._soundSecond = -1; // the second the toolbar shows (its text is redrawn when that changes)
 
     this.tooltip = new Label({ width: 0.56, height: 0.13 });
     this.tooltip.visible = false;
@@ -953,6 +970,10 @@ export class Interaction {
     p.add({ id: 'slider', type: 'slider', x: pad + 10, y: 10, w: W - 2 * pad - 230, h: 48, value: 0, onClick: (v) => this.jumpToProgress(v) });
     p.add({ id: 'back', type: 'button', x: pad, y: 8, w: 132, h: 52, label: '↩ Back', size: 26, hidden: true, onClick: () => this.goBack() });
     p.add({ id: 'label', type: 'text', x: W - pad - 210, y: 16, w: 210, h: 40, text: '', size: 26, align: 'right', color: UI.muted });
+    // A sound's controls, between the slider and the label while one is loaded (_layoutTopRow).
+    p.add({ id: 'snd-toggle', type: 'button', x: 0, y: 8, w: 64, h: 52, label: '❚❚', size: 22, hidden: true, onClick: () => this.sound.toggle() });
+    p.add({ id: 'snd-stop', type: 'button', x: 0, y: 8, w: 64, h: 52, label: '■', size: 26, hidden: true, onClick: () => this.sound.stop() });
+    p.add({ id: 'snd-time', type: 'text', x: 0, y: 19, w: SOUND_TIME_W, h: 34, text: '', size: 22, align: 'center', color: UI.accent, hidden: true });
     const by = 68;
     const bh = 84;
     const defs = [
@@ -1317,6 +1338,7 @@ export class Interaction {
       this._trail = [];
       this._trailBase = 0;
     }
+    this.sound.stop(); // a sound of the book stops with it
     this._showBack();
     this._markLink(null);
     const book = this.book;
@@ -1904,6 +1926,12 @@ export class Interaction {
    */
   async followLink(link) {
     if (this.state !== 'read' || this._turnBusy || this._following) return;
+    // On the tap itself (before anything is awaited): a sound needs the audio context running.
+    audio.init();
+    if (link.media) { // a sound the static build resolved
+      this._playSound(link.media);
+      return;
+    }
     this._following = true; // one link at a time: a second tap waits for nothing
     try {
       const book = this.book;
@@ -1919,10 +1947,15 @@ export class Interaction {
             return null;
           });
           if (this.state !== 'read' || this.book !== book) return; // closed meanwhile
-          if (!to) this._afterTurn(); // the label back
+          if (!to || to.media) this._afterTurn(); // the label back
+        }
+        if (to?.media) {
+          this._playSound(to.media);
+          return;
         }
         if (!to) {
-          this.notice('Not in this library', 'That link leads to a page this file does not have', 3);
+          if (SOUND_PATH.test(String(link.href ?? '').replace(/#.*$/, ''))) this.notice('The sound is not in this file', 'That link names a sound this ZIM file does not have', 3);
+          else this.notice('Not in this library', 'That link leads to a page this file does not have', 3);
           return;
         }
         dest = { libId: book.libId, id: to.book, at: { c: to.c, b: to.b ?? 0, ...(to.f ? { f: to.f } : {}) } };
@@ -2016,11 +2049,57 @@ export class Interaction {
 
   /** The toolbar's Back button, shown while there is somewhere to go back to. */
   _showBack() {
-    const on = this._trail.length > 0;
-    const W = this.toolbar.w;
+    this._layoutTopRow();
+  }
+
+  /**
+   * The toolbar's top row: Back while there is somewhere to go back to, the slider, a sound's
+   * controls while one is loaded (▶ / ❚❚, ■ and its time), and the page label.
+   */
+  _layoutTopRow() {
+    const p = this.toolbar;
     const pad = 18;
-    this.toolbar.set('back', { hidden: !on });
-    this.toolbar.set('slider', on ? { x: pad + 146, w: W - 2 * pad - 230 - 136 } : { x: pad + 10, w: W - 2 * pad - 230 });
+    const back = this._trail.length > 0;
+    const sound = this.sound.state !== 'idle';
+    p.set('back', { hidden: !back });
+    const x = back ? pad + 146 : pad + 10;
+    const right = p.w - pad - 220 - (sound ? SOUND_ROW_W : 0); // the label (210) and a gap
+    p.set('slider', { x, w: right - x });
+    p.set('snd-toggle', { hidden: !sound, x: right + 10 });
+    p.set('snd-stop', { hidden: !sound, x: right + 82 });
+    p.set('snd-time', { hidden: !sound, x: right + 154 });
+  }
+
+  /**
+   * Plays a sound a link names (SPEC §3.5 `media`: a MIDI file through the synthesizer, an MP3
+   * through the browser); it does not go on the trail. Its name in a notice (in a headset too).
+   */
+  _playSound(media) {
+    audio.click();
+    this.notice(`♪ ${media.name || 'Sound'}`, isMidi(media) ? 'MIDI, played by the built-in synthesizer' : 'A recording, played by the browser', 2.5);
+    this.sound.play(media);
+  }
+
+  /** The sound's controls on the toolbar, as the player's state changes. */
+  _showSound() {
+    const s = this.sound;
+    this._layoutTopRow();
+    const on = s.state === 'playing' || s.state === 'loading';
+    this.toolbar.set('snd-toggle', { label: on ? '❚❚' : '▶', disabled: s.state === 'loading', active: s.state === 'blocked' });
+    this._soundSecond = NaN;
+    this._soundTime();
+  }
+
+  /** The sound's time on the toolbar: a new text only when the second shown changes (it runs every frame). */
+  _soundTime() {
+    const s = this.sound;
+    if (s.state === 'idle') return;
+    const sec = s.state === 'loading' ? -1 : s.state === 'blocked' ? -2 : Math.floor(s.position);
+    if (sec === this._soundSecond) return;
+    this._soundSecond = sec;
+    const d = s.duration;
+    const text = sec === -1 ? '♪ …' : sec === -2 ? '♪ tap ▶' : d ? `${clock(sec)} / ${clock(d)}` : clock(sec);
+    this.toolbar.set('snd-time', { text });
   }
 
   /**
@@ -2648,6 +2727,7 @@ export class Interaction {
     }
     if (this.tooltip.visible) this.camera.getWorldQuaternion(this.tooltip.mesh.quaternion);
 
+    if (this.sound.state === 'playing') this._soundTime();
     for (const p of this._panels) if (p.visible) p.update();
     if (this.tooltip.visible) this.tooltip.panel.update();
     if (this._notice?.visible && this._time >= this._noticeUntil) this._notice.visible = false;

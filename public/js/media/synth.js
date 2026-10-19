@@ -1,0 +1,341 @@
+// Plays a song of midi.js through WebAudio: a small General MIDI synthesizer of oscillators,
+// envelopes and filtered noise (no sound fonts to download), a timbre per instrument family and a
+// few drums. Notes are scheduled a little ahead (LOOKAHEAD) from a timer, not from the frame
+// loop: requestAnimationFrame does not run in VR or in a hidden page, and a song's thousands of
+// notes are never all scheduled at once. At most MAX_VOICES sound together (a Quest's audio
+// thread), the one ending soonest giving way.
+
+/** Notes scheduled this far ahead (s), from a timer every TICK_MS. */
+const LOOKAHEAD = 1.0;
+const TICK_MS = 200;
+/** A note due longer ago than this (s: the timer was late, a hidden page's) is skipped, not crowded in. */
+const LATE = 0.25;
+/** Voices sounding at once. */
+export const MAX_VOICES = 40;
+/** How loud a note of full velocity starts, before the master volume. */
+const PEAK = 0.32;
+
+/**
+ * Timbres by General MIDI family (program >> 3): oscillator, attack and release (s), how far it
+ * decays (sustain 0: dies away like a struck or plucked string, in `decay` s at middle C, longer
+ * when lower) and a low-pass filter at `filter` times the pitch (0: none).
+ */
+const FAMILIES = [
+  { wave: 'triangle', attack: 0.004, decay: 3.2, sustain: 0, release: 0.25, filter: 0 }, // piano
+  { wave: 'sine', attack: 0.002, decay: 1.4, sustain: 0, release: 0.3, filter: 0 }, // chromatic percussion
+  { wave: 'square', attack: 0.012, decay: 0, sustain: 1, release: 0.08, filter: 5 }, // organ
+  { wave: 'sawtooth', attack: 0.003, decay: 1.8, sustain: 0, release: 0.15, filter: 4 }, // guitar
+  { wave: 'triangle', attack: 0.006, decay: 1.6, sustain: 0.35, release: 0.1, filter: 0 }, // bass
+  { wave: 'sawtooth', attack: 0.07, decay: 0, sustain: 1, release: 0.25, filter: 3 }, // strings
+  { wave: 'sawtooth', attack: 0.14, decay: 0, sustain: 1, release: 0.4, filter: 2.5 }, // ensemble, choir
+  { wave: 'sawtooth', attack: 0.04, decay: 0, sustain: 1, release: 0.12, filter: 5 }, // brass
+  { wave: 'square', attack: 0.03, decay: 0, sustain: 1, release: 0.1, filter: 3.5 }, // reed
+  { wave: 'sine', attack: 0.04, decay: 0, sustain: 1, release: 0.12, filter: 0 }, // pipe, flute
+  { wave: 'square', attack: 0.01, decay: 0, sustain: 1, release: 0.1, filter: 8 }, // synth lead
+  { wave: 'sawtooth', attack: 0.3, decay: 0, sustain: 1, release: 0.6, filter: 2 }, // synth pad
+  { wave: 'triangle', attack: 0.1, decay: 0, sustain: 1, release: 0.5, filter: 0 }, // synth effects
+  { wave: 'sawtooth', attack: 0.004, decay: 1.4, sustain: 0, release: 0.15, filter: 4 }, // ethnic (plucked)
+  { wave: 'triangle', attack: 0.002, decay: 0.6, sustain: 0, release: 0.1, filter: 0 }, // percussive
+  { wave: 'triangle', attack: 0.05, decay: 0.8, sustain: 0, release: 0.2, filter: 0 }, // sound effects
+];
+/** Programs whose family's timbre does not fit: pizzicato, harp and timpani are struck, not bowed. */
+const PROGRAMS = {
+  45: FAMILIES[3], 46: { ...FAMILIES[1], decay: 2.2 }, 47: { ...FAMILIES[14], decay: 1.2 },
+  105: FAMILIES[13], 106: FAMILIES[13], 107: FAMILIES[13], 108: FAMILIES[1],
+  109: { ...FAMILIES[8], filter: 6 }, 110: FAMILIES[5], 111: FAMILIES[8],
+};
+
+export function timbreOf(program) {
+  return PROGRAMS[program] ?? FAMILIES[(program >> 3) & 15];
+}
+
+/** A General MIDI drum (channel 10) by key: noise through a filter, or a falling tone. */
+function drumOf(key) {
+  if (key === 35 || key === 36) return { tone: [150, 45], dur: 0.32 }; // bass drum
+  if (key === 38 || key === 40) return { noise: ['bandpass', 1800, 0.8], dur: 0.18, tone: [190, 140], toneGain: 0.5 }; // snare
+  if (key === 37 || key === 39) return { noise: ['bandpass', 2400, 1.2], dur: 0.1 }; // side stick, clap
+  if (key === 42 || key === 44) return { noise: ['highpass', 7000, 0.7], dur: 0.05, gain: 0.5 }; // closed, pedal hi-hat
+  if (key === 46) return { noise: ['highpass', 7000, 0.7], dur: 0.3, gain: 0.5 }; // open hi-hat
+  if (key === 49 || key === 52 || key === 55 || key === 57) return { noise: ['highpass', 4500, 0.6], dur: 1.2, gain: 0.55 }; // cymbals
+  if (key === 51 || key === 53 || key === 59) return { noise: ['bandpass', 5200, 1.5], dur: 0.6, gain: 0.45 }; // ride
+  if (key >= 41 && key <= 50) { // toms, low to high
+    const f = 80 + (key - 41) * 16;
+    return { tone: [f, f * 0.75], dur: 0.36 };
+  }
+  return { noise: ['bandpass', 2600, 2], dur: 0.08, gain: 0.6 }; // anything else: a woodblock's tick
+}
+
+const freqOf = (key) => 440 * 2 ** ((key - 69) / 12);
+
+/**
+ * One song played on an AudioContext. play() starts or goes on, pause() keeps the place, stop()
+ * goes back to the start; onEnd is called when it has played to its end.
+ */
+export class MidiSynth {
+  /**
+   * @param {BaseAudioContext} ctx
+   * @param {{ notes: object[], duration: number }} song midiSong's
+   * @param {{ destination?: AudioNode, volume?: number }} [opts]
+   */
+  constructor(ctx, song, { destination = ctx.destination, volume = 0.7 } = {}) {
+    this.ctx = ctx;
+    this.song = song;
+    this.onEnd = null;
+    this._out = ctx.createGain();
+    this._out.gain.value = volume;
+    // Many notes at once add up: a compressor keeps the sum from clipping.
+    this._comp = ctx.createDynamicsCompressor?.() ?? null;
+    if (this._comp) {
+      this._comp.threshold.value = -14;
+      this._comp.knee.value = 12;
+      this._comp.ratio.value = 4;
+      this._out.connect(this._comp).connect(destination);
+    } else {
+      this._out.connect(destination);
+    }
+    this._pans = new Map(); // pan (rounded) → StereoPannerNode into _out
+    this._voices = [];
+    this._noise = null;
+    this._playing = false;
+    this._t0 = 0; // the context's time at the song's start
+    this._pos = 0; // where it is while paused (s)
+    this._next = 0; // the next note to schedule
+    this._timer = 0;
+    this._tick = this._tick.bind(this);
+  }
+
+  get duration() { return this.song.duration; }
+  get playing() { return this._playing; }
+  /** Where the song is (s). */
+  get position() {
+    return this._playing ? Math.max(0, Math.min(this.song.duration, this.ctx.currentTime - this._t0)) : this._pos;
+  }
+
+  /** Plays from `from` (s; default: where it was paused). */
+  play(from = this._pos) {
+    if (this._playing) return;
+    this._playing = true;
+    this._pos = Math.max(0, Math.min(this.song.duration, from));
+    this._t0 = this.ctx.currentTime + 0.05 - this._pos;
+    // The first note at or after that place (binary search: notes are in starting order).
+    const notes = this.song.notes;
+    let lo = 0;
+    let hi = notes.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (notes[mid].t < this._pos) lo = mid + 1;
+      else hi = mid;
+    }
+    this._next = lo;
+    this._tick();
+  }
+
+  /** Stops the sound and keeps the place. */
+  pause() {
+    if (!this._playing) return;
+    this._pos = this.position;
+    this._halt();
+  }
+
+  /** Stops the sound and goes back to the start. */
+  stop() {
+    this._halt();
+    this._pos = 0;
+  }
+
+  /** Stops and lets go of the audio nodes. */
+  dispose() {
+    this.stop();
+    this._out.disconnect();
+    this._comp?.disconnect();
+    for (const p of this._pans.values()) p.disconnect();
+    this._pans.clear();
+  }
+
+  _halt() {
+    this._playing = false;
+    clearTimeout(this._timer);
+    this._timer = 0;
+    const now = this.ctx.currentTime;
+    const voices = this._voices;
+    this._voices = [];
+    for (const v of voices) this._silence(v, now);
+    // Let go of them once their short fade is over (cut at once, they click).
+    setTimeout(() => {
+      for (const v of voices) for (const node of v.nodes) node.disconnect();
+    }, 150);
+  }
+
+  _tick() {
+    if (!this._playing) return;
+    const now = this.ctx.currentTime;
+    const until = now - this._t0 + LOOKAHEAD;
+    const notes = this.song.notes;
+    while (this._next < notes.length && notes[this._next].t < until) {
+      const n = notes[this._next++];
+      const when = this._t0 + n.t;
+      if (when < now - LATE) continue;
+      this._start(n, Math.max(when, now));
+    }
+    this._prune(now);
+    if (this._next >= notes.length && now - this._t0 >= this.song.duration + 0.3) {
+      this._playing = false;
+      this._pos = 0;
+      this._timer = 0;
+      this.onEnd?.();
+      return;
+    }
+    this._timer = setTimeout(this._tick, TICK_MS);
+  }
+
+  /** Lets go of the nodes of voices that have finished by `now`. */
+  _prune(now) {
+    const vs = this._voices;
+    let w = 0;
+    for (let i = 0; i < vs.length; i++) {
+      const v = vs[i];
+      if (v.end < now - 0.1) {
+        for (const node of v.nodes) node.disconnect();
+      } else {
+        vs[w++] = v;
+      }
+    }
+    vs.length = w;
+  }
+
+  /** A voice cut short at `when` (it gives way, or the song stops). */
+  _silence(v, when) {
+    if (v.end <= when) return;
+    v.cut = true;
+    v.gain.gain.cancelScheduledValues(when);
+    v.gain.gain.setTargetAtTime(0, when, 0.01);
+    for (const s of v.sources) s.stop(when + 0.06);
+    v.end = when + 0.06;
+  }
+
+  /** Room for a voice starting at `when`: the voice ending soonest gives way when all are in use. */
+  _room(when) {
+    let sounding = 0;
+    let first = null;
+    for (const v of this._voices) {
+      if (v.end <= when || v.cut) continue; // over, or already giving way
+      sounding++;
+      if (!first || v.end < first.end) first = v;
+    }
+    if (sounding >= MAX_VOICES && first) this._silence(first, when);
+  }
+
+  _pan(pan) {
+    const key = Math.round(pan * 8) / 8;
+    let node = this._pans.get(key);
+    if (!node) {
+      if (!this.ctx.createStereoPanner) return this._out;
+      node = this.ctx.createStereoPanner();
+      node.pan.value = key;
+      node.connect(this._out);
+      this._pans.set(key, node);
+    }
+    return node;
+  }
+
+  _start(n, when) {
+    this._room(when);
+    if (n.ch === 9) this._drum(n, when);
+    else this._tone(n, when);
+  }
+
+  _tone(n, when) {
+    const ctx = this.ctx;
+    const tim = timbreOf(n.program);
+    const f = freqOf(n.key);
+    const osc = ctx.createOscillator();
+    osc.type = tim.wave;
+    osc.frequency.value = f;
+    if (n.bend) osc.detune.value = n.bend;
+    const nodes = [osc];
+    let last = osc;
+    if (tim.filter) {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = Math.min(16000, f * tim.filter);
+      lp.Q.value = 0.5;
+      last.connect(lp);
+      nodes.push(lp);
+      last = lp;
+    }
+    const g = ctx.createGain();
+    nodes.push(g);
+    last.connect(g).connect(this._pan(n.pan));
+    const peak = PEAK * n.gain;
+    const top = when + tim.attack;
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(peak, top);
+    if (tim.sustain < 1) {
+      // Lower strings ring longer: twice as long three octaves down, half as long three up.
+      const decay = tim.decay * 2 ** ((60 - n.key) / 36);
+      g.gain.setTargetAtTime(peak * tim.sustain, top, decay / 4);
+    }
+    const off = Math.max(when + n.d, top);
+    g.gain.setTargetAtTime(0, off, tim.release / 3);
+    const end = off + tim.release * 1.6;
+    osc.start(when);
+    osc.stop(end);
+    this._voices.push({ nodes, sources: [osc], gain: g, end });
+  }
+
+  _drum(n, when) {
+    const ctx = this.ctx;
+    const d = drumOf(n.key);
+    const g = ctx.createGain();
+    const nodes = [g];
+    const sources = [];
+    const peak = PEAK * 1.4 * n.gain * (d.gain ?? 1);
+    g.gain.setValueAtTime(peak, when);
+    g.gain.setTargetAtTime(0, when + 0.005, d.dur / 4);
+    g.connect(this._pan(n.pan));
+    if (d.noise) {
+      const src = ctx.createBufferSource();
+      src.buffer = this._noiseBuffer();
+      const f = ctx.createBiquadFilter();
+      [f.type, f.frequency.value, f.Q.value] = d.noise;
+      src.connect(f).connect(g);
+      nodes.push(src, f);
+      sources.push(src);
+    }
+    if (d.tone) {
+      const osc = ctx.createOscillator();
+      osc.frequency.setValueAtTime(d.tone[0], when);
+      osc.frequency.exponentialRampToValueAtTime(d.tone[1], when + d.dur);
+      let into = g;
+      if (d.toneGain) {
+        into = ctx.createGain();
+        into.gain.value = d.toneGain;
+        into.connect(g);
+        nodes.push(into);
+      }
+      osc.connect(into);
+      nodes.push(osc);
+      sources.push(osc);
+    }
+    const end = when + d.dur * 1.5 + 0.02;
+    for (const s of sources) {
+      s.start(when);
+      s.stop(end);
+    }
+    this._voices.push({ nodes, sources, gain: g, end });
+  }
+
+  _noiseBuffer() {
+    if (!this._noise) {
+      const len = Math.round(this.ctx.sampleRate * 1.5);
+      this._noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = this._noise.getChannelData(0);
+      let x = 12345;
+      for (let i = 0; i < len; i++) { // a fixed noise (no Math.random: the same each time)
+        x = (Math.imul(x, 1103515245) + 12345) & 0x7fffffff;
+        data[i] = x / 0x3fffffff - 1;
+      }
+    }
+    return this._noise;
+  }
+}

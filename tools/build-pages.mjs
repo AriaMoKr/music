@@ -4,8 +4,10 @@
 // IWER files the client imports (followed from its imports), instead of the server mapping
 // node_modules.
 //
-//   node tools/build-pages.mjs [--out dist] [--zims <folder>] [--zim-files <folder>] [--indexes <folder>] [--zim-proxy <url>]
+//   node tools/build-pages.mjs [--out dist] [--zims <folder>] [--sources <list>] [--zim-files <folder>] [--indexes <folder>] [--zim-proxy <url>]
 //
+// --sources names the --zims ZIMs' addresses (tools/demo-set.txt): their sounds that the site has
+// no room for (MP3s) are read from Kiwix's mirror by their byte range there (siteSound).
 // --indexes builds the indexes of that folder's Wikipedia and Wikisource ZIMs into indexes/, for
 // visitors who open those files in the browser (buildIndexes).
 // --zim-files ships that folder's ZIMs as files (zims/<name>, with their Wikipedia and Wikisource
@@ -41,6 +43,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { fileName } from '../public/js/util/file-names.js';
 import { mergeRuns } from '../public/js/core/content/html.js';
+import { SOUND_PATH, isMidi } from '../public/js/core/content/sounds.js';
+import { zimUrl } from '../public/js/local/zim-url.js';
 import { DEFAULT_VENDOR_DIRS, rewriteVendorImports, vendorFileOf, vendorUrlOf } from '../server/vendor.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -341,7 +345,8 @@ export function blockImages(blocks, into = new Set()) {
 
 /**
  * Resolves the links of a chunk's blocks that are resolved when followed (`href`, SPEC §3.5) into
- * `to` with `resolve(href)`; those that lead nowhere are dropped (their text stays).
+ * `to` with `resolve(href)`, or `media` for a sound (resolve gives { media }); those that lead
+ * nowhere are dropped (their text stays).
  * @returns {Promise<boolean>} whether any link changed
  */
 export async function resolveLinks(blocks, resolve) {
@@ -353,7 +358,8 @@ export async function resolveLinks(blocks, resolve) {
       if (x?.href === undefined) continue;
       const to = await resolve(x.href);
       delete x.href;
-      if (to) x.to = to;
+      if (to?.media) x.media = to.media;
+      else if (to) x.to = to;
       else if (x.src === undefined) {
         run.length = 2;
         dropped = true;
@@ -366,11 +372,47 @@ export async function resolveLinks(blocks, resolve) {
 }
 
 /**
- * Pre-renders the ZIMs of `dir` into `out`: runs the server in this process and saves its answers
- * as the static files api.js asks for in static mode, and every image they refer to.
- * @returns {Promise<{ libraries: number, books: number, chunks: number, images: number }>}
+ * How the static site has a sound a link names (SPEC §3.5 `media`, the library's resolveLink):
+ * a MIDI file on the site itself (`ship`: they are small, and played from their bytes); any other
+ * sound (MP3: Gutenberg's Music ZIM has 879 MB of them) read from its ZIM on Kiwix's mirror by
+ * its byte range there (`remote`), which needs the ZIM's address there (`zimUrl`, --sources) and
+ * the sound stored as it is (`range`: ZimArchive.contentRange); else null (the link is dropped,
+ * as one that leads nowhere).
+ * @returns {{ media: object, ship: boolean } | null}
  */
-export async function prerender(dir, out, { log = console.log } = {}) {
+export function siteSound(media, { zimUrl = null, range = null, zimSize = 0 } = {}) {
+  const base = { mime: media.mime, name: media.name, ...(media.bytes !== undefined ? { bytes: media.bytes } : {}) };
+  if (isMidi(media)) return { media: { src: media.src, ...base }, ship: true };
+  if (zimUrl && range) return { media: { ...base, remote: { url: zimUrl, start: range[0], end: range[1], size: zimSize } }, ship: false };
+  return null;
+}
+
+/**
+ * The ZIM files a list names (tools/demo-set.txt's form: an address at the start of a line, #
+ * comments) by file name, with their address on Kiwix's mirror (zim-url.js: where a browser may
+ * read ranges of them), for siteSound.
+ * @returns {Map<string, string>}
+ */
+export function readSources(text) {
+  const out = new Map();
+  for (const line of String(text).split(/\r?\n/)) {
+    const [address] = line.trim().split(/\s+/);
+    if (!address || address.startsWith('#')) continue;
+    const { url, name } = zimUrl(address, { pageProtocol: 'https:' });
+    if (url && name) out.set(name, url);
+  }
+  return out;
+}
+
+/**
+ * Pre-renders the ZIMs of `dir` into `out`: runs the server in this process and saves its answers
+ * as the static files api.js asks for in static mode, and every image and sound they refer to.
+ * `sources`: the ZIMs' addresses on Kiwix's mirror by file name (readSources), where the page reads
+ * the sounds the site does not have (siteSound).
+ * @returns {Promise<{ libraries: number, books: number, chunks: number, images: number, sounds: number,
+ *   soundBytes: number, soundsRemote: number, soundsLeft: number }>}
+ */
+export async function prerender(dir, out, { log = console.log, sources = new Map() } = {}) {
   const { Library } = await import('../server/library.js');
   const { createApp } = await import('../server/http.js');
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vrlbry-pages-cache-'));
@@ -396,7 +438,8 @@ export async function prerender(dir, out, { log = console.log } = {}) {
     }
     fs.writeFileSync(to, data);
   };
-  const stats = { libraries: 0, books: 0, chunks: 0, images: 0 };
+  const stats = { libraries: 0, books: 0, chunks: 0, images: 0, sounds: 0, soundBytes: 0, soundsRemote: 0, soundsLeft: 0 };
+  const sounds = new Set(); // the sound files the site has (siteSound's ship), as the server names them
   try {
     // Indexes (Wikipedia volumes, Wikisource works) are built in the background on first open.
     for (const lib of library.list()) {
@@ -417,11 +460,25 @@ export async function prerender(dir, out, { log = console.log } = {}) {
       const { books } = JSON.parse(booksText);
       for (const b of books) for (const u of [b.cover, b.emblem]) if (u) images.add(u);
       // Links that the reader would ask the server about when followed (href) are resolved now:
-      // a static site has no server to ask. A page names the same article many times.
+      // a static site has no server to ask. A page names the same article many times. A sound's
+      // path is the book's own (Gutenberg's music/<name> is stored as <id>_<name>).
       const links = new Map();
+      const zimAddress = sources.get(info.file) ?? null;
+      const archive = library.get(info.id).archive;
+      const sound = async (media) => {
+        const range = zimAddress && !isMidi(media) ? await archive.findPath(media.path).then((e) => e && archive.contentRange(e)) : null;
+        const found = siteSound(media, { zimUrl: zimAddress, range, zimSize: archive.fileSize });
+        if (!found) stats.soundsLeft++;
+        else if (found.ship) sounds.add(found.media.src);
+        else stats.soundsRemote++;
+        return found && { media: found.media };
+      };
       const resolve = (bookId, href) => {
-        if (!links.has(href)) links.set(href, library.get(info.id).resolveLink(bookId, href).catch(() => null));
-        return links.get(href);
+        const key = SOUND_PATH.test(href.replace(/#.*$/, '')) ? `${bookId}\n${href}` : href;
+        if (!links.has(key)) {
+          links.set(key, library.get(info.id).resolveLink(bookId, href).then((to) => (to?.media ? sound(to.media) : to)).catch(() => null));
+        }
+        return links.get(key);
       };
       const saveChunk = async (bookId, n) => {
         let text = await (await get(`/api/libraries/${enc(info.id)}/books/${enc(bookId)}/chunks/${n}`)).text();
@@ -455,6 +512,14 @@ export async function prerender(dir, out, { log = console.log } = {}) {
       if (!res.ok) return log(`  missing image ${src} (HTTP ${res.status})`);
       write(staticFile(src), Buffer.from(await res.arrayBuffer()));
       stats.images++;
+    });
+    await each([...sounds], 16, async (src) => {
+      const res = await fetch(base + src, plain);
+      if (!res.ok) return log(`  missing sound ${src} (HTTP ${res.status})`);
+      const data = Buffer.from(await res.arrayBuffer());
+      write(staticFile(src), data);
+      stats.sounds++;
+      stats.soundBytes += data.length;
     });
     return stats;
   } finally {
@@ -512,7 +577,7 @@ export async function buildIndexes(dir, out, { log = console.log } = {}) {
 async function main() {
   const { values: opts } = parseArgs({ options: {
     out: { type: 'string', default: 'dist' }, zims: { type: 'string' }, indexes: { type: 'string' }, 'zim-proxy': { type: 'string' },
-    'zim-files': { type: 'string' },
+    'zim-files': { type: 'string' }, sources: { type: 'string' },
   } });
   const OUT = path.resolve(ROOT, opts.out);
   fs.rmSync(OUT, { recursive: true, force: true });
@@ -577,8 +642,13 @@ async function main() {
   fs.mkdirSync(api, { recursive: true });
   if (opts.zims) {
     console.log(`Pre-rendering the ZIMs in ${opts.zims}…`);
-    const st = await prerender(path.resolve(opts.zims), OUT);
+    const sources = opts.sources ? readSources(fs.readFileSync(path.resolve(ROOT, opts.sources), 'utf8')) : new Map();
+    const st = await prerender(path.resolve(opts.zims), OUT, { sources });
     console.log(`  ${st.libraries} libraries, ${st.books} books, ${st.chunks} chunks, ${st.images} images`);
+    if (st.sounds + st.soundsRemote + st.soundsLeft) {
+      console.log(`  sounds: ${st.sounds} on the site (${(st.soundBytes / 1048576).toFixed(1)} MB), ${st.soundsRemote} read from Kiwix's mirror`
+        + `${st.soundsLeft ? `, ${st.soundsLeft} left out (no address on Kiwix's mirror for their ZIM: --sources)` : ''}`);
+    }
   } else {
     fs.writeFileSync(path.join(api, 'libraries'), JSON.stringify({ generation: 0, libraries: [], static: true }));
   }

@@ -73,6 +73,13 @@ export const audio = {
       if (ctx.state === 'suspended') ctx.resume();
     } catch { /* audio unavailable */ }
   },
+  /**
+   * The audio context, once init() has made it (else null). The sounds books play go through it
+   * too (media/player.js), not through these sounds' volume, and whether UI sounds are on.
+   */
+  get context() {
+    return ctx;
+  },
   setEnabled(on) {
     enabled = !!on;
   },
