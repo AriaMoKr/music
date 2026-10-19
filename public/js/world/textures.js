@@ -371,8 +371,12 @@ export function drawSpine(g, book, x, y, w, h) {
     emboss(g, author.length > 14 ? author.slice(0, 13) + '…' : author, 0, 0, col.gilt);
     g.restore();
   }
-  // A small ornament.
-  if (rnd() < 0.5 && h > 200) {
+  // A book that plays (its links name sounds, SPEC §3.5: `sounds`): a gilt note at the head, in
+  // place of the ornament.
+  if (book.sounds > 0) {
+    g.font = `${Math.min(w * 0.55, 24)}px ${SERIF}`;
+    emboss(g, '♪', w / 2, h * 0.11, col.gilt);
+  } else if (rnd() < 0.5 && h > 200) { // a small ornament
     g.font = `${Math.min(w * 0.4, 16)}px ${SERIF}`;
     emboss(g, '❦', w / 2, h * 0.115, col.gilt);
   }

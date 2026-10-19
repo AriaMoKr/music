@@ -13,6 +13,7 @@ import { createApp } from '../server/http.js';
 import { loadCertificate, main, parseCliArgs } from '../server/index.js';
 import { Library } from '../server/library.js';
 import { writeZim } from './helpers/zimwriter.js';
+import { writeGutenbergZim, writeSoundsZim } from './helpers/zim-fixtures.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, '..');
@@ -596,6 +597,56 @@ describe('HTTP API (synthetic library)', () => {
 
   it('logged nothing unexpected', () => {
     assert.ok(errors.every((e) => /books\/4/.test(e)), errors.join('\n'));
+  });
+});
+
+describe('HTTP API: the sound index (GET /api/libraries/:lib/sounds)', () => {
+  let library;
+  let server;
+  let get;
+  before(async () => {
+    const dir = path.join(tmp, 'sound-zims');
+    fs.mkdirSync(dir);
+    writeSoundsZim(path.join(dir, 'songs.zim'));
+    writeGutenbergZim(path.join(dir, 'plain.zim')); // no file of it is a sound
+    library = await Library.scan(dir, { log: () => {}, cacheDir: path.join(tmp, 'sound-cache') });
+    server = await startServer(createApp(library, { log: () => {} }));
+    get = (p) => request(server.address().port, p);
+  });
+  after(async () => {
+    server?.closeAllConnections();
+    await new Promise((resolve) => server ? server.close(resolve) : resolve());
+    await library?.close();
+  });
+
+  it('answers with how far its build is, then the books that play and their sounds; 404 for a library without', async () => {
+    let body;
+    for (let i = 0; i < 200; i++) {
+      const r = await get('/api/libraries/songs/sounds');
+      assert.equal(r.status, 200);
+      body = JSON.parse(r.body.toString('utf8'));
+      if (body.ready) {
+        assert.equal(r.headers['cache-control'], 'no-cache');
+        break;
+      }
+      assert.equal(r.headers['cache-control'], 'no-store', 'its progress, never kept');
+      assert.ok(['queued', 'scan', 'books'].includes(body.stage), body.stage);
+      await new Promise((res) => setTimeout(res, 10));
+    }
+    assert.equal(body.ready, true);
+    assert.deepEqual(body.books.map((b) => [b.id, b.sounds.map((s) => [s.t, s.k, s.media.src])]), [
+      ['7', [['tune', 'midi', '/zim/songs/C/7_tune.mid'], ['air', 'audio', '/zim/songs/C/music/air.mp3']]],
+    ]);
+    const libs = JSON.parse((await get('/api/libraries')).body.toString('utf8')).libraries;
+    assert.deepEqual(libs.find((l) => l.id === 'songs').sounds, { books: 1, count: 2 });
+    assert.equal(libs.find((l) => l.id === 'plain').sounds, undefined);
+    const books = JSON.parse((await get('/api/libraries/songs/books')).body.toString('utf8')).books;
+    assert.equal(books.find((b) => b.id === '7').sounds, 2);
+    const meta = JSON.parse((await get('/api/libraries/songs/books/7')).body.toString('utf8'));
+    assert.deepEqual(meta.sounds, body.books[0].sounds, 'the book\'s meta lists them too');
+    const none = await get('/api/libraries/plain/sounds');
+    assert.equal(none.status, 404);
+    assert.equal((await get('/api/libraries/nope/sounds')).status, 404);
   });
 });
 

@@ -7,6 +7,7 @@
 import { getBookMeta, getChunk, forgetBook, imageSource } from '../api.js';
 import { PAGE_PX } from '../config.js';
 import { perf } from '../perf.js';
+import { soundRuns } from '../core/content/sounds.js';
 import { makeMetrics, ChunkLayout, getMeasurer, FONTS, blockChars } from './layout.js';
 
 export const THEMES = {
@@ -386,12 +387,43 @@ export class BookReader {
       }
     }
     if (!best) return null;
+    return { link: best, rects: this._rectsOf(page, (ln) => ln === best) };
+  }
+
+  /**
+   * The rectangles of a sound link on a page shown (SPEC §3.5 sound lists: an entry's chunk c,
+   * block b and i-th sound link of it), one per line, for the highlight of the sound playing;
+   * empty when it is not on that page.
+   */
+  async soundRects(ref, at) {
+    if (!ref || ref === 'ex' || ref === 'blank' || !at) return [];
+    const r = this._clampRef(ref);
+    if (r.c !== at.c) return [];
+    const blocks = await getChunk(this.libId, this.book.id, at.c).catch(() => null);
+    const blk = blocks?.[at.b];
+    const span = blk && soundRuns(blk, at.i ?? 0);
+    const page = this._knownPage(r);
+    if (!span || !page || at.b < page.firstBlock) return [];
+    const runs = blk.r ?? blk.c.flat();
+    const links = new Set();
+    for (let k = span[0]; k < span[1]; k++) links.add(runs[k][2]);
+    return this._rectsOf(page, (ln) => links.has(ln));
+  }
+
+  /** The rectangles (page pixels, one per line) of a page's text items whose link passes `test`. */
+  _rectsOf(page, test) {
+    const M = this.metrics;
+    const rectOf = (it, by) => {
+      if (it.k === 'img') return { x: it.x, y: by + it.y, w: it.w, h: it.h };
+      const k = (M.lineHeight * fontPx(it.font, M.size)) / M.size;
+      return { x: it.x, y: by + it.y - 0.8 * k, w: it.w, h: 1.05 * k };
+    };
     // Its words, joined along each line (a justified line draws them one by one).
     const rects = [];
     for (const { y: by, box } of page.boxes) {
       let line = null;
       for (const it of box.items) {
-        if (it.ln !== best) continue;
+        if (!it.ln || !test(it.ln)) continue;
         const r = rectOf(it, by);
         if (line && Math.abs(line.y - r.y) < 0.5 * M.lineHeight) {
           const right = Math.max(line.x + line.w, r.x + r.w);
@@ -409,7 +441,7 @@ export class BookReader {
       r.x += M.marginX;
       r.y += M.top;
     }
-    return { link: best, rects };
+    return rects;
   }
 
   /**

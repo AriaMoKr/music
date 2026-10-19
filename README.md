@@ -16,7 +16,13 @@ It understands three kinds of [Kiwix ZIM files](https://library.kiwix.org/) espe
 
 - **Project Gutenberg** (gutenberg2zim): real covers, authors, popularity ranks and the books' own
   illustrations. The music in its music books plays: tap **Listen** beside an example to hear it
-  (MIDI files through a small built-in synthesizer, MP3 recordings through the browser).
+  (MIDI files through a small built-in synthesizer, MP3 recordings through the browser). A book
+  that plays has a ♪ on its spine and a **Sounds** list beside its contents (**Play all** turns
+  the pages as it goes); a music stand beside it shows a MIDI song's notes as a piano roll and
+  lets you slow it down, loop a passage, change its key or mute a part. *Books that play* shelves
+  them together, by period if you like, a gramophone in the room plays on while you walk and
+  read (choose what on the catalogue stand's **♪ Listen** tab: by book, composer or period), and
+  the scores hang on the wall: point at one to hear it.
 - **Wikisource** (mwoffliner): every multi-part work — novels, collections, histories; 17,693 in
   the English ZIM — becomes one book with all its chapters in order, its cover, author, year and
   genre.
@@ -160,7 +166,8 @@ Then press **Enter VR**.
 | One page or two | **P**, or **1 page** / **2 pages** | **1 page** / **2 pages** (one page while the phone is upright) | toolbar | toolbar |
 | Book distance / size | mouse wheel | pinch | triggers | right stick up/down · left stick up/down · grip to move the book |
 | Follow a link | click it | tap it | **A** on it | trigger on it |
-| Play a sound (**Listen**) | click it; **❚❚** / **▶** and **■** on the toolbar | tap it; the same | **A** on it | trigger on it |
+| Play a sound (**Listen**) | click it; **❚❚** / **▶**, **■** and **⏭** on the toolbar; its time shows the music stand | tap it; the same | **A** on it | trigger on it |
+| The gramophone, a score on the wall | click it | tap it | **A** on it | trigger on it |
 | Back (along links, then close) | Backspace, **↩ Back**, or the browser's Back | **↩ Back**, or the back gesture | **B** | **B** or **Y** |
 | Close / put back | Esc | **✕** / **Put back** | **B** | **B** or **Y** |
 | Book out of sight | **F** | **Bring the book in front of me** (in **?**) | press the right stick | press a thumbstick |

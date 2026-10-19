@@ -195,6 +195,8 @@ export const articles = (lib, q, limit) => call('articles', { lib, q, limit });
 export const meta = (lib, book, { onProgress } = {}) => call('meta', { lib, book }, { onProgress });
 /** Where a link of a local book leads: { book, c, b?, f? }, or null. */
 export const link = (lib, book, href) => call('link', { lib, book, href });
+/** A local library's sound index: { ready, books } or { ready: false, stage, progress }, or null. */
+export const sounds = (lib) => call('sounds', { lib });
 /** A chunk's JSON, as bytes. */
 export const chunk = (lib, book, n) => call('chunk', { lib, book, n });
 /** An image of a local library: { bytes, mime }, or null. */

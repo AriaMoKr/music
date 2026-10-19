@@ -164,6 +164,19 @@ export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs 
       const articles = await lib.searchArticles(params.get('q') ?? '', Number(params.get('limit')) || undefined);
       return sendBody(req, res, new Body(Buffer.from(JSON.stringify({ library: lib.id, articles }), 'utf8')), { cacheControl: 'no-store' });
     }
+    if (segs.length === 3 && segs[2] === 'sounds') {
+      // The sound index (§4): the books that play and their sounds, or how far its build is.
+      if (!lib) return sendError(req, res, 404, `unknown library: ${segs[1]}`);
+      const sounds = await lib.soundIndex();
+      if (!sounds) return sendError(req, res, 404, 'this library has no sounds');
+      if (!sounds.ready) return sendBody(req, res, serialize({ library: lib.id, ...sounds }), { cacheControl: 'no-store' });
+      let wrapper = serialized.get(sounds.books); // ~1 MB for Gutenberg's Music ZIM: serialized once
+      if (!wrapper) {
+        wrapper = new Body(Buffer.from(JSON.stringify({ library: lib.id, ...sounds }), 'utf8'));
+        serialized.set(sounds.books, wrapper);
+      }
+      return sendBody(req, res, wrapper, { cacheControl: 'no-cache' });
+    }
     if (segs.length < 3 || segs[2] !== 'books') return sendError(req, res, 404, 'unknown API endpoint');
     if (!lib) return sendError(req, res, 404, `unknown library: ${segs[1]}`);
 

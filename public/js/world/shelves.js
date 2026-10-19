@@ -427,7 +427,7 @@ export class AtlasWorker {
       const slim = items.map(({ book, dims }) => ({
         book: book.volume
           ? { id: book.id, title: book.title, author: book.author, volume: book.volume, range: book.range }
-          : { id: book.id, title: book.title, author: book.author },
+          : { id: book.id, title: book.title, author: book.author, ...(book.sounds ? { sounds: book.sounds } : {}) },
         dims,
       }));
       this.worker.postMessage({ id, layout, items: slim, label, scale, gpu: ATLAS_GPU });

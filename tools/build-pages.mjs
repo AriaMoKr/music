@@ -441,22 +441,26 @@ export async function prerender(dir, out, { log = console.log, sources = new Map
   const stats = { libraries: 0, books: 0, chunks: 0, images: 0, sounds: 0, soundBytes: 0, soundsRemote: 0, soundsLeft: 0 };
   const sounds = new Set(); // the sound files the site has (siteSound's ship), as the server names them
   try {
-    // Indexes (Wikipedia volumes, Wikisource works) are built in the background on first open.
+    // Indexes (Wikipedia volumes, Wikisource works, a Gutenberg ZIM's sounds) are built in the
+    // background on first open.
+    const building = async (lib) => {
+      if ((await lib.info()).indexing) return true;
+      const sounds = await lib.soundIndex();
+      return !!sounds && !sounds.ready && sounds.stage !== 'failed';
+    };
     for (const lib of library.list()) {
-      for (let i = 0; (await lib.info()).indexing; i++) {
+      for (let i = 0; await building(lib); i++) {
         if (i % 50 === 0) log(`  waiting for ${lib.id} to be indexed…`);
         await new Promise((r) => setTimeout(r, 200));
       }
     }
     const images = new Set();
     const catalog = await (await get('/api/libraries')).json();
-    write('api/libraries', relativeUrls(JSON.stringify({ ...catalog, static: true })));
     for (const info of catalog.libraries) {
       stats.libraries++;
       if (info.illustration) images.add(info.illustration);
       const lib = `api/library/${fileName(info.id)}`;
       const booksText = await (await get(`/api/libraries/${enc(info.id)}/books`)).text();
-      write(`${lib}/books.json`, relativeUrls(booksText));
       const { books } = JSON.parse(booksText);
       for (const b of books) for (const u of [b.cover, b.emblem]) if (u) images.add(u);
       // Links that the reader would ask the server about when followed (href) are resolved now:
@@ -473,6 +477,21 @@ export async function prerender(dir, out, { log = console.log, sources = new Map
         else stats.soundsRemote++;
         return found && { media: found.media };
       };
+      // A book's sound list (§3.5) names its sounds as the server has them: here as the site has
+      // them (siteSound), those it has not left out. Counted once, with the links' (sound above).
+      const listed = new Map(); // archive path -> Promise of the site's media, or null
+      const siteMedia = (media) => {
+        if (!listed.has(media.path)) {
+          listed.set(media.path, (async () => {
+            const range = zimAddress && !isMidi(media) ? await archive.findPath(media.path).then((e) => e && archive.contentRange(e)) : null;
+            const found = siteSound(media, { zimUrl: zimAddress, range, zimSize: archive.fileSize });
+            if (found?.ship) sounds.add(found.media.src);
+            return found?.media ?? null;
+          })().catch(() => null));
+        }
+        return listed.get(media.path);
+      };
+      const soundLists = new Map(); // book id -> its sound list, as the site has it
       const resolve = (bookId, href) => {
         const key = SOUND_PATH.test(href.replace(/#.*$/, '')) ? `${bookId}\n${href}` : href;
         if (!links.has(key)) {
@@ -492,9 +511,20 @@ export async function prerender(dir, out, { log = console.log, sources = new Map
       // that each cluster is decompressed once (articlesInStorageOrder); other books one by one.
       const storageOrder = await library.get(info.id).articlesInStorageOrder?.();
       await each(books.filter((b) => b.readable), 4, async (b) => {
-        const metaText = await (await get(`/api/libraries/${enc(info.id)}/books/${enc(b.id)}`)).text();
-        write(`${lib}/books/${fileName(b.id)}/index.json`, relativeUrls(metaText));
+        let metaText = await (await get(`/api/libraries/${enc(info.id)}/books/${enc(b.id)}`)).text();
         const meta = JSON.parse(metaText);
+        if (meta.sounds) {
+          const list = (await Promise.all(meta.sounds.map(async (x) => {
+            const media = await siteMedia(x.media);
+            return media && { ...x, media };
+          }))).filter(Boolean);
+          if (list.length) {
+            meta.sounds = list;
+            soundLists.set(b.id, list);
+          } else delete meta.sounds;
+          metaText = JSON.stringify(meta);
+        }
+        write(`${lib}/books/${fileName(b.id)}/index.json`, relativeUrls(metaText));
         if (meta.cover) images.add(meta.cover);
         if (!storageOrder) await each(meta.chunks.map((_, n) => n), 8, (n) => saveChunk(b.id, n));
         stats.books++;
@@ -502,8 +532,21 @@ export async function prerender(dir, out, { log = console.log, sources = new Map
       if (storageOrder) await each(storageOrder, 8, ([bookId, n]) => saveChunk(bookId, n));
       const titles = await library.get(info.id).articleTitles?.();
       if (titles) write(`${lib}/titles.json`, JSON.stringify(titles));
-      log(`  ${info.id}: ${books.length} ${info.kind === 'wikipedia' ? 'volumes' : 'books'}`);
+      // The sound index (§4) and each book's count: of the sounds the site has.
+      if (info.sounds) {
+        const playing = books.filter((b) => soundLists.has(b.id)).map((b) => ({ id: b.id, sounds: soundLists.get(b.id) }));
+        write(`${lib}/sounds.json`, relativeUrls(JSON.stringify({ library: info.id, ready: true, books: playing })));
+        info.sounds = { books: playing.length, count: playing.reduce((n, x) => n + x.sounds.length, 0) };
+        for (const b of books) {
+          if (soundLists.has(b.id)) b.sounds = soundLists.get(b.id).length;
+          else delete b.sounds;
+        }
+      }
+      write(`${lib}/books.json`, relativeUrls(JSON.stringify({ ...JSON.parse(booksText), books })));
+      log(`  ${info.id}: ${books.length} ${info.kind === 'wikipedia' ? 'volumes' : 'books'}`
+        + `${info.sounds ? `, ${info.sounds.books} of them with ${info.sounds.count.toLocaleString('en')} sounds` : ''}`);
     }
+    write('api/libraries', relativeUrls(JSON.stringify({ ...catalog, static: true })));
     // The images, at their decoded paths (Pages decodes a request's path to find the file), with
     // names every system can store (staticFile, as the JSON names them: staticUrl).
     await each([...images], 16, async (src) => {

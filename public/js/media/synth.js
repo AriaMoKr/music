@@ -67,9 +67,15 @@ function drumOf(key) {
 
 const freqOf = (key) => 440 * 2 ** ((key - 69) / 12);
 
+/** Slowest and fastest a song is played (practice: its tempo, the pitch kept). */
+export const RATE_MIN = 0.5;
+export const RATE_MAX = 1.5;
+
 /**
  * One song played on an AudioContext. play() starts or goes on, pause() keeps the place, stop()
- * goes back to the start; onEnd is called when it has played to its end.
+ * goes back to the start; onEnd is called when it has played to its end. For practice it can be
+ * slower or faster (rate), higher or lower (transpose), without some parts (muted channels), with
+ * another instrument for a part (programs), and go round a passage (loop).
  */
 export class MidiSynth {
   /**
@@ -102,13 +108,64 @@ export class MidiSynth {
     this._next = 0; // the next note to schedule
     this._timer = 0;
     this._tick = this._tick.bind(this);
+    this._rate = 1; // song seconds a second
+    this._transpose = 0; // semitones, drums aside
+    this._muted = new Set(); // channels not played
+    this._programs = new Map(); // channel -> the program it is played with instead of its own
+    this._loop = null; // { a, b }: from b back to a (song seconds)
   }
 
   get duration() { return this.song.duration; }
   get playing() { return this._playing; }
-  /** Where the song is (s). */
+  /** Where the song is (s, of the song: at another rate the clock goes otherwise). */
   get position() {
-    return this._playing ? Math.max(0, Math.min(this.song.duration, this.ctx.currentTime - this._t0)) : this._pos;
+    return this._playing ? Math.max(0, Math.min(this.song.duration, (this.ctx.currentTime - this._t0) * this._rate)) : this._pos;
+  }
+
+  get rate() { return this._rate; }
+  get transpose() { return this._transpose; }
+  get loop() { return this._loop; }
+  /** Whether a channel is muted. */
+  muted(ch) { return this._muted.has(ch); }
+  /** The muted channels (read only: setMuted changes them). */
+  get mutedChannels() { return this._muted; }
+  /** The program a channel is played with instead of its own, or undefined. */
+  programOf(ch) { return this._programs.get(ch); }
+
+  /** Plays slower or faster (RATE_MIN…RATE_MAX), from where it is. */
+  setRate(rate) {
+    this._again(() => { this._rate = Math.max(RATE_MIN, Math.min(RATE_MAX, rate)); });
+  }
+
+  /** Plays it `semitones` higher (or lower), drums aside. */
+  setTranspose(semitones) {
+    this._again(() => { this._transpose = Math.max(-24, Math.min(24, Math.round(semitones))); });
+  }
+
+  /** Mutes a channel (or plays it again). */
+  setMuted(ch, on) {
+    this._again(() => { if (on) this._muted.add(ch); else this._muted.delete(ch); });
+  }
+
+  /** Plays a channel with another program (General MIDI), or its own again (null). */
+  setProgram(ch, program) {
+    this._again(() => { if (program == null) this._programs.delete(ch); else this._programs.set(ch, program & 127); });
+  }
+
+  /** Goes round from b back to a (song seconds), or not (null). */
+  setLoop(loop) {
+    this._loop = loop && loop.b - loop.a >= 0.25 ? { a: Math.max(0, loop.a), b: Math.min(this.song.duration, loop.b) } : null;
+    if (this._loop && this.position > this._loop.b) this._again(() => { this._pos = this._loop.a; }, true);
+  }
+
+  /** A change heard at once: the notes scheduled ahead are let go and scheduled again. */
+  _again(change, seek = false) {
+    const playing = this._playing;
+    const pos = this.position;
+    if (playing) this._halt();
+    if (!seek) this._pos = pos;
+    change();
+    if (playing) this.play(this._pos);
   }
 
   /** Plays from `from` (s; default: where it was paused). */
@@ -116,7 +173,7 @@ export class MidiSynth {
     if (this._playing) return;
     this._playing = true;
     this._pos = Math.max(0, Math.min(this.song.duration, from));
-    this._t0 = this.ctx.currentTime + 0.05 - this._pos;
+    this._t0 = this.ctx.currentTime + 0.05 - this._pos / this._rate;
     // The first note at or after that place (binary search: notes are in starting order).
     const notes = this.song.notes;
     let lo = 0;
@@ -169,16 +226,28 @@ export class MidiSynth {
   _tick() {
     if (!this._playing) return;
     const now = this.ctx.currentTime;
-    const until = now - this._t0 + LOOKAHEAD;
+    const rate = this._rate;
+    const loop = this._loop;
+    // Round the loop: from its end back to its start.
+    if (loop && (now - this._t0) * rate >= loop.b) {
+      this._halt();
+      this.play(loop.a);
+      return;
+    }
+    const until = Math.min((now - this._t0 + LOOKAHEAD) * rate, loop ? loop.b : Infinity);
     const notes = this.song.notes;
     while (this._next < notes.length && notes[this._next].t < until) {
       const n = notes[this._next++];
-      const when = this._t0 + n.t;
-      if (when < now - LATE) continue;
+      const when = this._t0 + n.t / rate;
+      if (when < now - LATE || this._muted.has(n.ch)) continue;
       this._start(n, Math.max(when, now));
     }
     this._prune(now);
-    if (this._next >= notes.length && now - this._t0 >= this.song.duration + 0.3) {
+    if (loop) {
+      this._timer = setTimeout(this._tick, TICK_MS);
+      return;
+    }
+    if (this._next >= notes.length && (now - this._t0) * rate >= this.song.duration + 0.3) {
       this._playing = false;
       this._pos = 0;
       this._timer = 0;
@@ -246,8 +315,8 @@ export class MidiSynth {
 
   _tone(n, when) {
     const ctx = this.ctx;
-    const tim = timbreOf(n.program);
-    const f = freqOf(n.key);
+    const tim = timbreOf(this._programs.get(n.ch) ?? n.program);
+    const f = freqOf(Math.max(0, Math.min(127, n.key + this._transpose)));
     const osc = ctx.createOscillator();
     osc.type = tim.wave;
     osc.frequency.value = f;
@@ -275,7 +344,7 @@ export class MidiSynth {
       const decay = tim.decay * 2 ** ((60 - n.key) / 36);
       g.gain.setTargetAtTime(peak * tim.sustain, top, decay / 4);
     }
-    const off = Math.max(when + n.d, top);
+    const off = Math.max(when + n.d / this._rate, top);
     g.gain.setTargetAtTime(0, off, tim.release / 3);
     const end = off + tim.release * 1.6;
     osc.start(when);

@@ -12,6 +12,11 @@ export const WIKIPEDIA_INDEX_VERSION = 5;
 export const WIKIPEDIA_UPGRADABLE = [4];
 /** The Wikisource works index (§2.4). */
 export const WIKISOURCE_INDEX_VERSION = 1;
+/** The sound index of a Gutenberg ZIM (§3.5 sound lists): bump when what a sound list holds changes. */
+export const SOUND_INDEX_VERSION = 1;
+
+/** The name a sound index is kept under (core/library.js soundIndex). */
+export const soundIndexName = (uuid) => `sounds-${uuid}.v${SOUND_INDEX_VERSION}.json`;
 
 /**
  * The name an index is kept under (a store, the site's indexes/): its kind, the ZIM's UUID (32 hex
