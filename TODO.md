@@ -165,7 +165,10 @@
      copy (108 s, 3.0 MB) and uploaded. The builds now have a workflow of their own
      (`indexes.yml`), apart from the deploys, which a run of 5 hours held back (a push waited for
      it), and they go the quickest first (`buildOrder`: Wikipedias by article count, Wikisources
-     last), whatever the list's order.
+     last), whatever the list's order. *Fourth run (2026-10-18, the first of `indexes.yml`):* built all 14 topic
+     nopics in 2 h 36 min, saved them in the cache and deployed: the site ships 50 indexes, and
+     every edition in `tools/indexes.txt` has one. The 14 (3.1 MB, taken from the site) go into the
+     release.
   4. New editions rebuilt by the workflow when Kiwix's catalogue lists them, so the shipped
      indexes do not go stale one by one.
 - **URL parameters for testing, and for settings** (asked 2026-10-11). Today there are a few,
