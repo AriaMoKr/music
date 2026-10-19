@@ -11,7 +11,8 @@
  */
 import { parseEpub } from './content/epub.js';
 import { blockChars, chunkBlocks, htmlToBlocks, imageSize, isImageRun, linkDocs, linkTarget, placeLinks } from './content/html.js';
-import { SOUND_MIME, SOUND_PATH } from './content/sounds.js';
+import { SOUND_MIME, SOUND_PATH, soundsOf } from './content/sounds.js';
+import { SOUND_INDEX_VERSION, soundIndexName } from './index-versions.js';
 import { platform } from './platform.js';
 import { LRUCache } from './util/lru.js';
 import * as wikipedia from './wikipedia.js';
@@ -282,6 +283,9 @@ export class ArchiveLibrary {
     this._built = null; // an index just built, until the catalogue is rebuilt from it
     this._volumeSize = volumeSize;
     this._indexTask = null;
+    this._sounds = null; // the sound index (soundIndex) once built or found: { version, uuid, books }
+    this._soundState = null; // { stage, progress, error? } while it is being built (or 'queued', 'failed')
+    this._soundTask = null;
     this._closed = false;
   }
 
@@ -340,6 +344,7 @@ export class ArchiveLibrary {
       } finally {
         lib._catalogProgress = null;
       }
+      lib._startSoundIndex(); // in the background: which books play, and what (soundIndex)
       return lib;
     } catch (err) {
       await archive.close().catch(() => {});
@@ -359,7 +364,12 @@ export class ArchiveLibrary {
   async info() {
     const base = await this._baseInfo();
     // Indexing progress is live; everything else is cached until the catalogue changes.
-    return this.kind === 'wikisource' || this.kind === 'wikipedia' ? { ...base, indexing: this._indexing ? { ...this._indexing } : null } : base;
+    const info = this.kind === 'wikisource' || this.kind === 'wikipedia' ? { ...base, indexing: this._indexing ? { ...this._indexing } : null } : base;
+    // The sound index (§4), once built: how many books play, and how many sounds (its build's
+    // progress is /sounds' to say: the catalogue changes only when it is done).
+    const s = this._sounds;
+    if (!s?.books.length) return info;
+    return { ...info, sounds: { books: s.books.length, count: s.books.reduce((n, b) => n + b.sounds.length, 0) } };
   }
 
   _baseInfo() {
@@ -564,6 +574,139 @@ export class ArchiveLibrary {
       return { src: zimUrl(this.id, entry.path), path: entry.path, mime: entry.mime, name, ...(bytes !== null ? { bytes } : {}) };
     }
     return null;
+  }
+
+  /**
+   * The library's sound index (SPEC §3.5 sound lists, §4 /sounds): the books that play, in
+   * catalogue order, each with its sounds (its meta's `sounds`). Built in the background when the
+   * library opens (_startSoundIndex) and kept in the store; null for a library without sounds
+   * (only a Gutenberg ZIM whose files include sounds has them).
+   * @returns {Promise<{ ready: true, books: Array<{ id: string, sounds: object[] }> }
+   *   | { ready: false, stage: string, progress: number, error?: string } | null>}
+   */
+  async soundIndex() {
+    await this.books();
+    if (!this._soundsWanted()) return null;
+    if (this._sounds) return { ready: true, books: this._sounds.books };
+    this._startSoundIndex();
+    return { ready: false, ...(this._soundState ?? { stage: 'queued', progress: 0 }) };
+  }
+
+  /**
+   * Whether the library has a sound index: a Gutenberg ZIM whose MIME list names a sound (the
+   * others' books keep no sound links), not over the network past maxIndexBuildBytes (finding
+   * them reads its whole directory and converts each book that has any).
+   */
+  _soundsWanted() {
+    if (this.kind !== 'gutenberg' || !this.archive.mimeTypes.some((m) => SOUND_MIME.test(m))) return false;
+    return this._maxIndexBuildBytes == null || this.archive.fileSize <= this._maxIndexBuildBytes;
+  }
+
+  /**
+   * Builds the sound index in the background, unless it is in the store: the books whose files
+   * include a sound (gutenberg2zim names a book's files '<id>_<name>': one pass over the
+   * directory) are converted one by one and their sound lists kept. Once built, each book that
+   * plays says how many sounds it has (`sounds`, §4) and onChange announces the new catalogue.
+   * Through the folder's IndexQueue, like the other indexes.
+   */
+  _startSoundIndex() {
+    if (this._sounds || this._soundTask || !this._soundsWanted() || this._soundState?.stage === 'failed') return;
+    const uuid = this.archive.header.uuid;
+    const name = soundIndexName(uuid);
+    const store = this._store;
+    const set = (stage, progress) => { this._soundState = { stage, progress }; };
+    set('queued', 0);
+    let t0 = 0;
+    const task = async () => {
+      const kept = store && await loadSoundIndex(store, name, uuid);
+      if (kept) return { idx: kept, found: true };
+      set('scan', 0);
+      t0 = performance.now();
+      const ids = await this._booksWithSoundFiles();
+      const books = (await this.books()).filter((b) => b.readable && ids.has(b.id));
+      const out = [];
+      for (let i = 0; i < books.length && !this._closed; i++) {
+        set('books', i / books.length);
+        // One book at a time, so that a book someone opens meanwhile is not kept waiting long.
+        const content = await this.content(books[i].id).catch((err) => {
+          this._warn(`${this.file}: the sounds of book ${books[i].id} are not indexed: ${err.message}`);
+          return null;
+        });
+        const sounds = content?.meta.sounds;
+        if (sounds?.length) out.push({ id: books[i].id, sounds });
+      }
+      if (this._closed) return null;
+      const idx = { version: SOUND_INDEX_VERSION, uuid, books: out };
+      if (store) {
+        await store.writeText(name, JSON.stringify(idx)).catch((err) => this._warn(`${this.file}: cannot cache the sound index (${err.message})`));
+      }
+      return { idx };
+    };
+    const queue = this._indexQueue;
+    this._soundTask = (queue ? queue.run(this.archive.fileSize, task, { cancelled: () => this._closed }) : task()).then(async (done) => {
+      if (!done || this._closed) return;
+      this._sounds = done.idx;
+      this._soundState = null;
+      if (!done.idx.books.length) return; // no book plays: the catalogue is as it was
+      await this._applySoundCounts();
+      const n = done.idx.books.reduce((k, b) => k + b.sounds.length, 0);
+      this._log(`${this.file}: sound index ${done.found ? 'found' : 'ready'}: ${done.idx.books.length} books play ${n} sounds`
+        + `${done.found ? '' : ` (${Math.round((performance.now() - t0) / 1000)} s)`}`);
+      this._onChange?.();
+    }).catch((err) => {
+      if (this._closed) return;
+      this._soundState = { stage: 'failed', progress: 0, error: err.message };
+      this._warn(`${this.file}: sound indexing failed: ${err.message}`);
+    }).finally(() => {
+      this._soundTask = null;
+    });
+  }
+
+  /** The ids of the books whose files include a sound ('<id>_<name>' with a sound's MIME type). */
+  async _booksWithSoundFiles() {
+    const ids = new Set();
+    let n = 0;
+    for await (const e of this.archive.entries()) {
+      if (++n % 4096 === 0) this._soundState = { stage: 'scan', progress: n / this.archive.entryCount };
+      if (e.cluster === null || e.cluster === undefined || !SOUND_MIME.test(e.mime ?? '')) continue;
+      const m = /^(\d+)_/.exec(e.url);
+      if (m) ids.add(m[1]);
+    }
+    return ids;
+  }
+
+  /**
+   * Each book that plays says how many sounds it has (`sounds`, §4): new book objects in a new
+   * list, since the old ones are shared (never changed in place).
+   */
+  async _applySoundCounts() {
+    const counts = new Map(this._sounds.books.map((b) => [b.id, b.sounds.length]));
+    const books = (await this.books()).map((b) => (counts.has(b.id) ? { ...b, sounds: counts.get(b.id) } : b));
+    for (const b of books) {
+      const rec = this._byId.get(b.id);
+      if (rec) rec.book = b;
+    }
+    this._books = Promise.resolve(books);
+    this._info = null;
+  }
+
+  /**
+   * A book's sound list (§3.5): its sound links (soundsOf), each with the sound it names (`media`,
+   * as resolveLink answers it) in place of its href; a sound the archive does not have is left out.
+   */
+  async _soundList(bookId, chunks) {
+    const found = soundsOf(chunks.map((c) => c.blocks));
+    const media = new Map(); // archive path -> Promise of media (a page may link a sound twice)
+    const out = new Array(found.length).fill(null);
+    await mapLimit(found, 8, async (s, i) => {
+      const path = s.href.replace(/#.*$/, '');
+      if (!media.has(path)) media.set(path, this._sound(bookId, path).catch(() => null));
+      const m = await media.get(path);
+      if (!m) return;
+      const { href, ...rest } = s;
+      out[i] = { ...rest, media: m };
+    });
+    return out.filter(Boolean);
   }
 
   /** The entry a link's path names, past ZIM redirects; null when there is none. */
@@ -1375,6 +1518,8 @@ export class ArchiveLibrary {
 
     const { chunks, toc, totalChars, tocTruncated, where } = chunkBlocks(blocks);
     blocks = null;
+    // The sounds its links name (§3.5 sound lists): the reader's Sounds list, the sound index.
+    const sounds = source === 'html' ? await this._soundList(book.id, chunks) : [];
     // A work's parts by path: where a link from another work to one of them leads.
     const parts = docs ? new Map(docs.map((d) => [d.path, where.get(d.top)]).filter(([, at]) => at)) : null;
     const out = chunks.map((c, i) => new Chunk(i, c.start, c.chars, c.blocks));
@@ -1391,6 +1536,7 @@ export class ArchiveLibrary {
       chunks: out.map((c) => ({ start: c.start, chars: c.chars, blocks: c.blockCount })),
       toc,
       tocTruncated: !!tocTruncated,
+      ...(sounds.length ? { sounds } : {}),
     };
     let bytes = 1024 + JSON.stringify(meta).length;
     for (const c of out) bytes += Math.ceil(c.json.length * (1 + GZIP_RESERVE)) + 128;
@@ -1561,6 +1707,16 @@ function dataUriSize(uri) {
  * @param {number} [maxBytes=300 MB]
  * @returns {LRUCache}
  */
+/** A stored sound index (_startSoundIndex), or null when absent, stale or damaged. */
+async function loadSoundIndex(store, name, uuid) {
+  try {
+    const idx = JSON.parse((await store.readText(name)) ?? 'null');
+    return idx?.version === SOUND_INDEX_VERSION && idx.uuid === uuid && Array.isArray(idx.books) ? idx : null;
+  } catch {
+    return null;
+  }
+}
+
 export function createContentCache(maxBytes = CONTENT_CACHE_BYTES) {
   return new LRUCache({ maxBytes, sizeOf: (c) => c.bytes });
 }

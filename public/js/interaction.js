@@ -15,8 +15,12 @@ import { perf } from './perf.js';
 import { load, save } from './util/storage.js';
 import { progressText } from './util/progress.js';
 import { isLocal } from './local/local.js';
-import { resolveLink, soundBytes, soundUrl } from './api.js';
+import { getSounds, imageSource, resolveLink, soundBytes, soundUrl } from './api.js';
+import { booksThatPlay, fillListenTab } from './ui/listen-tab.js';
+import { PERIODS, attributeAll, bookPeriod } from './media/composers.js';
+import { MusicStand, STAND_W, STAND_H } from './ui/music-stand.js';
 import { SOUND_PATH, SoundPlayer, clock, isMidi } from './media/player.js';
+import { SoundQueue, soundRows, soundTitle } from './media/queue.js';
 import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { wayOut as defaultWayOut } from './hallway.js';
@@ -24,7 +28,7 @@ import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
 import {
-  ALL_PLACE, capNote, collectionsFor, currentPlace, facetsOf, genreLabel, groupPlaces, isFaceted, normRoom, pagesOf, placeBookCount, placeFor, roomLabel, sameRoom, unitOf, ROOM_CAP,
+  ALL_PLACE, PLAYING_PLACE, playsSounds, capNote, collectionsFor, currentPlace, facetsOf, genreLabel, groupPlaces, isFaceted, normRoom, pagesOf, placeBookCount, placeFor, roomLabel, sameRoom, unitOf, ROOM_CAP,
 } from './rooms.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -47,6 +51,45 @@ const _onPlane = new THREE.Vector3();
 const _normal = new THREE.Vector3();
 // Reused by _hitTest every frame (no new arrays per pointer per frame).
 const _meshes = [];
+const _ear = new THREE.Vector3();
+const _earQ = new THREE.Quaternion();
+const _earF = new THREE.Vector3();
+const _earU = new THREE.Vector3();
+
+/** A PannerNode's position (the AudioParams where there are, else setPosition). */
+function setAudioPosition(node, p) {
+  if (node.positionX) {
+    node.positionX.value = p.x;
+    node.positionY.value = p.y;
+    node.positionZ.value = p.z;
+  } else {
+    node.setPosition(p.x, p.y, p.z);
+  }
+}
+
+/** The audio listener where the camera is, facing as it faces (every frame: nothing allocated). */
+function setListener(ctx, camera) {
+  const l = ctx?.listener;
+  if (!l) return;
+  camera.getWorldPosition(_ear);
+  camera.getWorldQuaternion(_earQ);
+  _earF.set(0, 0, -1).applyQuaternion(_earQ);
+  _earU.set(0, 1, 0).applyQuaternion(_earQ);
+  if (l.positionX) {
+    l.positionX.value = _ear.x;
+    l.positionY.value = _ear.y;
+    l.positionZ.value = _ear.z;
+    l.forwardX.value = _earF.x;
+    l.forwardY.value = _earF.y;
+    l.forwardZ.value = _earF.z;
+    l.upX.value = _earU.x;
+    l.upY.value = _earU.y;
+    l.upZ.value = _earU.z;
+  } else {
+    l.setPosition(_ear.x, _ear.y, _ear.z);
+    l.setOrientation(_earF.x, _earF.y, _earF.z, _earU.x, _earU.y, _earU.z);
+  }
+}
 const _hits = [];
 const _head = new THREE.Vector3();
 
@@ -67,6 +110,8 @@ const TOOLBAR_DROP = 0.15;
 /** A sound's controls on the toolbar's top row (px): ▶ / ❚❚ and ■ (64 each), its time, the gaps. */
 const SOUND_TIME_W = 150;
 const SOUND_ROW_W = 10 + 64 + 8 + 64 + 8 + SOUND_TIME_W;
+const SOUND_NEXT_W = 72; // ⏭ beside them while a queue has more (Play all)
+const SOUND_MARKS = 2 * LINK_MARKS; // the bands over the sound playing: on either page
 /** The contents panel's size (m). */
 const TOC_W = 0.42;
 const TOC_H = 0.56;
@@ -146,7 +191,21 @@ export class Interaction {
     });
     this.sound.onChange = () => this._showSound();
     this.sound.onError = (message) => this.notice('The sound cannot be played', message, 5);
+    this.sound.onEnded = () => this._soundEnded();
     this._soundSecond = -1; // the second the toolbar shows (its text is redrawn when that changes)
+    // What plays next (Play all in a book's Sounds list, the gramophone: media/queue.js), and the
+    // item playing ({ libId, bookId, sound }), whose link lights up while its page is shown.
+    this.queue = new SoundQueue();
+    this._playing = null;
+    this._followToken = 0;
+    this._soundMarks = null; // the bands over the link of the sound playing (_markSound)
+    this._tocTab = 'contents'; // the contents panel's list: 'contents' or 'sounds' (a book that plays)
+    // The kiosk's Listen tab (ui/listen-tab.js): its view ('books', 'book', 'queue'), the book chosen.
+    this._listen = { view: 'books', book: null, booksScroll: 0, bookScroll: null };
+    this._listenNote = null; // why a book's sounds are not shown yet (the sound index is being built)
+    this._listenPic = null; // { src, image } of the picture of the sound playing
+    this._soundIndexes = new Map(); // libId -> the library's sound index once ready ({ books: Map })
+    this._panner = null; // where the gramophone's sound comes from (a PannerNode at its horn)
 
     this.tooltip = new Label({ width: 0.56, height: 0.13 });
     this.tooltip.visible = false;
@@ -156,9 +215,15 @@ export class Interaction {
     this._buildInspectPanel();
     this._buildToolbar();
     this._buildToc();
+    // The music stand beside the book while a sound plays (ui/music-stand.js): the piano roll,
+    // practice. Shown by itself where there is room beside the book, else by tapping the time.
+    this.stand = new MusicStand({ onClose: () => this.toggleStand(false) });
+    this.holder.add(this.stand.mesh);
+    this._standWanted = null; // the visitor's choice (✕, the time tapped), else where there is room
+    this._standRoom = true; // whether the stand fits beside the book (_placeReadingPanels)
     // The panels a pointer can be over (all, or only the inspect panel while a book opens): fixed
     // arrays, so the per-frame hit test and update make none.
-    this._panels = [this.kiosk, this.inspectPanel, this.toolbar, this.tocPanel];
+    this._panels = [this.kiosk, this.inspectPanel, this.toolbar, this.tocPanel, this.stand.panel];
     this._openingPanels = [this.inspectPanel];
     this._buildExitRing();
     this._buildFade();
@@ -169,6 +234,7 @@ export class Interaction {
     renderer.compile(scene, camera);
     this._fade.visible = false;
     this._exitRing.mesh.visible = false;
+    this._fillScoreWall(); // the first room's (it waits for the sound catalogue)
 
     this._canvases = Array.from({ length: 6 }, () => {
       const c = document.createElement('canvas');
@@ -240,13 +306,20 @@ export class Interaction {
     const hw = Math.min(260, right - 12 - 270);
     p.add({ id: 'hallway', type: 'button', x: right - 12 - hw, y: 24, w: hw, h: 56, label: this.wayOut.label, size: 24, onClick: () => this.leave() });
     const place = this._place();
-    // Rooms exist when there is more than one library, or a library too big to shelve whole.
-    const hasRooms = this.libraries.length > 1 || (place && isFaceted(place, this.booksByLib[place.id]));
+    // The books that play laid out by period need their sounds' composers (soundCatalog): read
+    // once, then the room is built again.
+    if (place === PLAYING_PLACE && this.settings.playingOrder === 'period' && !this._soundCatalog?.value) this.soundCatalog();
+    // Rooms exist when there is more than one library, a library too big to shelve whole, or the
+    // books that play (a place of their own beside their library's).
+    const hasRooms = this.libraries.length > 1 || (place && isFaceted(place, this.booksByLib[place.id]))
+      || groupPlaces(this.libraries).includes(PLAYING_PLACE);
     if (!hasRooms && this._kioskTab === 'rooms') this._kioskTab = 'shelves';
     let y = 96;
     if (!this.kiwix && this._kioskTab === 'kiwix') this._kioskTab = 'shelves';
-    const tabs = [['shelves', 'Shelves & settings'], ...(hasRooms ? [['rooms', 'Rooms']] : []), ['search', 'Search'],
-      ...(this.kiwix ? [['kiwix', 'Kiwix']] : [])];
+    const listen = this.libraries.some(playsSounds); // the gramophone's: books that play
+    if (!listen && this._kioskTab === 'listen') this._kioskTab = 'shelves';
+    const tabs = [['shelves', hasRooms && listen && this.kiwix ? 'Shelves' : 'Shelves & settings'], ...(hasRooms ? [['rooms', 'Rooms']] : []),
+      ...(listen ? [['listen', '♪ Listen']] : []), ['search', 'Search'], ...(this.kiwix ? [['kiwix', 'Kiwix']] : [])];
     const tw = (W - 2 * pad - 12 * (tabs.length - 1)) / tabs.length;
     tabs.forEach(([id, label], i) => {
       p.add({
@@ -263,6 +336,7 @@ export class Interaction {
     });
     y += 74;
     if (this._kioskTab === 'rooms') this._fillRoomsTab(p, y, pad, place, placesScroll);
+    else if (this._kioskTab === 'listen') fillListenTab(this, p, y, pad);
     else if (this._kioskTab === 'search') this._fillSearchTab(p, y, pad);
     else if (this._kioskTab === 'kiwix') this._fillKiwixTab(p, y, pad);
     else this._fillShelvesTab(p, y, pad, place);
@@ -638,9 +712,23 @@ export class Interaction {
       const text = capped
         ? `${place.title} share ${MAX_BOOKCASES} bookcases here: the small libraries whole, the first books of the large ones.`
         : place === ALL_PLACE ? 'All libraries are shelved whole in this room.'
+          : place === PLAYING_PLACE ? 'The books whose pages play music (a ♪ on the spine), the most sounds first. Their Sounds list is beside Contents.'
           : groups.includes(place) ? `The ${place.title.toLowerCase()} is shelved whole in this room.`
             : `${place.title} is shelved whole in this room.`;
       p.add({ type: 'text', x: pad, y, w: W - 2 * pad, h: 90, text, size: 26, color: UI.muted, maxLines: 2 });
+      if (place === PLAYING_PLACE) {
+        // Shelved the most sounds first, or by period: a timeline round the room.
+        const by = this.settings.playingOrder === 'period' ? 'period' : 'sounds';
+        [['sounds', 'Most sounds first'], ['period', 'By period']].forEach(([id, label], i) => {
+          p.add({
+            id: `playing-${id}`, type: 'button', x: pad + i * 300, y: y + 100, w: 286, h: 54, label, size: 23, active: by === id,
+            onClick: () => this.setPlayingOrder(id),
+          });
+        });
+        if (by === 'period' && !this._soundCatalog?.value) {
+          p.add({ type: 'text', x: pad, y: y + 168, w: W - 2 * pad, h: 30, size: 21, color: UI.muted, text: 'Reading which composers and periods the sounds are of…' });
+        }
+      }
       return;
     }
     // …and a large library is browsed through two filters, a genre and a title letter, each
@@ -972,8 +1060,10 @@ export class Interaction {
     p.add({ id: 'label', type: 'text', x: W - pad - 210, y: 16, w: 210, h: 40, text: '', size: 26, align: 'right', color: UI.muted });
     // A sound's controls, between the slider and the label while one is loaded (_layoutTopRow).
     p.add({ id: 'snd-toggle', type: 'button', x: 0, y: 8, w: 64, h: 52, label: '❚❚', size: 22, hidden: true, onClick: () => this.sound.toggle() });
-    p.add({ id: 'snd-stop', type: 'button', x: 0, y: 8, w: 64, h: 52, label: '■', size: 26, hidden: true, onClick: () => this.sound.stop() });
-    p.add({ id: 'snd-time', type: 'text', x: 0, y: 19, w: SOUND_TIME_W, h: 34, text: '', size: 22, align: 'center', color: UI.accent, hidden: true });
+    p.add({ id: 'snd-stop', type: 'button', x: 0, y: 8, w: 64, h: 52, label: '■', size: 26, hidden: true, onClick: () => this.stopSounds() });
+    p.add({ id: 'snd-next', type: 'button', x: 0, y: 8, w: 64, h: 52, label: '⏭', size: 24, hidden: true, onClick: () => this.nextSound() });
+    // The time: tapped, it shows or hides the music stand.
+    p.add({ id: 'snd-time', type: 'button', x: 0, y: 8, w: SOUND_TIME_W, h: 52, label: '', size: 21, hidden: true, onClick: () => this.toggleStand() });
     const by = 68;
     const bh = 84;
     const defs = [
@@ -1007,8 +1097,28 @@ export class Interaction {
     const p = this.tocPanel;
     const meta = this.reader?.meta;
     p.clear();
-    p.add({ type: 'text', x: 30, y: 24, w: p.w - 140, h: 50, text: 'Contents', size: 40, weight: '600', serif: true, color: UI.accent });
+    // A book that plays has two lists here: its contents and its sounds (SPEC §3.5 sound lists).
+    const sounds = meta?.sounds ?? [];
+    if (!sounds.length) this._tocTab = 'contents';
+    if (sounds.length) {
+      const tw = (p.w - 140 - 12) / 2;
+      [['contents', 'Contents'], ['sounds', `♪ Sounds (${sounds.length})`]].forEach(([id, label], i) => {
+        p.add({
+          id: `toc-tab-${id}`, type: 'button', x: 30 + i * (tw + 12), y: 18, w: tw, h: 60, label, size: 26, active: this._tocTab === id,
+          onClick: () => {
+            this._tocTab = id;
+            this._fillToc();
+          },
+        });
+      });
+    } else {
+      p.add({ type: 'text', x: 30, y: 24, w: p.w - 140, h: 50, text: 'Contents', size: 40, weight: '600', serif: true, color: UI.accent });
+    }
     p.add({ type: 'button', x: p.w - 100, y: 18, w: 70, h: 60, label: '✕', size: 32, onClick: () => this.toggleToc(false) });
+    if (this._tocTab === 'sounds') {
+      this._fillSoundsList(p, sounds);
+      return;
+    }
     const toc = meta?.toc || [];
     if (!toc.length) {
       p.add({ type: 'text', x: 30, y: 100, w: p.w - 60, h: 100, text: 'This book has no table of contents.', size: 28, color: UI.muted });
@@ -1040,6 +1150,50 @@ export class Interaction {
       id: 'list', type: 'list', x: 20 + thumbW, y: listY, w: p.w - 40 - thumbW, h: listH, rowH: 64, size: 26, serif: true,
       scroll: Math.max(0, current - 3),
       items: toc.map((e, i) => ({ label: e.title, indent: e.level - minLevel, active: i === current, onClick: () => this.jumpToToc(e) })),
+    });
+  }
+
+  /**
+   * The contents panel's Sounds list: the book's sounds under their headings (media/queue.js
+   * soundRows), the one playing marked; a sound plays when tapped (its page turned to), Play all
+   * plays them in turn from the page shown.
+   */
+  _fillSoundsList(p, sounds) {
+    const book = this.book;
+    const items = sounds.map((sound) => ({ libId: book.libId, bookId: book.id, sound }));
+    const playing = this._playing && this._playing.bookId === book.id && this._playing.libId === book.libId ? this._playing.sound : null;
+    const allOn = playing && this.queue.length > 1 && this.queue.source === 'book';
+    p.add({
+      id: 'snd-all', type: 'button', x: 30, y: 96, w: 250, h: 56, label: allOn ? '■ Stop all' : '▶ Play all', size: 25, active: !!allOn,
+      onClick: () => {
+        if (allOn) return this.stopSounds();
+        // From the first sound at or after the page shown (else the first).
+        const at = this.reader.anchorOf(this._currentRef());
+        const from = sounds.findIndex((s) => s.c > at.c || (s.c === at.c && s.b >= at.b));
+        this.playSounds(items, Math.max(0, from), 'book');
+      },
+    });
+    const midi = sounds.filter((s) => s.k === 'midi').length;
+    p.add({
+      type: 'text', x: 296, y: 104, w: p.w - 326, h: 40, size: 21, color: UI.muted, maxLines: 1, align: 'right',
+      text: midi === sounds.length ? `${sounds.length} MIDI` : midi ? `${midi} MIDI, ${sounds.length - midi} recorded` : `${sounds.length} recorded`,
+    });
+    const rows = soundRows(sounds);
+    const current = playing ? rows.findIndex((r) => r.i !== undefined && sounds[r.i] === playing) : -1;
+    // The list opens at the sound playing, else at the page shown.
+    const at = this.reader.anchorOf(this._currentRef());
+    const here = rows.findIndex((r) => r.i !== undefined && (sounds[r.i].c > at.c || (sounds[r.i].c === at.c && sounds[r.i].b >= at.b)));
+    const open = current >= 0 ? current : Math.max(0, here);
+    p.add({
+      id: 'list', type: 'list', x: 20, y: 168, w: p.w - 40, h: p.h - 188, rowH: 60, size: 24, serif: true,
+      scroll: Math.max(0, open - 3),
+      items: rows.map((r, k) => (r.i === undefined
+        ? { label: r.heading, disabled: true, weight: '600' }
+        : {
+          label: r.label, right: r.kind, indent: r.under ? 1 : 0,
+          active: k === current,
+          onClick: () => this.playSounds([items[r.i]], 0, 'book'),
+        })),
     });
   }
 
@@ -1099,6 +1253,20 @@ export class Interaction {
     const door = this.state === 'browse' ? this.world.door?.raycast(rc.ray) : null;
     if (door && door.distance < rc.far && (!best || door.distance < best.distance)) {
       best = { kind: door.opening ? 'door' : 'solid', distance: door.distance };
+    }
+    // The wall of scores (world/score-wall.js): pointing at a picture plays its sound.
+    const wall = this.state === 'browse' ? this.world.scoreWall : null;
+    if (wall?.pictures?.visible) {
+      _hits.length = 0;
+      const wh = rc.intersectObject(wall.pictures, false, _hits)[0];
+      if (wh && (!best || wh.distance < best.distance)) best = { kind: 'score', index: Math.floor(wh.faceIndex / 2), distance: wh.distance };
+    }
+    // The gramophone (world/gramophone.js): pointing at it pauses or goes on.
+    const gram = this.state === 'browse' ? this.world.gramophone : null;
+    if (gram) {
+      _hits.length = 0;
+      const gh = rc.intersectObjects(gram.meshes, false, _hits)[0];
+      if (gh && (!best || gh.distance < best.distance)) best = { kind: 'gramophone', distance: gh.distance };
     }
     if (this.book3d && (this.state === 'read' || this.state === 'inspect')) {
       if (this.state === 'read') {
@@ -1161,6 +1329,10 @@ export class Interaction {
       this.pick(hit.book);
     } else if (hit.kind === 'door' && this.state === 'browse') {
       this.leave();
+    } else if (hit.kind === 'gramophone' && this.state === 'browse') {
+      this.gramophoneTap();
+    } else if (hit.kind === 'score' && this.state === 'browse') {
+      this.playScore(hit.index);
     } else if (hit.kind === 'held' && this.state === 'inspect') {
       if (this.book.readable) this.read();
     } else if (hit.kind === 'page' && this.state === 'read') {
@@ -1338,9 +1510,14 @@ export class Interaction {
       this._trail = [];
       this._trailBase = 0;
     }
-    this.sound.stop(); // a sound of the book stops with it
+    // A sound of the book stops with it; the gramophone's plays on.
+    if (this.queue.source === 'gramophone') this._playing = null;
+    else this.stopSounds();
     this._showBack();
     this._markLink(null);
+    this._markSound(null);
+    this._standWanted = null;
+    this.stand.visible = false;
     const book = this.book;
     const b3 = this.book3d;
     // Forget the spreads, or the next book finds every page canvas still in use.
@@ -1670,6 +1847,22 @@ export class Interaction {
     bar.scale.setScalar(ts);
     bar.position.set(0, -ph / 2 - 0.085 * ts, 0.03);
     bar.rotation.set(-0.35, 0, 0);
+    // The music stand right of the page(s), as the contents are left; where there is no room
+    // there (a narrow screen), over the foot of the page, and only when asked for.
+    const stand = this.stand.mesh;
+    const right = (this._single ? pw / 2 : pw) + 0.26;
+    this._standRoom = right + STAND_W / 2 <= 0.98 * half;
+    if (this._standRoom) {
+      stand.position.set(right, 0.02, 0.08);
+      stand.rotation.set(0, -0.45, 0);
+      stand.scale.setScalar(1);
+    } else {
+      const k = Math.min(1, (0.96 * this._viewHalfWidth(0.07)) / (STAND_W / 2), (0.62 * ph) / STAND_H);
+      stand.position.set(this._single ? 0 : pw / 2, -ph / 2 + (STAND_H / 2) * k + 0.01, 0.07);
+      stand.rotation.set(0, 0, 0);
+      stand.scale.setScalar(k);
+    }
+    this._showStand();
     const toc = this.tocPanel.mesh;
     const beside = (this._single ? -pw / 2 : -pw) - 0.24; // left of the page(s), turned towards the reader
     if (beside - TOC_W / 2 >= -0.98 * half) {
@@ -1929,7 +2122,7 @@ export class Interaction {
     // On the tap itself (before anything is awaited): a sound needs the audio context running.
     audio.init();
     if (link.media) { // a sound the static build resolved
-      this._playSound(link.media);
+      this._playLinkSound(link.media);
       return;
     }
     this._following = true; // one link at a time: a second tap waits for nothing
@@ -1950,7 +2143,7 @@ export class Interaction {
           if (!to || to.media) this._afterTurn(); // the label back
         }
         if (to?.media) {
-          this._playSound(to.media);
+          this._playLinkSound(to.media);
           return;
         }
         if (!to) {
@@ -2061,28 +2254,425 @@ export class Interaction {
     const pad = 18;
     const back = this._trail.length > 0;
     const sound = this.sound.state !== 'idle';
+    const next = sound && this.queue.hasNext;
     p.set('back', { hidden: !back });
     const x = back ? pad + 146 : pad + 10;
-    const right = p.w - pad - 220 - (sound ? SOUND_ROW_W : 0); // the label (210) and a gap
+    const right = p.w - pad - 220 - (sound ? SOUND_ROW_W : 0) - (next ? SOUND_NEXT_W : 0); // the label (210) and a gap
     p.set('slider', { x, w: right - x });
     p.set('snd-toggle', { hidden: !sound, x: right + 10 });
     p.set('snd-stop', { hidden: !sound, x: right + 82 });
-    p.set('snd-time', { hidden: !sound, x: right + 154 });
+    p.set('snd-next', { hidden: !next, x: right + 154 });
+    p.set('snd-time', { hidden: !sound, x: right + 154 + (next ? SOUND_NEXT_W : 0) });
   }
 
   /**
    * Plays a sound a link names (SPEC §3.5 `media`: a MIDI file through the synthesizer, an MP3
    * through the browser); it does not go on the trail. Its name in a notice (in a headset too).
    */
-  _playSound(media) {
+  _playSound(media, title = null, destination = null) {
     audio.click();
-    this.notice(`♪ ${media.name || 'Sound'}`, isMidi(media) ? 'MIDI, played by the built-in synthesizer' : 'A recording, played by the browser', 2.5);
-    this.sound.play(media);
+    this.notice(`♪ ${title || media.name || 'Sound'}`, isMidi(media) ? 'MIDI, played by the built-in synthesizer' : 'A recording, played by the browser', 2.5);
+    this.sound.play(media, { destination });
+  }
+
+  /**
+   * Where the gramophone's sound goes: a PannerNode at its horn (the room's), so that it comes
+   * from there, quieter further off but never silent; null without a gramophone or Web Audio.
+   */
+  _gramophoneOut(at = null) {
+    const where = at ?? this.world.gramophone?.mouth;
+    const ctx = audio.context;
+    if (!where || !ctx?.createPanner) return null;
+    if (!this._panner) {
+      const pn = ctx.createPanner();
+      pn.panningModel = 'HRTF';
+      pn.distanceModel = 'inverse'; // never quite silent: 1/4 as loud 10 m off
+      pn.refDistance = 1.5;
+      pn.rolloffFactor = 0.6;
+      pn.maxDistance = 60;
+      pn.connect(ctx.destination);
+      this._panner = pn;
+    }
+    setAudioPosition(this._panner, where);
+    return this._panner;
+  }
+
+  /**
+   * Hangs the scores of the books shelved on the wall (world/score-wall.js): a picture beside one
+   * of each book's sounds (a MIDI song's first), by period then the most sounds first, spread over
+   * them when there are more books than places. Waits for the sound catalogue (soundCatalog).
+   */
+  _fillScoreWall() {
+    const wall = this.world.scoreWall;
+    if (!wall) return;
+    const cat = this.soundCatalog();
+    if (!cat) return; // filled when it is read
+    const shelved = new Set(this.world.shelves.books().map((b) => `${b.libId}\n${b.id}`));
+    const firstOf = new Map(); // book -> its sound with a picture (a MIDI song's first)
+    for (const it of cat.items) {
+      if (!it.sound.pic) continue;
+      const k = `${it.libId}\n${it.bookId}`;
+      if (!shelved.has(k)) continue;
+      const had = firstOf.get(k);
+      if (!had || (had.sound.k !== 'midi' && it.sound.k === 'midi')) firstOf.set(k, it);
+    }
+    const order = (it) => PERIODS.findIndex((p) => p.id === (this.bookOf(it.libId, it.bookId)?.period ?? 'other'));
+    const all = [...firstOf.values()].sort((a, b) => order(a) - order(b)
+      || (this.bookOf(b.libId, b.bookId)?.sounds ?? 0) - (this.bookOf(a.libId, a.bookId)?.sounds ?? 0));
+    const n = Math.min(all.length, wall.slots.length);
+    const picked = Array.from({ length: n }, (_, i) => all[Math.floor((i * all.length) / n)]);
+    wall.setItems(picked.map(({ libId, bookId, sound }) => ({ libId, bookId, sound, pic: sound.pic })), (src) => this._image(src));
+  }
+
+  /** A picture on the wall of scores, pointed at: its sound, from where it hangs. */
+  playScore(i) {
+    const wall = this.world.scoreWall;
+    const item = wall?.items[i];
+    if (!item) return;
+    this.playSounds([{ libId: item.libId, bookId: item.bookId, sound: item.sound, at: wall.positionOf(i) }], 0, 'gramophone');
+  }
+
+  /** The gramophone, pointed at: pauses or goes on; silent, it plays a book that plays, picked at random. */
+  async gramophoneTap() {
+    audio.init(); // on the tap itself
+    if (this.queue.source === 'gramophone' && this.sound.state !== 'idle') {
+      this.sound.toggle();
+      return;
+    }
+    this._kioskTab = 'listen';
+    this._kioskTabPicked = true;
+    const books = booksThatPlay(this.libraries, this.booksByLib);
+    if (!books.length) {
+      this._fillKiosk();
+      this.notice('The gramophone', 'Its books are still being searched for sounds', 3);
+      return;
+    }
+    const book = books[Math.floor(Math.random() * books.length)];
+    const sounds = await this._soundsOfBookLoaded(book.libId, book.id);
+    if (!sounds?.length) return;
+    this._listen = { ...this._listen, view: 'book', book: { libId: book.libId, id: book.id }, bookScroll: null };
+    this.playSounds(sounds.map((sound) => ({ libId: book.libId, bookId: book.id, sound })), 0, 'gramophone');
+    this._fillKiosk();
+  }
+
+  /** Plays the queue's item i (the Listen tab's queue). */
+  playQueued(i) {
+    audio.init();
+    const item = this.queue.go(i);
+    if (item) this._playItem(item);
+  }
+
+  /** Shelves the books that play the most sounds first ('sounds') or by period ('period'). */
+  async setPlayingOrder(order) {
+    if (this.state !== 'browse' || this.settings.playingOrder === order) return;
+    this.settings.playingOrder = order;
+    save('settings', this.settings);
+    if (order === 'period' && !this._soundCatalog?.value) {
+      this._fillKiosk();
+      this.soundCatalog(); // rebuilds the room when the books' periods are known
+      return;
+    }
+    await this._rebuildWorld();
+  }
+
+  /**
+   * Every sound of the libraries that play, attributed to a composer and a period
+   * (media/composers.js attributeAll): { items, composers, periods }, or null while their sound
+   * indexes are read (then the kiosk is filled again, and a room laid out by period rebuilt).
+   * Each book that plays gets its `period` (rooms.js periodCollections).
+   */
+  soundCatalog() {
+    const libs = this.libraries.filter(playsSounds);
+    const key = libs.map((l) => `${l.id}:${l.sounds.count}`).join('\n');
+    if (this._soundCatalog?.key === key) return this._soundCatalog.value;
+    if (this._soundCatalog?.loading === key) return null;
+    this._soundCatalog = { key, loading: key, value: null };
+    Promise.all(libs.map(async (l) => {
+      await this._soundsOfBookLoaded(l.id, '');
+      const idx = this._soundIndexes.get(l.id);
+      return idx ? { libId: l.id, books: [...idx.books].map(([id, sounds]) => ({ id, sounds })) } : null;
+    })).then((list) => {
+      if (this._soundCatalog?.key !== key) return;
+      if (list.some((x) => !x)) { // an index still being built: tried again with the next fill
+        this._soundCatalog = null;
+        return;
+      }
+      const byLib = new Map(libs.map((l) => [l.id, new Map((this.booksByLib[l.id] || []).map((b) => [b.id, b]))]));
+      const value = attributeAll(list, (libId, id) => byLib.get(libId)?.get(id) ?? null);
+      // Each book's period, for the room laid out by period.
+      const items = new Map();
+      for (const it of value.items) {
+        const k = `${it.libId}\n${it.bookId}`;
+        if (!items.has(k)) items.set(k, []);
+        items.get(k).push(it);
+      }
+      for (const [k, its] of items) {
+        const [libId, id] = k.split('\n');
+        const book = byLib.get(libId)?.get(id);
+        if (book) book.period = bookPeriod(its);
+      }
+      this._soundCatalog = { key, value };
+      if (this._kioskTab === 'listen' || this._kioskTab === 'rooms') this._fillKiosk();
+      this._fillScoreWall();
+      if (this._place() === PLAYING_PLACE && this.settings.playingOrder === 'period') {
+        if (this.state === 'browse') this._rebuildWorld();
+        else this._pendingCatalog = true;
+      }
+    }).catch((err) => {
+      console.warn('sound catalogue', err);
+      if (this._soundCatalog?.key === key) this._soundCatalog = null;
+    });
+    return null;
+  }
+
+  /** A book descriptor by library and id, or null. */
+  bookOf(libId, id) {
+    return (this.booksByLib[libId] || []).find((b) => b.id === id) ?? null;
+  }
+
+  /**
+   * A book's sound list from its library's sound index (SPEC §4 /sounds), or null while that is
+   * read (then the kiosk is filled again) or being built (_listenNote says how far).
+   */
+  soundsOfBook(libId, bookId) {
+    const idx = this._soundIndexes.get(libId);
+    if (idx) return idx.books.get(bookId) ?? [];
+    this._soundsOfBookLoaded(libId, bookId).then((s) => { if (s && this._kioskTab === 'listen') this._fillKiosk(); });
+    return null;
+  }
+
+  async _soundsOfBookLoaded(libId, bookId) {
+    let idx = this._soundIndexes.get(libId);
+    if (!idx) {
+      const answer = await getSounds(libId).catch((err) => {
+        console.warn('sounds', err);
+        return null;
+      });
+      if (!answer?.ready) {
+        this._listenNote = answer ? `Finding the sounds of its library… ${Math.round((answer.progress ?? 0) * 100)}%` : 'Its sounds cannot be read.';
+        if (answer && !this._listenRetry) {
+          this._listenRetry = setTimeout(() => {
+            this._listenRetry = 0;
+            if (this._kioskTab === 'listen') this._fillKiosk();
+          }, 3000);
+        }
+        return null;
+      }
+      this._listenNote = null;
+      idx = { books: new Map(answer.books.map((b) => [b.id, b.sounds])) };
+      this._soundIndexes.set(libId, idx);
+    }
+    return idx.books.get(bookId) ?? [];
+  }
+
+  /** The picture of the sound playing, for the Listen tab (loaded once, then the kiosk drawn again). */
+  _loadListenPic(src) {
+    if (this._listenPic?.src === src) return;
+    this._listenPic = { src, image: null };
+    imageSource(src).then(({ url, release }) => {
+      if (!url || this._listenPic?.src !== src) return release();
+      const img = new Image();
+      img.onload = () => {
+        release();
+        if (this._listenPic?.src !== src) return;
+        this._listenPic.image = img;
+        if (this._kioskTab === 'listen') this.kiosk.set('lst-pic', { image: img });
+      };
+      img.onerror = release;
+      img.src = url;
+    }).catch(() => {});
+  }
+
+  /**
+   * Plays a link's sound (followLink), as its entry of the book's sound list when it has one
+   * (SPEC §3.5 sound lists: the same sound, in this chunk if it is linked twice), so that its link
+   * lights up while it plays; a sound before the queue's is left out of it.
+   */
+  _playLinkSound(media) {
+    const sounds = this.reader?.meta?.sounds ?? [];
+    const c = this._currentRef()?.c ?? 0;
+    const same = (m) => (media.path && m.path ? m.path === media.path
+      : m.name === media.name && (m.src ?? m.remote?.start) === (media.src ?? media.remote?.start));
+    const matching = sounds.filter((x) => same(x.media));
+    const sound = matching.find((x) => x.c === c) ?? matching[0];
+    if (!sound) {
+      this.queue.clear();
+      this._playing = null;
+      this._markSound(null);
+      this._playSound(media);
+      return;
+    }
+    this.playSounds([{ libId: this.book.libId, bookId: this.book.id, sound }]);
+  }
+
+  /**
+   * Plays sounds one after another (SPEC §5.6 "Sounds"): items { libId, bookId, sound } from item
+   * `start`. A book's (`source` 'book': its Sounds list, its links) stop when it is put back; the
+   * gramophone's play on.
+   */
+  playSounds(items, start = 0, source = 'book') {
+    audio.init(); // on the tap itself: the audio context needs the gesture
+    const item = this.queue.set(items, { start, source });
+    if (item) this._playItem(item);
+  }
+
+  /** Plays the queue's current item; its link lights up when its book is open (_followSound). */
+  _playItem(item, { turn = true } = {}) {
+    this._playing = item;
+    this._playSound(item.sound.media, soundTitle(item.sound), this.queue.source === 'gramophone' ? this._gramophoneOut(item.at) : null);
+    this._followSound(turn).catch((err) => console.warn('follow', err));
+    if (this.tocPanel.visible && this._tocTab === 'sounds') this._fillToc();
+  }
+
+  /**
+   * The music stand: shown while a book is read and a sound is loaded, where there is room
+   * beside the book or when asked for (the time tapped); filled for each new sound.
+   */
+  _showStand() {
+    const on = this.state === 'read' && this.sound.state !== 'idle' && this.sound.state !== 'loading'
+      && (this._standWanted ?? this._standRoom);
+    if (on && (this.stand._media !== this.sound.media || !this.stand.visible)) {
+      const sound = this._playing?.sound;
+      this.stand.show(this.sound, sound ? soundTitle(sound) : this.sound.media?.name, sound?.pic ?? null, (src) => this._image(src));
+    }
+    this.stand.visible = on;
+    this.toolbar.set('snd-time', { active: on });
+  }
+
+  /** Shows or hides the music stand (the time on the toolbar, its ✕). */
+  toggleStand(show = !this.stand.visible) {
+    this._standWanted = show;
+    this._showStand();
+  }
+
+  /** An image (an Image element, loaded) from a client URL (api.imageSource), or null. */
+  async _image(src) {
+    const { url, release } = await imageSource(src);
+    if (!url) return null;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        release();
+        resolve(img);
+      };
+      img.onerror = () => {
+        release();
+        resolve(null);
+      };
+      img.src = url;
+    });
+  }
+
+  /** ⏭: the queue's next sound. */
+  nextSound() {
+    audio.init();
+    const next = this.queue.next();
+    if (next) this._playItem(next);
+  }
+
+  /** ⏮: the queue's sound before. */
+  prevSound() {
+    audio.init();
+    const prev = this.queue.prev();
+    if (prev) this._playItem(prev);
+  }
+
+  /** ■: stops the sound and empties the queue. */
+  stopSounds() {
+    this.queue.clear();
+    this._playing = null;
+    this.sound.stop();
+    this._markSound(null);
+    if (this.tocPanel.visible && this._tocTab === 'sounds') this._fillToc();
+  }
+
+  /** A sound played to its end: the queue's next, if there is one. */
+  _soundEnded() {
+    const next = this.queue.next();
+    if (next) {
+      this._playItem(next);
+      return;
+    }
+    this.queue.clear();
+    this._playing = null;
+    this._markSound(null);
+    if (this.tocPanel.visible && this._tocTab === 'sounds') this._fillToc();
+  }
+
+  /**
+   * Follow-along: the link of the sound playing lights up on the spread shown; with `turn`, a sound
+   * whose link is on another page turns the book there (Play all turns the pages as it goes).
+   */
+  async _followSound(turn = false) {
+    const item = this._playing;
+    const token = ++this._followToken;
+    const book = this.book;
+    if (!item || this.state !== 'read' || !this.reader || item.libId !== book?.libId || item.bookId !== book?.id) {
+      this._markSound(null);
+      return;
+    }
+    const spread = this._cur?.spread;
+    const found = [];
+    for (const side of ['left', 'right']) {
+      const ref = spread?.[side];
+      if (!isPage(ref)) continue;
+      const rects = await this.reader.soundRects(ref, item.sound);
+      if (rects.length) found.push({ side, rects });
+    }
+    if (token !== this._followToken || this.book !== book || this.state !== 'read') return;
+    if (!found.length && turn) {
+      if (this._turnBusy) return;
+      this._markSound(null);
+      await this._jump(await this.reader.refForAnchor({ c: item.sound.c, b: item.sound.b })); // then _afterTurn follows
+      return;
+    }
+    this._markSound(found);
+  }
+
+  /**
+   * Bands over the link of the sound playing (found: [{ side, rects }] in page pixels), warmer than
+   * a pointer's: meshes in front of the pages, as _markLink's. null hides them.
+   */
+  _markSound(found) {
+    const b3 = this.book3d;
+    if (!this._soundMarks) {
+      if (!found?.length) return;
+      const mat = new THREE.MeshBasicMaterial({ color: 0xe0a83a, transparent: true, opacity: 0.32, depthWrite: false });
+      const geo = new THREE.PlaneGeometry(1, 1);
+      this._soundMarks = Array.from({ length: SOUND_MARKS }, () => {
+        const m = new THREE.Mesh(geo, mat);
+        m.name = 'sound-mark';
+        m.visible = false;
+        return m;
+      });
+    }
+    const marks = this._soundMarks;
+    let k = 0;
+    if (found?.length && b3 && this.state === 'read') {
+      const r = this.reader;
+      const pad = 5;
+      for (const { side, rects } of found) {
+        const page = side === 'left' ? b3.leftPage : b3.rightPage;
+        const { width: pw, height: ph } = page.geometry.parameters;
+        for (const { x, y, w, h } of rects.slice(0, LINK_MARKS)) {
+          if (k >= marks.length) break;
+          const m = marks[k++];
+          if (m.parent !== page) page.add(m);
+          m.scale.set(((w + 2 * pad) / r.width) * pw, ((h + 2 * pad) / r.height) * ph, 1);
+          m.position.set(((x + w / 2) / r.width - 0.5) * pw, (0.5 - (y + h / 2) / r.height) * ph, 0.0004);
+          m.visible = true;
+        }
+      }
+    }
+    for (; k < marks.length; k++) marks[k].visible = false;
   }
 
   /** The sound's controls on the toolbar, as the player's state changes. */
   _showSound() {
     const s = this.sound;
+    this.world.gramophone?.setMusic(s.state === 'playing' && this.queue.source === 'gramophone');
+    this._showStand();
+    if (this._kioskTab === 'listen' && s.state !== 'loading') this._fillKiosk(); // what plays, its buttons
     this._layoutTopRow();
     const on = s.state === 'playing' || s.state === 'loading';
     this.toolbar.set('snd-toggle', { label: on ? '❚❚' : '▶', disabled: s.state === 'loading', active: s.state === 'blocked' });
@@ -2099,7 +2689,7 @@ export class Interaction {
     this._soundSecond = sec;
     const d = s.duration;
     const text = sec === -1 ? '♪ …' : sec === -2 ? '♪ tap ▶' : d ? `${clock(sec)} / ${clock(d)}` : clock(sec);
-    this.toolbar.set('snd-time', { text });
+    this.toolbar.set('snd-time', { label: text, active: this.stand.visible });
   }
 
   /**
@@ -2166,6 +2756,7 @@ export class Interaction {
     recent.unshift({ libId: book.libId, id: book.id, t: Date.now() });
     save('recent', recent.slice(0, 20));
     this._prepareNeighbours().catch((e) => console.warn('prepare', e));
+    if (this._playing) this._followSound().catch((e) => console.warn('follow', e)); // its link, on the new spread
   }
 
   async changeFont(step) {
@@ -2346,6 +2937,10 @@ export class Interaction {
       if (this.world.isWalkable(viewer.x, viewer.z)) this.controls.followFrame(kiosk, to);
       else this.controls.teleportTo(this.world.spawn.position, this.world.spawn.yaw);
       this._fillKiosk();
+      this._fillScoreWall();
+      // A new room's gramophone: turning if it plays, and the sound from its horn.
+      this.world.gramophone?.setMusic(this.sound.state === 'playing' && this.queue.source === 'gramophone');
+      if (this._panner && this.world.gramophone && !this._playing?.at) setAudioPosition(this._panner, this.world.gramophone.mouth);
       this.onShelved?.(this.settings.place, collections.length === 1 ? collections[0].room : null);
       await this._tween(0.08, () => {}); // a few frames in the dark: the heavy first render
       await this._fadeTo(0, 0.3);
@@ -2651,6 +3246,10 @@ export class Interaction {
   update(dt) {
     this._time += dt;
     this._lastDt = dt;
+    // The gramophone's sound comes from its horn: the listener is where the head is.
+    if (this._panner && this.sound.state === 'playing' && this.queue.source === 'gramophone') setListener(audio.context, this.camera);
+    if (this.sound.state === 'playing') this.sound.checkLoop(); // a recording's practice loop
+    if (this.stand.visible) this.stand.update();
     if (this._tweens.length) {
       const done = [];
       for (const tw of this._tweens) {
@@ -2692,6 +3291,8 @@ export class Interaction {
         interactive = true;
       } else if (hit?.kind === 'door') {
         hoverDoor = true;
+        interactive = true;
+      } else if (hit?.kind === 'gramophone' || hit?.kind === 'score') {
         interactive = true;
       } else if (hit?.kind === 'page' || hit?.kind === 'held') {
         interactive = true;

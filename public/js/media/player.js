@@ -5,7 +5,7 @@
 import { perf } from '../perf.js';
 import { isMidi } from '../core/content/sounds.js';
 import { midiSong, parseMidi } from './midi.js';
-import { MidiSynth } from './synth.js';
+import { MidiSynth, RATE_MAX, RATE_MIN } from './synth.js';
 
 export { SOUND_PATH, isMidi } from '../core/content/sounds.js';
 
@@ -38,10 +38,57 @@ export class SoundPlayer {
     this.onChange = null;
     /** Called with (message, media) when a sound cannot be played. */
     this.onError = null;
+    /** Called with (media) when a sound has played to its end (after the change to 'idle'). */
+    this.onEnded = null;
     this._synth = null;
     this._el = null;
+    this._source = null; // the element's MediaElementSourceNode, when it plays through `destination`
+    this._dest = null;
+    this._rate = 1; // practice: the tempo (setRate), kept from sound to sound
+    this._loop = null; // practice: { a, b } of the sound playing (setLoop)
     this._release = null;
     this._token = 0; // bumped by every play and stop: an older load that finishes is dropped
+  }
+
+  /** The MIDI song playing (midi.js midiSong's: the music stand's piano roll), or null. */
+  get song() {
+    return this._synth?.song ?? null;
+  }
+
+  /** The synthesizer playing it (practice: its parts, transpose), or null for a recording. */
+  get synth() {
+    return this._synth;
+  }
+
+  /**
+   * Practice (SPEC §5.6 "Sounds"): its tempo (a MIDI song's through the synthesizer, a
+   * recording's through the browser, its pitch kept), kept for the sounds played after it.
+   */
+  get rate() {
+    return this._rate;
+  }
+  setRate(rate) {
+    this._rate = Math.max(RATE_MIN, Math.min(RATE_MAX, rate));
+    this._synth?.setRate(this._rate);
+    if (this._el) this._el.playbackRate = this._rate;
+  }
+
+  /** Practice: goes round from b back to a (s), or not (null); for this sound only. */
+  get loop() {
+    return this._loop;
+  }
+  setLoop(loop) {
+    this._loop = loop && loop.b - loop.a >= 0.25 ? { a: loop.a, b: loop.b } : null;
+    this._synth?.setLoop(this._loop);
+  }
+
+  /**
+   * A recording's loop: from its end back to its start, checked every frame (a song's goes round
+   * in the synthesizer).
+   */
+  checkLoop() {
+    const el = this._el;
+    if (el && this._loop && this.state === 'playing' && el.currentTime >= this._loop.b) el.currentTime = this._loop.a;
   }
 
   /** Where the sound is, and how long it is (s; 0 until known). */
@@ -53,11 +100,15 @@ export class SoundPlayer {
     return Number.isFinite(d) ? d : 0;
   }
 
-  /** Loads a sound and plays it from its start, stopping the one before. */
-  async play(media) {
+  /**
+   * Loads a sound and plays it from its start, stopping the one before. `destination`: an audio
+   * node it goes through (the gramophone's panner), else the speakers.
+   */
+  async play(media, { destination = null } = {}) {
     this.stop();
     const token = ++this._token;
     this.media = media;
+    this._dest = destination;
     this._set('loading');
     try {
       if (isMidi(media)) await this._playMidi(media, token);
@@ -79,7 +130,8 @@ export class SoundPlayer {
     // Resumed on the tap that led here (audio.init); were it still suspended, its clock waits
     // and the song starts when it runs.
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    this._synth = new MidiSynth(ctx, song);
+    this._synth = new MidiSynth(ctx, song, this._dest ? { destination: this._dest } : {});
+    if (this._rate !== 1) this._synth.setRate(this._rate);
     this._synth.onEnd = () => this._ended(token);
     this._synth.play(0);
     this._set('playing');
@@ -99,7 +151,15 @@ export class SoundPlayer {
       if (token === this._token) this._fail(new Error(`The browser cannot play ${media.name || 'this sound'}.`));
     };
     el.src = url;
+    el.preservesPitch = true; // slower or faster for practice, not lower or higher
+    if (this._rate !== 1) el.playbackRate = this._rate;
     this._el = el;
+    // Through an audio node (the gramophone's): the element's sound goes there instead.
+    const ctx = this._dest && this._context();
+    if (ctx?.createMediaElementSource) {
+      this._source = ctx.createMediaElementSource(el);
+      this._source.connect(this._dest);
+    }
     await this._start(el, token);
   }
 
@@ -155,6 +215,9 @@ export class SoundPlayer {
       el.load?.(); // lets go of what it buffered
       this._el = null;
     }
+    this._source?.disconnect();
+    this._source = null;
+    this._loop = null;
     this._release?.();
     this._release = null;
     this.media = null;
@@ -162,7 +225,10 @@ export class SoundPlayer {
   }
 
   _ended(token) {
-    if (token === this._token) this.stop();
+    if (token !== this._token) return;
+    const media = this.media;
+    this.stop();
+    this.onEnded?.(media);
   }
 
   _fail(err) {

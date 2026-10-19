@@ -1,13 +1,13 @@
 // The address says where the visitor is (SPEC §5.6 "Rooms"): the place, `?place=<library id>` or
-// a group place's id (demo, local, *), and in a large library its room, `&genre=`, `&letter=` and
+// a group place's id (demo, local, playing, *), and in a large library its room, `&genre=`, `&letter=` and
 // `&page=` (from 2), kept up to date as the room changes (history.replaceState in main.js), so it
 // can be bookmarked, shared or reloaded; a link naming them opens there. The page's other
 // parameters (?back=, ?xr=, ?perf, …) are left as they are. Pure.
 
-import { ALL_PLACE, DEMO_PLACE, LOCAL_PLACE, normRoom } from './rooms.js';
+import { ALL_PLACE, DEMO_PLACE, LOCAL_PLACE, PLAYING_PLACE, normRoom } from './rooms.js';
 
 const KEYS = ['place', 'genre', 'letter', 'page'];
-const GROUP_IDS = [ALL_PLACE.id, DEMO_PLACE.id, LOCAL_PLACE.id];
+const GROUP_IDS = [ALL_PLACE.id, DEMO_PLACE.id, LOCAL_PLACE.id, PLAYING_PLACE.id];
 /** A library id without its edition's date ("wikipedia_en_100_2026-09" → "wikipedia_en_100"). */
 const undated = (id) => String(id).replace(/_\d{4}-\d{2}$/, '');
 

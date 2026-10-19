@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture } from './canvas-texture.js';
+import { makeGramophone } from './gramophone.js';
 import {
   makePlankCanvas, makePlasterCanvas, makeWoodCanvas, makeSkyCanvas, makeShadowCanvas,
   makeRugCanvas, rng,
@@ -57,6 +58,7 @@ function materials() {
     darkWood: new THREE.MeshLambertMaterial({ map: wood, color: 0x8a7766 }),
     sky: new THREE.MeshBasicMaterial({ map: sky, toneMapped: false }),
     brass: new THREE.MeshLambertMaterial({ color: 0xb08d47, emissive: 0x2a1c08 }),
+    brassDouble: new THREE.MeshLambertMaterial({ color: 0xb08d47, emissive: 0x2a1c08, side: THREE.DoubleSide }), // a horn, seen inside
     leather: new THREE.MeshLambertMaterial({ color: 0x6e2a1f }),
     glow: new THREE.MeshBasicMaterial({ color: 0xffe0a8, toneMapped: false }),
     shade: new THREE.MeshLambertMaterial({ color: 0xe9c88f, emissive: 0x9a6a2a, side: THREE.DoubleSide }),
@@ -343,12 +345,18 @@ function commonLights(group) {
   group.add(fill);
 }
 
+/** While music plays (the gramophone's level, 0…1): the chandeliers this much dimmer, the lamp brighter. */
+const MUSIC_DIM = 0.2;
+const MUSIC_LAMP = 0.35;
+
 /**
  * Rotunda: circular wall of radius R with bookcases placed by the caller, windows at the given
- * angles (radians, 0 = −Z, increasing toward +X), a dome and a central reading area.
- * @returns {{ group, floor, walkable(x,z): boolean, boundary(p, radius), colliders, update(dt) }}
+ * angles (radians, 0 = −Z, increasing toward +X), a dome and a central reading area. With
+ * `gramophone` (a library whose books play) a gramophone stands where the globe would.
+ * @returns {{ group, floor, walkable(x,z): boolean, boundary(p, radius), colliders, update(dt),
+ *   gramophone: object|null }}
  */
-export function createRotunda({ R, windowAngles = [], kiosk, decor = true }) {
+export function createRotunda({ R, windowAngles = [], kiosk, decor = true, gramophone: withGramophone = false }) {
   const mats = materials();
   const group = new THREE.Group();
   group.name = 'room-rotunda';
@@ -405,6 +413,7 @@ export function createRotunda({ R, windowAngles = [], kiosk, decor = true }) {
   const chandelier = makeChandelier(group, 0, WALL_H - 0.5, 0, 0.7);
   const colliders = [];
   let lamp = null;
+  let gramophone = null;
   if (decor) {
     const rug = new THREE.Mesh(new THREE.CircleGeometry(Math.min(1.9, R * 0.45), 64), mats.rug);
     rug.rotation.x = -Math.PI / 2;
@@ -413,7 +422,17 @@ export function createRotunda({ R, windowAngles = [], kiosk, decor = true }) {
     const corner = makeReadingCorner(group, -Math.min(1.7, R * 0.45), Math.min(0.9, R * 0.25), 0.6);
     lamp = corner.lamp;
     colliders.push(...corner.colliders);
-    colliders.push(makeGlobe(group, Math.min(2.0, R * 0.55), Math.min(1.4, R * 0.4)));
+    const gx = Math.min(2.0, R * 0.55);
+    const gz = Math.min(1.4, R * 0.4);
+    if (withGramophone) {
+      // Facing the middle of the room, its horn toward whoever stands there.
+      gramophone = makeGramophone(mats, { x: gx, z: gz, yaw: Math.atan2(-gx, -gz) });
+      group.add(gramophone.group);
+      shadowDecal(group, gx, gz, 0.9, 0.9);
+      colliders.push(gramophone.collider);
+    } else {
+      colliders.push(makeGlobe(group, gx, gz));
+    }
   }
   if (kiosk) colliders.push(makePedestal(group, kiosk.position.x, kiosk.position.z, kiosk.yaw));
   const dust = makeDust(group, 0, 0, R * 0.7, WALL_H - 0.8);
@@ -421,7 +440,7 @@ export function createRotunda({ R, windowAngles = [], kiosk, decor = true }) {
 
   const walkR = R - 0.45;
   return {
-    group, floor, colliders, kind: 'rotunda', R,
+    group, floor, colliders, kind: 'rotunda', R, gramophone,
     // Laser stop: the round wall, the dome above it, the floor, the furniture.
     raycast: (ray) => Math.min(
       rayCylinderExit(ray, 0, 0, R, WALL_H), raySphereExit(ray, 0, WALL_H, 0, R), rayFloor(ray), rayColliders(ray, colliders),
@@ -438,17 +457,19 @@ export function createRotunda({ R, windowAngles = [], kiosk, decor = true }) {
     update(dt) {
       t += dt;
       dust(dt);
-      chandelier.intensity = 9 + Math.sin(t * 7.3) * 0.15 + Math.sin(t * 13.1) * 0.1;
-      if (lamp) lamp.intensity = 2.2 + Math.sin(t * 9.7) * 0.05;
+      gramophone?.update(dt);
+      const m = gramophone ? gramophone.level : 0;
+      chandelier.intensity = (9 + Math.sin(t * 7.3) * 0.15 + Math.sin(t * 13.1) * 0.1) * (1 - MUSIC_DIM * m);
+      if (lamp) lamp.intensity = (2.2 + Math.sin(t * 9.7) * 0.05) * (1 + MUSIC_LAMP * m);
     },
   };
 }
 
 /**
  * Rectangular hall for large collections: bounds in metres, windows along the long walls,
- * several chandeliers down the central aisle.
+ * several chandeliers down the central aisle; with `gramophone`, one across from the kiosk.
  */
-export function createHall({ minX, maxX, minZ, maxZ, kiosk }) {
+export function createHall({ minX, maxX, minZ, maxZ, kiosk, gramophone: withGramophone = false }) {
   const mats = materials();
   const group = new THREE.Group();
   group.name = 'room-hall';
@@ -500,10 +521,21 @@ export function createHall({ minX, maxX, minZ, maxZ, kiosk }) {
   }
   const colliders = [];
   if (kiosk) colliders.push(makePedestal(group, kiosk.position.x, kiosk.position.z, kiosk.yaw));
+  let gramophone = null;
+  if (withGramophone) {
+    // Across the entrance from the kiosk, facing the way in.
+    const gx = kiosk ? -kiosk.position.x : cx - 1.3;
+    const gz = kiosk ? kiosk.position.z : maxZ - 2.6;
+    gramophone = makeGramophone(mats, { x: gx, z: gz, yaw: Math.atan2(cx - gx, maxZ - 1.4 - gz) });
+    group.add(gramophone.group);
+    shadowDecal(group, gx, gz, 0.9, 0.9);
+    colliders.push(gramophone.collider);
+  }
+  const bright = lights.map((l) => l?.intensity ?? 0);
   const dust = makeDust(group, cx, maxZ - 3, 3, WALL_H - 1);
   const margin = 0.35;
   return {
-    group, floor, colliders, kind: 'hall', bounds: { minX, maxX, minZ, maxZ },
+    group, floor, colliders, kind: 'hall', bounds: { minX, maxX, minZ, maxZ }, gramophone,
     // Laser stop: the four walls, the ceiling, the floor, the furniture.
     raycast: (ray) => Math.min(rayBoxExit(ray, minX, maxX, minZ, maxZ), rayFloor(ray), rayColliders(ray, colliders)),
     walkable: (x, z) => x > minX + margin && x < maxX - margin && z > minZ + margin && z < maxZ - margin,
@@ -513,6 +545,10 @@ export function createHall({ minX, maxX, minZ, maxZ, kiosk }) {
     },
     update(dt) {
       dust(dt);
+      if (!gramophone) return;
+      gramophone.update(dt);
+      const k = 1 - MUSIC_DIM * gramophone.level;
+      for (let i = 0; i < lights.length; i++) if (lights[i]) lights[i].intensity = bright[i] * k;
     },
   };
 }

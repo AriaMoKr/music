@@ -24,6 +24,7 @@ const paths = {
   meta: (id, book) => `${lib(id)}/books/${seg(book)}${staticSite ? '/index.json' : ''}`,
   chunk: (id, book, n) => `${lib(id)}/books/${seg(book)}/chunks/${n}${staticSite ? '.json' : ''}`,
   titles: (id) => `${lib(id)}/titles.json`,
+  sounds: (id) => `${lib(id)}/sounds${staticSite ? '.json' : ''}`,
 };
 
 const chunkCache = new Map(); // `${lib}\n${id}\n${n}` -> Promise<blocks[]>
@@ -151,6 +152,27 @@ export function getBookMeta(libId, bookId, { onProgress } = {}) {
     metaCache.set(key, p);
   }
   return metaCache.get(key);
+}
+
+const soundIndexes = new Map(); // libId -> Promise of a ready sound index
+
+/**
+ * A library's sound index (SPEC §4 /sounds): { ready: true, books: [{ id, sounds }] }, or { ready:
+ * false, stage, progress } while it is being built; null for a library without sounds. A ready
+ * one is kept (it changes only with the library, whose id names its edition).
+ */
+export async function getSounds(libId) {
+  if (soundIndexes.has(libId)) return soundIndexes.get(libId);
+  let answer;
+  if (local.isLocal(libId)) answer = await local.sounds(libId);
+  else {
+    const res = await fetch(api(paths.sounds(libId)));
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`sounds of ${libId}: ${res.status} ${res.statusText}`);
+    answer = await res.json();
+  }
+  if (answer?.ready) soundIndexes.set(libId, Promise.resolve(answer));
+  return answer;
 }
 
 /**

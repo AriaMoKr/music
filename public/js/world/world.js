@@ -9,7 +9,8 @@ import * as THREE from 'three';
 import { BOOKCASE, PLAYER } from '../config.js';
 import { sortBooks } from '../util/books.js';
 import { Bookshelves, bookcasesNeeded, packBookcases, prefixForBookcases, rangeLabel, shareBookcases } from './shelves.js';
-import { createRotunda, createHall, disposeRoom } from './room.js';
+import { createRotunda, createHall, disposeRoom, roomMaterials } from './room.js';
+import { ScoreWall, hallSlots, rotundaSlots } from './score-wall.js';
 import { canvasTexture } from './canvas-texture.js';
 import { makeSignCanvas } from './textures.js';
 import { Door, doorCorridor, windowAnglesBesideDoor } from './door.js';
@@ -109,16 +110,18 @@ export class World {
       return c.ordered ? c.books : sortBooks(c.books, sort);
     });
     const quotas = shareBookcases(sorted.map(bookcasesNeeded), MAX_BOOKCASES);
-    collections.forEach(({ library, books, subtitle, ordered }, k) => {
+    collections.forEach(({ library, books, subtitle, ordered, title }, k) => {
       let packed = packBookcases(prefixForBookcases(sorted[k], quotas[k]));
       if (packed.length > quotas[k]) packed = packed.slice(0, quotas[k]);
       if (!packed.length) return;
       const shown = packed.reduce((n, p) => n + p.items.length, 0);
-      this.sections.push({ library, first: cases.length, count: packed.length, books: books.length, shown, subtitle });
+      this.sections.push({ library, first: cases.length, count: packed.length, books: books.length, shown, subtitle, title });
       for (const p of packed) cases.push({ ...p, label: rangeLabel(p.items, ordered ? 'title' : sort), libId: library.id });
     });
 
     // Tear down the previous room.
+    this.scoreWall?.dispose();
+    this.scoreWall = null;
     if (this.room) disposeRoom(this.room);
     for (const s of this.signs) {
       disposeSign(s);
@@ -127,8 +130,10 @@ export class World {
     this.signs = [];
 
     const n = cases.length;
-    if (n <= ROTUNDA_MAX_CASES) this._layoutRotunda(cases);
-    else this._layoutHall(cases);
+    // A library whose books play gets a gramophone (world/gramophone.js), in place of the globe.
+    const music = collections.some((c) => (c.library.sounds?.books ?? 0) > 0);
+    if (n <= ROTUNDA_MAX_CASES) this._layoutRotunda(cases, music);
+    else this._layoutHall(cases, music);
     this.shelves.build(cases);
     this._footprints = this.shelves.footprints();
     this._makeSigns(cases);
@@ -139,7 +144,7 @@ export class World {
     await Promise.race([this.shelves.ready(), new Promise((r) => setTimeout(r, 3000))]);
   }
 
-  _layoutRotunda(cases) {
+  _layoutRotunda(cases, music = false) {
     const n = cases.length;
     const step = BOOKCASE.width + CASE_GAP;
     // Radius: cases may use up to ~70 % of the wall; keep a comfortable minimum room size.
@@ -147,8 +152,10 @@ export class World {
     const rc = R - BOOKCASE.depth / 2 - 0.04;
     const da = step / rc;
     const a0 = -((n - 1) / 2) * da;
+    const angles = [];
     cases.forEach((cs, i) => {
       const a = a0 + i * da;
+      angles.push(a);
       cs.position = new THREE.Vector3(Math.sin(a) * rc, 0, -Math.cos(a) * rc);
       cs.yaw = -a;
     });
@@ -159,15 +166,18 @@ export class World {
     // With the door back, not where it and its plaque stand (behind the spawn point).
     const windowAngles = this._doorSpec ? windowAnglesBesideDoor(half, R) : [];
     if (!this._doorSpec) for (let i = 0; i < count; i++) windowAngles.push(half + ((i + 0.5) / count) * free);
+    // A room whose books play hangs their scores over the bookcases and between the windows
+    // (world/score-wall.js).
+    this._wallSlots = music ? rotundaSlots(R, angles, windowAngles, !!this._doorSpec) : null;
 
     this.spawn = { position: new THREE.Vector3(0, 0, Math.min(1.6, R * 0.35)), yaw: 0 };
     const kp = new THREE.Vector3(Math.min(1.45, R * 0.36), 0, this.spawn.position.z - 1.4);
     this.kiosk = { position: kp, yaw: Math.atan2(this.spawn.position.x - kp.x, this.spawn.position.z - kp.z) };
-    this.room = createRotunda({ R, windowAngles, kiosk: this.kiosk });
+    this.room = createRotunda({ R, windowAngles, kiosk: this.kiosk, gramophone: music });
     this._finishRoom();
   }
 
-  _layoutHall(cases) {
+  _layoutHall(cases, music = false) {
     const n = cases.length;
     const K = Math.max(4, Math.min(12, Math.ceil(Math.sqrt(n / 2))));
     const rows = Math.ceil(n / (2 * K));
@@ -193,12 +203,18 @@ export class World {
     this.spawn = { position: new THREE.Vector3(0, 0, maxZ - 1.4), yaw: 0 };
     const kp = new THREE.Vector3(1.3, 0, maxZ - 2.6);
     this.kiosk = { position: kp, yaw: Math.atan2(this.spawn.position.x - kp.x, this.spawn.position.z - kp.z) };
-    this.room = createHall({ minX: -halfW, maxX: halfW, minZ, maxZ, kiosk: this.kiosk });
+    this.room = createHall({ minX: -halfW, maxX: halfW, minZ, maxZ, kiosk: this.kiosk, gramophone: music });
+    this._wallSlots = music ? hallSlots({ minX: -halfW, maxX: halfW, minZ, maxZ }) : null;
     this._finishRoom();
   }
 
   _finishRoom() {
     this.group.add(this.room.group);
+    // The wall of scores: its pictures are hung by the page (interaction.js), once it knows them.
+    if (this._wallSlots?.length) {
+      this.scoreWall = new ScoreWall(roomMaterials(), this._wallSlots);
+      this.room.group.add(this.scoreWall.group);
+    }
     this.teleportTargets = [this.room.floor];
     this._colliders = this.room.colliders;
     if (this._doorSpec) {
@@ -218,7 +234,7 @@ export class World {
       const lib = sec.library;
       // The description, unless the title already says it (Gutenberg classes: "Gutenberg · English
       // language (PE)", §4).
-      const title = lib.title || lib.name || lib.id;
+      const title = sec.title || lib.title || lib.name || lib.id; // a section's own (a period), else its library's
       const description = lib.description && !String(title).includes(lib.description) ? lib.description : null;
       const canvas = makeSignCanvas(title,
         sec.subtitle ?? [description, sec.shown < sec.books
@@ -336,6 +352,11 @@ export class World {
   }
 
   /** Per-frame: room ambience and spine-atlas LOD. */
+  /** The room's gramophone (world/gramophone.js), or null when its library's books do not play. */
+  get gramophone() {
+    return this.room?.gramophone ?? null;
+  }
+
   update(dt, camera) {
     this.room?.update(dt);
     this.shelves.update(dt, camera);

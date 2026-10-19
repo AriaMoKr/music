@@ -74,10 +74,15 @@ async function indexed(indexing) {
 
 async function serverAnswers(file, limit = Infinity) {
   provide(nodePlatform);
-  const lib = await ArchiveLibrary.open(file, { log: () => {} });
+  // A store of its own (none: not the project's .cache, where a stale index would be found next time).
+  const lib = await ArchiveLibrary.open(file, { log: () => {}, store: memoryStore() });
   try {
     await indexed(async () => (await lib.info()).indexing);
-    const out = { info: await lib.info(), books: await lib.books(), byBook: {} };
+    await indexed(async () => { // the sound index too (§4)
+      const s = await lib.soundIndex();
+      return s && !s.ready;
+    });
+    const out = { info: await lib.info(), books: await lib.books(), byBook: {}, sounds: await lib.soundIndex() };
     if (out.info.kind === 'wikipedia') {
       out.search = await Promise.all(SEARCHES.map((q) => lib.searchArticles(q, 8)));
       out.links = await Promise.all(LINKS.map((href) => lib.resolveLink(out.books[0].id, href)));
@@ -99,8 +104,15 @@ async function serverAnswers(file, limit = Infinity) {
 async function localAnswers(local, id, limit = Infinity) {
   provide(browser);
   await indexed(async () => (await local.call('catalog')).value.libraries.find((l) => l.id === id).indexing);
+  await indexed(async () => {
+    const s = (await local.call('sounds', { lib: id })).value;
+    return s && !s.ready;
+  });
   const { value: catalog } = await local.call('catalog');
-  const out = { info: catalog.libraries.find((l) => l.id === id), books: (await local.call('books', { lib: id })).value, byBook: {} };
+  const out = {
+    info: catalog.libraries.find((l) => l.id === id), books: (await local.call('books', { lib: id })).value, byBook: {},
+    sounds: (await local.call('sounds', { lib: id })).value,
+  };
   if (out.info.kind === 'wikipedia') {
     out.search = await Promise.all(SEARCHES.map((q) => local.call('articles', { lib: id, q, limit: 8 }).then((r) => r.value)));
     out.links = await Promise.all(LINKS.map((href) => local.call('link', { lib: id, book: out.books[0].id, href }).then((r) => r.value)));
@@ -198,6 +210,9 @@ describe('local library (ZIM files read in the browser)', () => {
     // api.soundBytes asks the worker for an entry's bytes as for an image's.
     assert.deepEqual(Buffer.from((await local.call('image', { url: tune.media.src })).value.bytes), Buffer.from(TUNE));
     assert.deepEqual(Buffer.from((await local.call('image', { url: air.media.src })).value.bytes), AIR_MP3);
+    // The sound index, as the server's (sameAnswers compared it): the book and its two sounds.
+    const sounds = (await local.call('sounds', { lib: id })).value;
+    assert.deepEqual(sounds.books.map((b) => [b.id, b.sounds.map((s) => s.t)]), [['7', ['tune', 'air']]]);
   });
 
   it('answers like the server for an old-scheme Gutenberg ZIM (zlib clusters)', async () => {

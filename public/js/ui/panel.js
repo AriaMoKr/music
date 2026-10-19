@@ -172,6 +172,11 @@ export class Panel {
     return `${weight} ${size}px ${el.serif ? SERIF : FONT}`.trim();
   }
 
+  /** An element that draws itself: el.draw(g, el) (the music stand's piano roll). */
+  _draw_custom(g, el) {
+    el.draw?.(g, el);
+  }
+
   _draw_rect(g, el) {
     roundRect(g, el.x, el.y, el.w, el.h, el.radius ?? 0);
     g.fillStyle = el.color || 'rgba(255,255,255,0.08)';

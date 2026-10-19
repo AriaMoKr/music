@@ -13,6 +13,8 @@ import { wayOut } from '../hallway.js';
 
 const ARTICLE_RESULTS = 8; // per Wikipedia library
 
+/** What a library card says of its sounds (SPEC §4 `sounds`): how many of its books play. */
+const soundsText = (s) => (s?.books ? ` · ♪ ${s.books.toLocaleString()} play ${s.count.toLocaleString()} sounds` : '');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /** A web address's host, for a library read from the web ("mirror.download.kiwix.org"). */
 const hostOf = (url) => { try { return new URL(url).hostname; } catch { return 'the web'; } };
@@ -406,7 +408,7 @@ export class Overlay {
           <div class="ov-lib-desc">${esc(l.longDescription || (l.description && !String(l.title).includes(l.description) ? l.description : ''))}</div>
           <div class="ov-lib-meta">${l.indexing && l.indexing.stage !== 'failed'
             ? (l.indexing.stage === 'queued' ? 'waiting to index…' : `indexing… ${Math.round((l.indexing.progress || 0) * 100)}%`)
-            : `${(booksByLib[l.id]?.length || 0).toLocaleString()} ${l.kind === 'wikisource' ? 'works' : l.kind === 'wikipedia' ? `volumes (${(l.articles ?? 0).toLocaleString()} articles)` : 'books'}`} · ${esc(l.file)}${l.site ? ' · from this site' : l.url ? ` · from ${esc(hostOf(l.url))}` : ''}</div></div>
+            : `${(booksByLib[l.id]?.length || 0).toLocaleString()} ${l.kind === 'wikisource' ? 'works' : l.kind === 'wikipedia' ? `volumes (${(l.articles ?? 0).toLocaleString()} articles)` : 'books'}`}${soundsText(l.sounds)} · ${esc(l.file)}${l.site ? ' · from this site' : l.url ? ` · from ${esc(hostOf(l.url))}` : ''}</div></div>
           ${String(l.id).startsWith('~') ? `<button class="ov-lib-close" data-id="${esc(l.id)}" title="${l.site ? 'Close it (it opens again with the page)' : l.url ? 'Close it (and do not reopen it)' : 'Close this file'}" aria-label="Close ${esc(l.title)}">×</button>` : ''}
         </div>`).join('') + (libraries.length > 1 ? `<div class="ov-lib-meta">${total.toLocaleString()} books in ${libraries.length} libraries</div>` : '')
       : `<div class="ov-lib-desc">${this._static ? 'This online version has no books yet. Open a ZIM file from this device or the web below, or run vrlbry yourself (see the README).' : 'No .zim files were found in the server folder. Add some and reload, or open one from this device or the web below.'}</div>`;

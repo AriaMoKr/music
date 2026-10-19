@@ -171,6 +171,11 @@ export function createLocalLibraries({
       return { value: await lib(id).resolveLink(book, href) };
     },
 
+    /** The sound index (soundIndex): as the server's route; null for a library without sounds. */
+    async sounds({ lib: id }) {
+      return { value: await lib(id).soundIndex() };
+    },
+
     async meta({ lib: id, book }, { onProgress } = {}) {
       const l = lib(id);
       if (!(await l.book(book))) throw new LocalError(`unknown book: ${book}`);

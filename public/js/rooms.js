@@ -7,6 +7,7 @@
 // A room of a large library is `{ genre: string|null, letter: string|null }`.
 
 import { letterOf, sortBooks } from './util/books.js';
+import { PERIODS } from './media/composers.js';
 
 /**
  * Most books a room shelves at once (~92 bookcases; more are shelved a page at a time). Measured
@@ -54,10 +55,46 @@ export const isDemoLibrary = (library) => {
 export const LOCAL_PLACE = { id: 'local', title: 'Opened here', kind: 'local' };
 export const isLocalLibrary = (library) => String(library.id).startsWith('~') && !library.site;
 
+/**
+ * The books that play, of every library (a Gutenberg ZIM's books whose links name sounds: their
+ * count is `sounds`, once the library's sound index is built, SPEC §4): shelved together, the
+ * books with the most sounds first.
+ */
+export const PLAYING_PLACE = { id: 'playing', title: 'Books that play', kind: 'playing' };
+export const playsSounds = (library) => (library.sounds?.books ?? 0) > 0;
+/** The books of a library that play, the most sounds first (then in the library's order). */
+export function playingBooks(books) {
+  return books.filter((b) => b.sounds > 0).sort((a, b) => b.sounds - a.sounds);
+}
+
+/**
+ * The books that play laid out by period (settings.playingOrder 'period'): a section per period
+ * in time order (SPEC §5.6 "Sounds": a book's `period`, from its sounds' composers, set by the
+ * page once the sound index is read), each the most sounds first; null while no book has one.
+ */
+export function periodCollections(collections) {
+  const all = collections.flatMap((c) => c.books.map((book) => ({ book, library: c.library })));
+  if (!all.some(({ book }) => book.period)) return null;
+  const out = [];
+  for (const p of PERIODS) {
+    const these = all.filter(({ book }) => (book.period ?? 'other') === p.id);
+    if (!these.length) continue;
+    const books = these.map((x) => x.book);
+    const sounds = books.reduce((n, b) => n + b.sounds, 0);
+    out.push({
+      library: these[0].library, books, room: null, total: books.length, capped: false, ordered: true, period: p.id,
+      title: p.name, subtitle: `${p.years ? `${p.years} · ` : ''}${books.length} book${books.length === 1 ? '' : 's'} · ${sounds.toLocaleString()} sounds`,
+    });
+  }
+  return out;
+}
+
 /** Places that shelve several libraries together: which libraries each takes, and when it exists. */
 const GROUPS = [
   { place: DEMO_PLACE, includes: isDemoLibrary, exists: (libraries) => libraries.some(isDemoLibrary) },
   { place: LOCAL_PLACE, includes: isLocalLibrary, exists: (libraries) => libraries.filter(isLocalLibrary).length > 1 },
+  // Not every book of its libraries: only those that play (`books`), in their own order.
+  { place: PLAYING_PLACE, includes: playsSounds, exists: (libraries) => libraries.some(playsSounds), books: playingBooks },
   // All libraries: not when they are all the demo set's (as on the GitHub Pages site) or all
   // opened here, where it would be one of those again.
   {
@@ -279,12 +316,20 @@ export function collectionsFor(libraries, booksByLib, settings) {
   if (!lib) return [];
   const group = groupOf(lib);
   if (group) {
-    return libraries.filter((l) => group.includes(l) && booksByLib[l.id]?.length).map((library) => {
-      const books = booksByLib[library.id];
+    const shelved = libraries.filter((l) => group.includes(l) && booksByLib[l.id]?.length).map((library) => {
+      const books = group.books ? group.books(booksByLib[library.id]) : booksByLib[library.id];
+      if (group.books) {
+        const sounds = books.reduce((n, b) => n + b.sounds, 0);
+        const subtitle = `${books.length.toLocaleString()} book${books.length === 1 ? '' : 's'} that play · ${sounds.toLocaleString()} sounds`;
+        return { library, books, room: null, total: books.length, capped: false, ordered: true, subtitle };
+      }
       // Wikipedia volumes keep their own order (by article range) whatever the shelf order.
       const wiki = library.kind === 'wikipedia';
       return { library, books, room: null, total: books.length, capped: false, ordered: wiki, subtitle: wiki ? volumesSubtitle(library, books.length) : undefined };
-    });
+    }).filter((c) => c.books.length);
+    // The books that play by period: a timeline round the room.
+    if (lib === PLAYING_PLACE && settings.playingOrder === 'period') return periodCollections(shelved) ?? shelved;
+    return shelved;
   }
   return shelfCollections([lib], booksByLib, settings.rooms, settings.sort).map((c) => ({
     ...c,
@@ -297,6 +342,7 @@ export function collectionsFor(libraries, booksByLib, settings) {
 /** Number of books a place shelves in total (every library of a group place). */
 export function placeBookCount(place, libraries, booksByLib) {
   const group = groupOf(place);
+  if (group?.books) return libraries.reduce((n, l) => n + (group.includes(l) ? group.books(booksByLib[l.id] || []).length : 0), 0);
   if (group) return libraries.reduce((n, l) => n + (group.includes(l) ? booksByLib[l.id]?.length || 0 : 0), 0);
   return booksByLib[place.id]?.length || 0;
 }

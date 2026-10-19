@@ -343,6 +343,26 @@
     sounds inside an EPUB-only book's EPUB (none in `lcc-m`; its links are still dropped);
     reading MP3s through the edge proxy when the site has one (now only from Kiwix's mirror);
     showing which links are sounds before they are tapped (a ♪).
+- **Done (2026-10-18): listening views of the Music collection** (SPEC §3.5 sound lists, §4
+  `/sounds`, §5.3 Music, §5.6 "Sounds"). A sound index per Gutenberg ZIM (115 books, 5,215
+  sounds in the Music ZIM: 4 s on the server, 169 KB gzipped; the static site's `sounds.json`);
+  a *Books that play* place (♪ on their spines, the most sounds first, or by period: a sign per
+  period round the rotunda); a Sounds list in the contents panel with Play all and follow-along
+  (the page turns to each sound, its link marked); a music stand with a piano roll and practice
+  (tempo, loop, key, parts muted or played with another instrument); a gramophone that plays on
+  while one walks and reads, its sound from its horn (positional), its record turning, the room's
+  lights dimmed meanwhile; the kiosk's Listen tab (books, composers, periods, the queue); a wall
+  of score pictures that play when pointed at, from where they hang.
+  - *Not checked:* on the Quest, in VR: the HRTF panner and a `MediaElementSource` on its audio
+    thread, the wall's one atlas upload (2048 × 1024, ~8 MB) and the kiosk redrawn when what
+    plays changes; the placement of the music stand beside the book in a headset (checked on a
+    flat screen, where it goes over the page's foot when asked for).
+  - *Next:* composers and periods are guessed from the words around each sound (approximate: a
+    history book's example under "the time of Beethoven" counts as Beethoven's); a curated list
+    per book would be better. The signs of the period layout could queue their period when
+    pointed at; composer portraits (images whose captions name a composer) could hang on the wall
+    beside the scores; the stand's roll could show the staff (the score picture) above the notes;
+    seeking (the playhead could be dragged).
 - **Possible: more in "Copy debug info"** (`debug-info.js`; it has browser, GPU, version, state,
   place, viewpoint, the open book and page, the dialogs and the last 20 errors; pasting it into
   the help dialog, or `__vrlbry.reproduce(report)`, restores that scene, see `scene.js`).

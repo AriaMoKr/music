@@ -456,7 +456,8 @@ public/js/core/       shared by the server and the browser's local library
   zim/xz.js           Pure-JS .xz (LZMA2) decoder.
   content/html.js     HTML → blocks, chunking, TOC, image size sniffing.
   content/epub.js     ZIP + EPUB parsing (for EPUB-only books).
-  content/sounds.js   which links name a sound, which entries are one, which are MIDI (§3.5 media).
+  content/sounds.js   which links name a sound, which entries are one, which are MIDI (§3.5 media);
+                      a book's sound list (soundsOf, §3.5 sound lists).
   library.js          ArchiveLibrary: catalog building, content conversion + caching.
   wikisource.js       Wikisource works index (build, store), genres, work assembly (§2.4, §3.8).
   wikipedia.js        Wikipedia article index (build, store, search) (§2.5).
@@ -790,6 +791,18 @@ title="[Listen]"><source src="music/….mp3">`) becomes such a link, its title i
 "[Listen]"), its `src` or first `<source>` its `href`; the browser's text inside it is dropped.
 gutenberg2zim stores a book's sounds as `<id>_<name>` while its pages say `music/<name>`: a
 sound's `href` is looked up as written, then so (`_sound`).
+
+**Sound lists.** A book's meta lists the sounds its links name (`meta.sounds`, when it has any:
+`soundsOf` in `core/content/sounds.js`, then each resolved as `resolveLink` would, those the
+archive does not have left out), in reading order, one per link (a link's runs in several styles
+together): `{ c, b, i?, t, k, media, h?, p?, x?, pic? }`: chunk `c`, block `b` and `i` its place
+among the block's sound links (absent: the first; `soundRuns(block, i)` finds its runs), the
+link's text `t`, its kind `k` (`'midi'` or `'audio'`), the sound (`media`, as §3.5's), the
+nearest heading `h` and the one above it `p`, the rest of its paragraph `x` (without the words
+of the other files Gutenberg links beside a sound: "[PNG] [MusicXML] | View/Download PDF"; absent
+when only brackets are left), and `pic`, an image block next to it (within the 4 blocks before it
+or the 2 after, not past a heading or another sound: a tune's score). Texts are cut at 140
+characters. The library's **sound index** (§4 `/sounds`) is these lists of every book that plays.
 Optional fields are omitted when default (`a` absent = justified/left, `q` absent = 0).
 
 `TocEntry` = `{ title: string, level: 1–6, c: chunkIndex, b: blockIndexWithinChunk }`.
@@ -906,6 +919,16 @@ export class ArchiveLibrary {
   null otherwise (a page that is not an article, a main page, a file, another library).
 - Book `size`: `getBlobSize(epubEntry ?? htmlEntry, { cheapOnly: true })` (null if unknown).
   Never decompress whole archives at startup; `books()` must be fast (< 1 s for this file).
+- The sound index (`soundIndex()`, §4): a Gutenberg ZIM whose MIME list names a sound
+  (`SOUND_MIME`) starts it in the background as it opens, through the folder's `IndexQueue`
+  (not past `maxIndexBuildBytes` over the network): one pass over the directory finds the books
+  whose files include a sound (gutenberg2zim's `<id>_<name>`), then each is converted
+  (`content()`, so cached as if opened) and its `meta.sounds` kept: `{ version, uuid, books: [{
+  id, sounds }] }`, in the store as `sounds-<uuid>.v<SOUND_INDEX_VERSION>.json`
+  (`core/index-versions.js`). Gutenberg's Music ZIM: 115 books, 5,215 sounds, 4 s on the server,
+  1.7 MB of JSON (169 KB gzipped). Once built, each book that plays gets `sounds` (its count; new
+  book objects, the old ones being shared), `info().sounds` says `{ books, count }` and
+  `onChange` announces the catalogue; an index of no book that plays changes nothing.
 
 ### 3.7 `server/http.js` and `server/index.js`
 
@@ -1086,6 +1109,18 @@ files, 4.3 MB); any other sound is read from its ZIM on Kiwix's mirror (`remote`
 knows that ZIM's address there (`--sources tools/demo-set.txt`) and the sound is stored
 uncompressed (`ZimArchive.contentRange`: libzim stores MP3s so), else its link is dropped.
 
+**`GET /api/libraries/:lib/sounds`** → the library's sound index (§3.5 sound lists, §3.6):
+`{ "library", "ready": true, "books": [ { "id", "sounds": [ { "c", "b", "i"?, "t", "k", "media",
+"h"?, "p"?, "x"?, "pic"? } ] } ] }`, the books that play in catalogue order (`no-cache`, its
+JSON made once); while it is built `{ "library", "ready": false, "stage": "queued" | "scan" |
+"books" | "failed", "progress", "error"? }` (`no-store`). 404 for a library without sounds (not a
+Gutenberg ZIM, or none of its files is one). Once it is built a library's info has `"sounds": {
+"books", "count" }` (when a book plays), a book that plays `"sounds": <count>`, and every book's
+metadata its `sounds` list. A static build writes it as `api/library/<id>/sounds.json`, with
+each list's `media` as the site has it (`siteSound`: MIDI on the site, MP3 by its range on
+Kiwix's mirror, the others left out, also from the counts), and waits for it as for the other
+indexes.
+
 **`GET /api/libraries/:lib/articles?q=<prefix>&limit=<n>`** (Wikipedia libraries only, 404
 otherwise) → `{ "library": lib, "articles": [ { "title", "book": "v<N>", "n", "from"? } ] }`:
 articles whose title starts with `q` in title order (matched by `titleKey`, so case, accents, a
@@ -1145,7 +1180,14 @@ public/
     audio.js             tiny WebAudio synth: page turn, book slide/thud, UI click; the audio context (`audio.context`).
     media/midi.js        Standard MIDI Files → a song: notes in seconds with their instrument, loudness, pan, bend (pure).
     media/synth.js       MidiSynth: plays a song through WebAudio (oscillators, envelopes, noise drums; ≤ 40 voices).
-    media/player.js      SoundPlayer: the one sound a book plays (MIDI through MidiSynth, else <audio>).
+    media/player.js      SoundPlayer: the one sound playing (MIDI through MidiSynth, else <audio>); tempo, loop.
+    media/queue.js       SoundQueue (what plays next) and how sounds are named and listed (pure).
+    media/roll.js        the piano roll: a song's pitch range and parts, a window of it drawn (pure).
+    media/composers.js   who wrote a sound and when: composers, periods, a book's period (pure).
+    ui/listen-tab.js     the kiosk's Listen tab: what plays, books, composers, periods, the queue.
+    ui/music-stand.js    the music stand beside the book: piano roll or picture, playhead, practice.
+    world/gramophone.js  the gramophone of a room whose books play (its horn: where its sound comes from).
+    world/score-wall.js  the wall of scores: pictures beside sounds, framed, one atlas.
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
     debug-info.js        "Copy debug info": the page's last 20 errors (startErrorLog) and a report (debugReport); "Save screenshot" (screenshot).
     reset.js             "Reset stored data": the parts of what the site keeps in the browser (RESET_PARTS), cleared by resetStoredData.
@@ -1249,6 +1291,23 @@ export class World {
   dispose()
 }
 ```
+
+**Music** (a room whose libraries' books play, §4 `sounds`): a **gramophone**
+(`world/gramophone.js`) stands where the globe would (in a hall, across the entrance from the
+kiosk), facing the middle of the room: a cabinet, a turntable whose record turns while it plays
+(78 rpm, eased in and out), a tone arm and a brass horn, 4 draw calls; the sound it plays comes
+from its horn's mouth (`mouth`; interaction.js's PannerNode, HRTF, `inverse` distance: a quarter
+as loud 10 m off, never silent). While it plays (`setMusic`, its eased `level`) the chandeliers
+are 20 % dimmer and the reading lamp 35 % brighter: only intensities, every room keeps its two
+point lights. A **wall of scores** (`world/score-wall.js`): the pictures beside sounds' links
+(`pic`) framed on the wall, in the rotunda over the bookcases (one each, above the section
+signs, at 3.4 m) and between its windows (at 2.2 m, not by the door), in the hall between the
+windows, up to 16; two draw calls (the frames, and the
+pictures from one 2048 × 1024 atlas of 512 × 256 tiles, hidden until its pictures are in and then
+uploaded once: an upload per picture would cost a frame each). The page picks them
+(`interaction._fillScoreWall`: one of each book shelved, a MIDI song's first, by period then the
+most sounds first); pointing at one plays it from where it hangs. A section's sign says its
+`title` when it has one (a period), else its library's.
 
 **The door** (`world/door.js`, `world/portal.js`): a doorway like the Hallway's own
 (https://ariamokr.github.io/hallway/), leading where the way out leads (§5.6). It stands against the
@@ -1537,7 +1596,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   (the server's URL, which streams; a blob of its bytes for a local file or a sound read from
   Kiwix's mirror). The audio context is made or resumed on the tap itself (`audio.init`, before
   anything is awaited); a browser that refuses to start an `<audio>` without a recent tap leaves
-  it waiting for ▶ ("tap ▶"). The sound stops when the book is put back. Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
+  it waiting for ▶ ("tap ▶"). A book's sound stops when the book is put back (the gramophone's
+  plays on). Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
   the font size), kept while links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
   to the same spread while the font size is the same. So does the browser's Back (its button, a
@@ -1549,6 +1609,40 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   and closing the book takes them out (`history.go(-depth)`), so Back then leaves as before.
   Forward does not follow the links again; entries an earlier load of the page left (a reload) are
   passed over.
+- **Sounds** (§3.5 sound lists, §4 `/sounds`; `media/queue.js`, `ui/listen-tab.js`,
+  `ui/music-stand.js`): a book that plays has two lists in its contents panel, *Contents* and
+  *♪ Sounds (n)*: its sounds under their headings (`soundRows`: a heading row where it changes, a
+  tune's one sound as one row named by its heading), each named by `soundTitle` (its link's words
+  when they name it, "[Listen: Dorian]" → "Dorian"; else a short paragraph around it; else its
+  heading, after the one above it when it is only a number or "by …"; else its file); a tap
+  plays it and turns to it, *▶ Play all* plays them in turn from the page shown. What plays next
+  is a `SoundQueue` (`interaction.queue`: items `{ libId, bookId, sound, at? }`, at most 2,000,
+  ⏮ ⏭, repeat), whose `source` says whose it is: `'book'` (stops when the book is put back) or
+  `'gramophone'` (plays on while the visitor walks and reads). The toolbar's top row has ⏭ while
+  more follows. **Follow-along**: while a sound of the open book plays its link has a warm band
+  per line on the spread (`reader.soundRects`; meshes in front of the page, as a hovered link's),
+  and the next sound of a queue turns the book to its page. **The music stand** beside the book
+  (right of the pages, as the contents are left; on a screen too narrow, over the foot of the page
+  and only when asked for: the toolbar's time is its button, ✕ hides it): a MIDI song as a piano
+  roll (`media/roll.js`: 8 s windows drawn on the stand's canvas, a part's colour per channel,
+  drums as ticks, a line at each C; a new window only when the playhead reaches 90 % of it, the
+  playhead a mesh moved every frame), a recording as its picture (`pic`). Practice under it: the
+  tempo (50–150 %, the pitch kept: the synthesizer's rate, an `<audio>`'s `playbackRate` with
+  `preservesPitch`; kept for the sounds after it), a loop (tap: its start here, again: its end,
+  again: off; a song's in the synthesizer, a recording's checked every frame), and for a song its
+  key (±1 semitone a tap, drums aside) and its parts (a button each, or per instrument family
+  when there are more than 8, "Strings ×5": tapped, muted or heard again; with ⇄, played with the
+  next of 12 families). A change is heard at once (the notes scheduled ahead are let go).
+  **The gramophone** (§5.3), pointed at, pauses or goes on; silent, it plays a book that plays,
+  picked at random, and the kiosk shows its *Listen* tab. **Composers and periods**
+  (`media/composers.js`, applied as the index is read, so the rules change without it): a
+  sound's composer is the first of 90 names (with their years) found in its link's words, its
+  paragraph, its headings, then its book's title ("by Ludwig van Beethoven"; "Strauss" is
+  Johann's unless "Richard"); its period is the composer's by the year they were 35 (to 1400,
+  Renaissance to 1600, Baroque to 1750, Classical to 1820, Romantic to 1900, then the 20th
+  century), else what its words say (chant, Greek or Chinese music, folk songs and hymns, scales
+  and exercises), else *Other*. A book's period is its sounds' (a named composer weighs 3, other
+  words 1). The Music ZIM: 55 composers; Beethoven 236 sounds in 20 books, Wagner 312.
 - **Leaving VR**: an "Exit VR" button in the kiosk header (only while presenting), or holding
   B/Y for 1 s while browsing (a short press still means "back" when a book is out): a head-locked
   ring below the line of sight fills up (shown after 0.15 s, so taps do not flash it); releasing
@@ -1559,20 +1653,33 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   reach, and a reload ends the session), and the way out, "← Hallway" (below); at its foot,
   small and right-aligned, "Updated <date, time>" from `GET /api/version`, fetched once at load,
   so it tells which version the page is running. Tabs: *Shelves & settings*, *Rooms* (when there
-  is more than one library or the current one is browsed by rooms), *Search* and *Kiwix* (§2.6,
-  Kiwix's library). The page opens on *Kiwix*: more to read is what a new visitor most likely
+  is more than one library, the current one is browsed by rooms, or books play), *♪ Listen* (when
+  books play), *Search* and *Kiwix* (§2.6, Kiwix's library; with all five, the first is
+  *Shelves*). The page opens on *Kiwix*: more to read is what a new visitor most likely
   wants (a tab chosen before Kiwix's library is ready, or restored with a scene, stays):
   - *Shelves & settings*: library summary, sort toggle Title/Author/Popularity (rebuilds shelves),
     A–Z letter grid over the shelved books (teleports to the first book with that letter via
     `shelves.locate` and highlights it for 4 s), "Surprise me" (random book), "Recently read"
     list (opens directly into read), settings toggles (sound, smooth move).
-  - *Rooms*: one button per library (with its book count, its indexing progress or "waiting to index"), and for a
+  - *Rooms*: the places that shelve several libraries (the demo set, *Books that play*: §5.6
+    `rooms.js` `PLAYING_PLACE`, every library's books that play, the most sounds first, or
+    *By period*: a section per period in time order with its sign, a timeline round the room,
+    `settings.playingOrder`), one button per library (with its book count, its indexing progress or "waiting to index"), and for a
     library browsed by rooms the current room ("Now: Poetry, titles starting with A · 39 works")
     with a "✕ Clear filters" button, genre buttons and a title-letter grid. Genre and letter are
     independent toggles: tapping one sets or swaps that filter, tapping the active one removes
     it, and the other filter is kept. Counts show what the room would hold with that choice
     (a genre's count respects the current letter and vice versa); choices that would give an
     empty room are disabled.
+  - *♪ Listen* (`ui/listen-tab.js`): what plays (its picture, name, book, kind, length, "3 of
+    127"; ⏮ ▶/❚❚ ⏭ ■ and ↻ Repeat), then *Books* (the books that play, the most sounds first; a
+    book's sounds under their headings, *▶ Play all*, *+ Add to queue*, *Find the book*),
+    *Composers* (by birth: a timeline; a composer's sounds across books), *Periods* (in time
+    order; a period's sounds under their composers) and *Queue* (tap one to play it, *✕ Clear*).
+    A sound tapped there plays its list from it on the gramophone. The lists come from the
+    libraries' sound indexes (`api.getSounds`, kept once ready; while one is built the tab says
+    how far). The kiosk is drawn again when what plays changes, not every second (a 1000 px
+    canvas each second would be a texture upload each second).
   - *Search* (search in VR): the query field, an on-screen keyboard (digits, QWERTY, ' - .
     ,; Space, ⌫, Clear) and the results 250 ms after the last key. On a desktop the field also
     takes the physical keyboard while it has focus (a caret shows): from opening the tab, clicking

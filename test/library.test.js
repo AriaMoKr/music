@@ -339,7 +339,7 @@ describe('ArchiveLibrary: sounds a book links (SPEC §3.5 media)', () => {
   before(async () => {
     file = path.join(tmp, 'songs.zim');
     writeSoundsZim(file);
-    lib = await ArchiveLibrary.open(file, { log: quietLog });
+    lib = await ArchiveLibrary.open(file, { log: quietLog, cacheDir: path.join(tmp, 'songs-cache') });
   });
   after(async () => {
     await lib?.close();
@@ -368,6 +368,49 @@ describe('ArchiveLibrary: sounds a book links (SPEC §3.5 media)', () => {
     assert.equal(await lib.resolveLink('7', 'C/music/gone.mid'), null, 'not in the archive');
     assert.equal(await lib.resolveLink('7', 'C/music/page.mp3'), null, 'a page, whatever its name');
     assert.equal(await lib.resolveLink('999', 'C/music/tune.mid'), null, 'no such book');
+  });
+
+  it('lists the book\'s sounds in its meta, each with the sound it names, the missing ones left out (§3.5 sound lists)', async () => {
+    const { meta } = await lib.content('7');
+    assert.deepEqual(meta.sounds.map((s) => [s.c, s.b, s.i ?? 0, s.t, s.k, s.media.path]), [
+      [0, 1, 0, 'tune', 'midi', 'C/7_tune.mid'],
+      [0, 1, 1, 'air', 'audio', 'C/music/air.mp3'],
+    ], 'after the title; gone.mid is not in the archive, page.mp3 is a page');
+    assert.equal(meta.sounds[0].media.src, '/zim/songs/C/7_tune.mid');
+    assert.equal(meta.sounds[0].x, 'Hear the and the .', 'the rest of its paragraph');
+  });
+
+  it('builds the sound index in the background: the books that play, each one\'s count, kept in the store (§4)', async () => {
+    let idx;
+    for (let i = 0; i < 200 && !(idx = await lib.soundIndex()).ready; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(idx.ready, true);
+    assert.deepEqual(idx.books.map((b) => [b.id, b.sounds.length]), [['7', 2]]);
+    assert.deepEqual(idx.books[0].sounds, (await lib.content('7')).meta.sounds, 'the meta\'s sounds');
+    assert.deepEqual((await lib.info()).sounds, { books: 1, count: 2 });
+    assert.equal((await lib.book('7')).sounds, 2, 'the book says how many it has');
+    assert.equal((await lib.books()).find((b) => b.id === '7').sounds, 2);
+    // Kept: opened again, the index is found, not built (no book is converted for it).
+    const again = await ArchiveLibrary.open(file, { log: quietLog, cacheDir: path.join(tmp, 'songs-cache') });
+    try {
+      let found;
+      for (let i = 0; i < 200 && !(found = await again.soundIndex()).ready; i++) await new Promise((r) => setTimeout(r, 10));
+      assert.deepEqual(found.books, idx.books);
+      assert.equal(again.conversions, 0, 'read from the store');
+    } finally {
+      await again.close();
+    }
+  });
+
+  it('has no sound index where no file is a sound', async () => {
+    const plain = path.join(tmp, 'plain-gutenberg.zim');
+    writeGutenbergZim(plain);
+    const other = await ArchiveLibrary.open(plain, { log: quietLog, cacheDir: path.join(tmp, 'plain-cache') });
+    try {
+      assert.equal(await other.soundIndex(), null);
+      assert.equal((await other.info()).sounds, undefined);
+    } finally {
+      await other.close();
+    }
   });
 
   it('knows where an uncompressed entry lies in the file (contentRange), for reading it from a copy elsewhere', async () => {

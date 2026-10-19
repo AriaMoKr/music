@@ -241,13 +241,27 @@ describe('GitHub Pages build: sounds (--sources)', () => {
     assert.equal(air.media.src, undefined, 'not on the site');
     assert.ok(!fs.existsSync(path.join(site, 'zim', 'songs_2026-01', 'C', 'music', 'air.mp3')));
     assert.deepEqual([stats.sounds, stats.soundBytes, stats.soundsRemote, stats.soundsLeft], [1, TUNE.length, 1, 0]);
+    // The book's sound list and the library's sound index, as the site has the sounds.
+    const lib = path.join(site, 'api', 'library', 'songs_2026-01');
+    const meta = JSON.parse(fs.readFileSync(path.join(lib, 'books', '7', 'index.json'), 'utf8'));
+    assert.deepEqual(meta.sounds.map((s) => [s.t, s.media]), [['tune', tune.media], ['air', air.media]]);
+    const index = JSON.parse(fs.readFileSync(path.join(lib, 'sounds.json'), 'utf8'));
+    assert.deepEqual(index, { library: 'songs_2026-01', ready: true, books: [{ id: '7', sounds: meta.sounds }] });
+    const { books } = JSON.parse(fs.readFileSync(path.join(lib, 'books.json'), 'utf8'));
+    assert.equal(books.find((b) => b.id === '7').sounds, 2);
+    const catalog = JSON.parse(fs.readFileSync(path.join(site, 'api', 'libraries'), 'utf8'));
+    assert.deepEqual(catalog.libraries[0].sounds, { books: 1, count: 2 });
   });
 
   it('leaves out a sound it has no way to: an MP3 of a ZIM whose address is not given', async () => {
-    const { stats, links, text } = await build(new Map());
+    const { site, stats, links, text } = await build(new Map());
     assert.deepEqual(links.map(([t]) => t), ['tune']);
     assert.match(text, /the air\./);
     assert.equal(stats.soundsLeft, 1);
+    const lib = path.join(site, 'api', 'library', 'songs_2026-01');
+    const meta = JSON.parse(fs.readFileSync(path.join(lib, 'books', '7', 'index.json'), 'utf8'));
+    assert.deepEqual(meta.sounds.map((s) => s.t), ['tune'], 'its list and count without it');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(lib, 'books.json'), 'utf8')).books.find((b) => b.id === '7').sounds, 1);
   });
 });
 
