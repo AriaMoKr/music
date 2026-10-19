@@ -125,6 +125,9 @@ export class Interaction {
     this._exitHold = null; // { name, t } while B/Y is held to leave VR
     // Where links were followed from, latest last (back()): { libId, id, at, page, fontScale, side }.
     this._trail = [];
+    this._trailBase = 0; // places dropped from the trail's start (it keeps 100): links deep at its first
+    /** Set by main.js: the browser's Back along the trail (back-history.js). */
+    this.backHistory = null;
     this._following = false; // a link being looked up (resolveLink)
     this._linkMarks = null; // the bands over the link under a pointer (_markLink)
 
@@ -1308,7 +1311,12 @@ export class Interaction {
   /** Returns the book to its shelf (keepTrail: a link leads to another book: back() returns). */
   async putBack({ keepTrail = false } = {}) {
     if (this.state !== 'inspect' && this.state !== 'read') return;
-    if (!keepTrail) this._trail = [];
+    if (!keepTrail) {
+      // The book closed: the browser's Back no longer goes along its links (back-history.js).
+      if (this._trail.length) this.backHistory?.cleared();
+      this._trail = [];
+      this._trailBase = 0;
+    }
     this._showBack();
     this._markLink(null);
     const book = this.book;
@@ -1922,20 +1930,54 @@ export class Interaction {
       audio.click();
       const from = this._here();
       this._trail.push(from);
-      if (this._trail.length > 100) this._trail.shift();
-      if (!(await this._goTo(dest)) && this._trail.at(-1) === from) this._trail.pop();
+      if (this._trail.length > 100) {
+        this._trail.shift();
+        this._trailBase++;
+      }
+      const shown = await this._goTo(dest);
+      if (!shown && this._trail.at(-1) === from) this._trail.pop();
+      // The browser's Back comes back here too (back-history.js).
+      else if (shown) this.backHistory?.pushed(this._trailBase + this._trail.length);
     } finally {
       this._following = false;
       this._showBack();
     }
   }
 
-  /** Back along the links followed (the toolbar's Back, B/Y, Backspace). */
+  /**
+   * Back along the links followed (the toolbar's Back, B/Y, Backspace): through the browser's
+   * history when the link has an entry there (its popstate comes back as backTo), else at once.
+   */
   async goBack() {
     if (this.state !== 'read' || this._turnBusy || this._following || !this._trail.length) return;
+    if (this.backHistory?.back()) return;
     this._following = true;
     try {
       await this._goTo(this._trail.pop());
+    } finally {
+      this._following = false;
+      this._showBack();
+    }
+  }
+
+  /**
+   * Back to where the trail was `depth` links deep (the browser's Back, back-history.js): one link
+   * back, or several at once. Waits for a link or a page turn in progress.
+   * @returns {Promise<boolean>} false when the trail has no such place (the book closed meanwhile)
+   */
+  async backTo(depth) {
+    const i = depth - this._trailBase;
+    if (this.state !== 'read' || i < 0 || i >= this._trail.length) return false;
+    if (this._following || this._turnBusy) {
+      await new Promise((r) => setTimeout(r, 120));
+      return this.backTo(depth);
+    }
+    this._following = true;
+    try {
+      const dest = this._trail[i];
+      this._trail.length = i;
+      await this._goTo(dest);
+      return true;
     } finally {
       this._following = false;
       this._showBack();

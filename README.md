@@ -159,7 +159,7 @@ Then press **Enter VR**.
 | One page or two | **P**, or **1 page** / **2 pages** | **1 page** / **2 pages** (one page while the phone is upright) | toolbar | toolbar |
 | Book distance / size | mouse wheel | pinch | triggers | right stick up/down · left stick up/down · grip to move the book |
 | Follow a link | click it | tap it | **A** on it | trigger on it |
-| Back (along links, then close) | Backspace, or **↩ Back** | **↩ Back** | **B** | **B** or **Y** |
+| Back (along links, then close) | Backspace, **↩ Back**, or the browser's Back | **↩ Back**, or the back gesture | **B** | **B** or **Y** |
 | Close / put back | Esc | **✕** / **Put back** | **B** | **B** or **Y** |
 | Book out of sight | **F** | **Bring the book in front of me** (in **?**) | press the right stick | press a thumbstick |
 | Back to the start | Home, or **Reset view** (in **?**) | **Reset view** (in **?**) | | |

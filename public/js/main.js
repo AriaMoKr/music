@@ -17,6 +17,7 @@ import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
 import { doorOf, wayOut } from './hallway.js';
 import { placeFromSearch, placeHref } from './place-url.js';
+import { BackHistory } from './back-history.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
@@ -189,6 +190,11 @@ async function start() {
   // Back from there with the browser's Back, this page restored from its cache as it was left (dark,
   // in the doorway): in front of the door again.
   addEventListener('pageshow', (e) => { if (e.persisted) interaction.cameBack(); });
+  // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
+  // followed in a book, as the toolbar's ↩ Back (back-history.js).
+  const backHistory = new BackHistory({ history, load: performance.timeOrigin, onBack: (depth) => interaction.backTo(depth) });
+  interaction.backHistory = backHistory;
+  addEventListener('popstate', (e) => backHistory.popstate(e.state));
   // The address names the place and room shown (place-url.js), replaced as they change (no history
   // entry per room), so it can be bookmarked, shared or reloaded.
   const showPlace = (place, room) => {

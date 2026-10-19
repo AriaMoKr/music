@@ -1508,7 +1508,15 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   notice. Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
   the font size), kept while links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
-  to the same spread while the font size is the same.
+  to the same spread while the font size is the same. So does the browser's Back (its button, a
+  phone's back gesture, a mouse's back button, Quest Browser's: `back-history.js`): each link
+  followed adds a history entry at the same address (`pushState`, its state `{ vrlbryTrail: <links
+  deep>, vrlbryLoad: performance.timeOrigin }` beside what was there), its popstate goes back to
+  that depth (`interaction.backTo`, after a link or turn in progress; several at once when the
+  browser goes back several), the toolbar's Back goes through the same entries (`history.back()`),
+  and closing the book takes them out (`history.go(-depth)`), so Back then leaves as before.
+  Forward does not follow the links again; entries an earlier load of the page left (a reload) are
+  passed over.
 - **Leaving VR**: an "Exit VR" button in the kiosk header (only while presenting), or holding
   B/Y for 1 s while browsing (a short press still means "back" when a book is out): a head-locked
   ring below the line of sight fills up (shown after 0.15 s, so taps do not flash it); releasing
