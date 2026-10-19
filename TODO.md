@@ -307,6 +307,23 @@
   - leave them off the shelves, or mark their spines, so that nobody takes one out for nothing;
   - show the PDF: pdf.js drawing each page onto the book's pages (a large library, and PDF pages
     do not reflow to the book's page size).
+- **Possible: audio in Gutenberg books** (counted 2026-10-18). Of the local ZIMs only
+  Gutenberg's has audio or video: `gutenberg_en_all_2023-08` holds 6,586 files (about 1 GB) in 402
+  books, nearly all MIDI (4,465, 6.4 MB) and MP3 (2,069, 942 MB), plus a few M4A, Ogg, WAV, AVI
+  and MPEG. Wikipedia `top1m_maxi` and Wikisource declare no audio or video type.
+  - *How the books use them:* links in the text (`<a href="music/music011.mid">`), not `<audio>`
+    (which `html.js` drops anyway). The converter keeps them as links, and since a Gutenberg link
+    resolves only within the book (`resolveLink`), tapping one says "Not in this library", though
+    the file has it.
+  - *Where they are:* the class ZIM `gutenberg_en_lcc-m_2026-03` (Music, 3.99 GB) holds about
+    70 % of the files and 79 % of their bytes (103 books: 2,932 MIDI, 1,750 MP3, 744 MB;
+    *Principles of Orchestration*, *The Complete Opera Book*). The next are `lcc-g` (479 MIDI),
+    `lcc-e` (251) and `lcc-pz` (203 MIDI, 88 MP3), mostly folk and traditional songs. The tests'
+    reference ZIM `lcc-pe` has 14 MP3s in one book (*The Haliburton Primer*), and `lcc-pm`
+    (0.05 GB) 8 MIDI files. Kiwix's current class ZIMs carry the files themselves.
+  - *Ideas:* play MP3 (and M4A, Ogg, WAV) through the browser's `<audio>` or WebAudio from the
+    entry's bytes (the server already answers `Range` requests on `/zim/`); MIDI needs a
+    synthesizer (no browser plays it), so at most a small soundfont player, or nothing.
 - **Possible: more in "Copy debug info"** (`debug-info.js`; it has browser, GPU, version, state,
   place, viewpoint, the open book and page, the dialogs and the last 20 errors; pasting it into
   the help dialog, or `__vrlbry.reproduce(report)`, restores that scene, see `scene.js`).
