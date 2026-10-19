@@ -1,7 +1,8 @@
 // The catalogue stand's Listen tab (SPEC §5.6 "Sounds"): what the gramophone plays. What plays
-// now (its picture, book and buttons), then the books that play, a book's sounds, or the queue.
-// Tapping a sound plays its book from there on, on the gramophone, which goes on playing while
-// the visitor walks and reads. Filled by interaction.js's _fillKiosk (`ix`: the Interaction).
+// now (its picture, book and buttons), then the books that play, a book's sounds, or the queue,
+// all of them or only MIDI songs or only recordings (settings.listenKind). Tapping a sound plays
+// its book from there on, on the gramophone, which goes on playing while the visitor walks and
+// reads. Filled by interaction.js's _fillKiosk (`ix`: the Interaction).
 
 import { UI } from './panel.js';
 import { soundRows, soundTitle } from '../media/queue.js';
@@ -11,11 +12,68 @@ import { clock } from '../media/player.js';
 /** The tab's views, beside each other under what plays (a list, and what one of it holds). */
 const VIEWS = [['books', 'Books', 'book'], ['composers', 'Composers', 'composer'], ['periods', 'Periods', 'period'], ['queue', 'Queue']];
 
+/** The kinds of sound the tab shows (settings.listenKind): all, MIDI songs, recordings (MP3s). */
+export const LISTEN_KINDS = [['all', 'All'], ['midi', 'MIDI'], ['audio', 'MP3']];
+const KIND_WORDS = { all: 'sounds', midi: 'MIDI songs', audio: 'recordings' };
+
+/** Whether a sound (a sound list entry) is of a kind: 'all', 'midi', or 'audio' (a recording). */
+export const isOfKind = (sound, kind) => kind === 'all' || !kind || (kind === 'midi' ? sound.k === 'midi' : sound.k !== 'midi');
+
 /** Every book that plays, of every library: the most sounds first. */
 export function booksThatPlay(libraries, booksByLib) {
   const out = [];
   for (const l of libraries) if (playsSounds(l)) out.push(...playingBooks(booksByLib[l.id] || []));
   return out.sort((a, b) => b.sounds - a.sounds);
+}
+
+/**
+ * The books that play sounds of a kind, with how many: [{ book, count }], the most first. All
+ * kinds from the books' own counts; one kind from the sound catalogue (Interaction.soundCatalog),
+ * or null while it is read.
+ */
+export function booksOfKind(libraries, booksByLib, catalog, kind) {
+  const books = booksThatPlay(libraries, booksByLib);
+  if (kind === 'all' || !kind) return books.map((book) => ({ book, count: book.sounds }));
+  if (!catalog) return null;
+  const counts = new Map();
+  for (const it of catalog.items) {
+    if (!isOfKind(it.sound, kind)) continue;
+    const k = `${it.libId}\n${it.bookId}`;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return books.map((book) => ({ book, count: counts.get(`${book.libId}\n${book.id}`) ?? 0 }))
+    .filter((x) => x.count).sort((a, b) => b.count - a.count);
+}
+
+const kindCatalogs = new WeakMap(); // catalog -> Map(kind -> the catalog of that kind)
+
+/**
+ * The sound catalogue (media/composers.js attributeAll's) of one kind: its items of that kind, and
+ * the composers and periods that have any, counted again. Kept per catalogue.
+ */
+export function catalogOfKind(catalog, kind) {
+  if (kind === 'all' || !kind) return catalog;
+  if (!kindCatalogs.has(catalog)) kindCatalogs.set(catalog, new Map());
+  const kept = kindCatalogs.get(catalog);
+  if (kept.has(kind)) return kept.get(kind);
+  const items = catalog.items.filter((it) => isOfKind(it.sound, kind));
+  const counted = new Map();
+  for (const it of items) {
+    if (!it.composer) continue;
+    if (!counted.has(it.composer.name)) counted.set(it.composer.name, { count: 0, books: new Set() });
+    const c = counted.get(it.composer.name);
+    c.count++;
+    c.books.add(`${it.libId}\n${it.bookId}`);
+  }
+  const periods = new Map();
+  for (const it of items) periods.set(it.period, (periods.get(it.period) ?? 0) + 1);
+  const out = {
+    items,
+    composers: catalog.composers.filter((c) => counted.has(c.name)).map((c) => ({ ...c, ...counted.get(c.name) })),
+    periods: catalog.periods.map((pe) => ({ ...pe, count: periods.get(pe.id) ?? 0 })).filter((pe) => pe.count),
+  };
+  kept.set(kind, out);
+  return out;
 }
 
 /**
@@ -27,7 +85,7 @@ export function fillListenTab(ix, p, y0, pad) {
   const L = ix._listen;
   let y = y0;
   y = nowPlaying(ix, p, y, pad);
-  const tw = 210;
+  const tw = 160;
   // What each detail view shows, chosen in its list.
   const chosen = { book: 'book', composer: 'composer', period: 'period' };
   VIEWS.forEach(([id, label, detail], i) => {
@@ -47,6 +105,18 @@ export function fillListenTab(ix, p, y0, pad) {
       },
     });
   });
+  // Which sounds: all, MIDI songs only, recordings only (not the queue: it is what plays).
+  if (L.view !== 'queue') {
+    const kind = ix.settings.listenKind ?? 'all';
+    const x0 = pad + VIEWS.length * (tw + 12) + 4;
+    const kw = (p.w - pad - x0 - 2 * 6) / LISTEN_KINDS.length;
+    LISTEN_KINDS.forEach(([id, label], i) => {
+      p.add({
+        id: `lst-kind-${id}`, type: 'button', x: x0 + i * (kw + 6), y, w: kw, h: 50, label, size: 19, active: kind === id,
+        onClick: () => ix.setListenKind(id),
+      });
+    });
+  }
   y += 64;
   const bottom = p.h - 56;
   if (L.view === 'queue') queueView(ix, p, y, pad, bottom);
@@ -62,11 +132,13 @@ export function fillListenTab(ix, p, y0, pad) {
 function attributedView(ix, p, y, pad, bottom) {
   const W = p.w;
   const L = ix._listen;
-  const cat = ix.soundCatalog();
-  if (!cat) {
+  const kind = ix.settings.listenKind ?? 'all';
+  const all = ix.soundCatalog();
+  if (!all) {
     p.add({ type: 'text', x: pad, y: y + 10, w: W - 2 * pad, h: 40, size: 24, color: UI.muted, text: ix._listenNote ?? 'Reading the sounds of every book…' });
     return;
   }
+  const cat = catalogOfKind(all, kind);
   const back = (label, view, key) => {
     p.add({
       id: 'lst-back', type: 'button', x: pad, y, w: 190, h: 50, label, size: 22,
@@ -81,7 +153,7 @@ function attributedView(ix, p, y, pad, bottom) {
     L.view = 'composers';
     p.add({
       type: 'text', x: pad, y: y + 4, w: W - 2 * pad, h: 30, size: 21, color: UI.muted, maxLines: 1,
-      text: `${cat.composers.length} composers named near their sounds, by birth (the names are guessed from the text around each sound)`,
+      text: `${cat.composers.length} composers named near their ${KIND_WORDS[kind]}, by birth (the names are guessed from the text around each sound)`,
     });
     p.add({
       id: 'lst-composers', type: 'list', x: pad, y: y + 42, w: W - 2 * pad, h: bottom - y - 42, rowH: 72, size: 25, serif: true,
@@ -101,7 +173,7 @@ function attributedView(ix, p, y, pad, bottom) {
   }
   if (L.view === 'periods' || (L.view === 'period' && !L.period)) {
     L.view = 'periods';
-    p.add({ type: 'text', x: pad, y: y + 4, w: W - 2 * pad, h: 30, size: 21, color: UI.muted, maxLines: 1, text: 'The sounds by period, from their composers (or what their words say)' });
+    p.add({ type: 'text', x: pad, y: y + 4, w: W - 2 * pad, h: 30, size: 21, color: UI.muted, maxLines: 1, text: `The ${KIND_WORDS[kind]} by period, from their composers (or what their words say)` });
     p.add({
       id: 'lst-periods', type: 'list', x: pad, y: y + 42, w: W - 2 * pad, h: bottom - y - 42, rowH: 72, size: 25, serif: true,
       items: cat.periods.map((pe) => ({
@@ -118,6 +190,12 @@ function attributedView(ix, p, y, pad, bottom) {
   // One composer's sounds, or one period's (under their composers' names).
   const composer = L.view === 'composer' ? cat.composers.find((c) => c.name === L.composer) : null;
   const period = L.view === 'period' ? cat.periods.find((pe) => pe.id === L.period) : null;
+  if (!composer && !period) { // none of this kind: back to the list
+    L.view = L.view === 'composer' ? 'composers' : 'periods';
+    L.composer = L.period = null;
+    attributedView(ix, p, y, pad, bottom);
+    return;
+  }
   const items = cat.items.filter((it) => (composer ? it.composer?.name === composer.name : it.period === period?.id));
   if (period) {
     // A period's sounds by composer, in time order, the unnamed last.
@@ -141,7 +219,7 @@ function attributedView(ix, p, y, pad, bottom) {
       ix._fillKiosk();
     },
   });
-  p.add({ type: 'text', x: pad + 510, y: y + 14, w: W - 2 * pad - 510, h: 30, size: 21, color: UI.muted, align: 'right', maxLines: 1, text: `${items.length} sounds` });
+  p.add({ type: 'text', x: pad + 510, y: y + 14, w: W - 2 * pad - 510, h: 30, size: 21, color: UI.muted, align: 'right', maxLines: 1, text: `${items.length} ${KIND_WORDS[kind]}` });
   y += 66;
   const titles = new Map();
   const titleOf = (it) => {
@@ -227,23 +305,28 @@ function nowPlaying(ix, p, y, pad) {
   return y + H + 16;
 }
 
-/** The books that play, the most sounds first. */
+/** The books that play (sounds of the kind chosen), the most first. */
 function booksView(ix, p, y, pad, bottom) {
   const W = p.w;
-  const books = booksThatPlay(ix.libraries, ix.booksByLib);
-  const sounds = books.reduce((n, b) => n + b.sounds, 0);
+  const kind = ix.settings.listenKind ?? 'all';
+  const books = booksOfKind(ix.libraries, ix.booksByLib, kind === 'all' ? null : ix.soundCatalog(), kind);
+  if (!books) {
+    p.add({ type: 'text', x: pad, y: y + 10, w: W - 2 * pad, h: 40, size: 24, color: UI.muted, text: ix._listenNote ?? 'Reading the sounds of every book…' });
+    return;
+  }
+  const sounds = books.reduce((n, b) => n + b.count, 0);
+  const none = kind === 'all' ? 'No book here plays yet (its library is still being searched for sounds).' : `No book here has ${KIND_WORDS[kind]}.`;
   p.add({
     type: 'text', x: pad, y: y + 4, w: W - 2 * pad, h: 30, size: 22, color: UI.muted, maxLines: 1,
-    text: books.length ? `${books.length.toLocaleString()} books that play, ${sounds.toLocaleString()} sounds: choose one`
-      : 'No book here plays yet (its library is still being searched for sounds).',
+    text: books.length ? `${books.length.toLocaleString()} books ${kind === 'all' ? 'that play' : 'with them'}, ${sounds.toLocaleString()} ${KIND_WORDS[kind]}: choose one` : none,
   });
   y += 42;
   const L = ix._listen;
   p.add({
     id: 'lst-books', type: 'list', x: pad, y, w: W - 2 * pad, h: bottom - y, rowH: 72, size: 25, serif: true,
     scroll: L.booksScroll ?? 0,
-    items: books.map((b) => ({
-      label: b.title, sub: b.author || '', right: `${b.sounds} ♪`,
+    items: books.map(({ book: b, count }) => ({
+      label: b.title, sub: b.author || '', right: `${count} ♪`,
       active: ix._playing?.bookId === b.id && ix._playing?.libId === b.libId,
       onClick: () => {
         L.booksScroll = p.get('lst-books')?.scroll ?? 0;
@@ -271,9 +354,19 @@ function bookView(ix, p, y, pad, bottom) {
   });
   p.add({ type: 'text', x: pad + 166, y: y + 8, w: W - 2 * pad - 166, h: 36, size: 26, weight: '600', serif: true, maxLines: 1, text: book?.title ?? '' });
   y += 62;
-  const sounds = ix.soundsOfBook(L.book.libId, L.book.id);
-  if (!sounds) {
+  const every = ix.soundsOfBook(L.book.libId, L.book.id);
+  if (!every) {
     p.add({ type: 'text', x: pad, y: y + 10, w: W - 2 * pad, h: 40, size: 24, color: UI.muted, text: ix._listenNote ?? 'Reading its sounds…' });
+    return;
+  }
+  const kind = ix.settings.listenKind ?? 'all';
+  const sounds = every.filter((s) => isOfKind(s, kind));
+  if (!sounds.length) {
+    const other = every.length - sounds.length;
+    p.add({
+      type: 'text', x: pad, y: y + 10, w: W - 2 * pad, h: 80, size: 24, color: UI.muted, maxLines: 2,
+      text: `This book has no ${KIND_WORDS[kind]} (it has ${other} ${KIND_WORDS[kind === 'midi' ? 'audio' : 'midi']}): All shows them.`,
+    });
     return;
   }
   const items = sounds.map((sound) => ({ libId: L.book.libId, bookId: L.book.id, sound }));

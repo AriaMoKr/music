@@ -16,7 +16,7 @@ import { load, save } from './util/storage.js';
 import { progressText } from './util/progress.js';
 import { isLocal } from './local/local.js';
 import { getSounds, imageSource, resolveLink, soundBytes, soundUrl } from './api.js';
-import { booksThatPlay, fillListenTab } from './ui/listen-tab.js';
+import { booksThatPlay, fillListenTab, isOfKind } from './ui/listen-tab.js';
 import { PERIODS, attributeAll, bookPeriod } from './media/composers.js';
 import { MusicStand, STAND_W, STAND_H } from './ui/music-stand.js';
 import { SOUND_PATH, SoundPlayer, clock, isMidi } from './media/player.js';
@@ -122,6 +122,7 @@ export const DEFAULT_SETTINGS = {
   sort: 'title', fontScale: 1, theme: 'paper', smoothMove: true, sound: true, readScale: 1, readDistance: READ.distance,
   pageView: 'auto', // one page or two at a time (reader/spreads.js singlePage): 'auto', 'single' or 'spread'
   updateNotices: true, // tell when the site has been updated (main.js; "Don't show again" turns it off)
+  listenKind: 'all', // the Listen tab's sounds (ui/listen-tab.js): 'all', 'midi' or 'audio' (recordings)
 };
 
 export class Interaction {
@@ -2347,11 +2348,28 @@ export class Interaction {
       this.notice('The gramophone', 'Its books are still being searched for sounds', 3);
       return;
     }
-    const book = books[Math.floor(Math.random() * books.length)];
-    const sounds = await this._soundsOfBookLoaded(book.libId, book.id);
+    // A book at random with sounds of the kind the Listen tab shows (its MIDI songs, say).
+    const kind = this.settings.listenKind ?? 'all';
+    let book = null;
+    let sounds = null;
+    for (let tries = 0; tries < 12 && !sounds?.length; tries++) {
+      book = books[Math.floor(Math.random() * books.length)];
+      sounds = (await this._soundsOfBookLoaded(book.libId, book.id))?.filter((s) => isOfKind(s, kind)) ?? null;
+    }
     if (!sounds?.length) return;
     this._listen = { ...this._listen, view: 'book', book: { libId: book.libId, id: book.id }, bookScroll: null };
     this.playSounds(sounds.map((sound) => ({ libId: book.libId, bookId: book.id, sound })), 0, 'gramophone');
+    this._fillKiosk();
+  }
+
+  /** The Listen tab's sounds: 'all', 'midi' (MIDI songs) or 'audio' (recordings); kept in the settings. */
+  setListenKind(kind) {
+    if (this.settings.listenKind === kind) return;
+    this.settings.listenKind = kind;
+    save('settings', this.settings);
+    this._listen.booksScroll = 0;
+    this._listen.bookScroll = null;
+    this._listen.composersScroll = 0;
     this._fillKiosk();
   }
 

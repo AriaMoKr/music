@@ -21,7 +21,8 @@ It understands three kinds of [Kiwix ZIM files](https://library.kiwix.org/) espe
   the pages as it goes); a music stand beside it shows a MIDI song's notes as a piano roll and
   lets you slow it down, loop a passage, change its key or mute a part. *Books that play* shelves
   them together, by period if you like, a gramophone in the room plays on while you walk and
-  read (choose what on the catalogue stand's **♪ Listen** tab: by book, composer or period), and
+  read (choose what on the catalogue stand's **♪ Listen** tab: by book, composer or period, all of
+the sounds or only the MIDI songs or only the MP3 recordings), and
   the scores hang on the wall: point at one to hear it.
 - **Wikisource** (mwoffliner): every multi-part work — novels, collections, histories; 17,693 in
   the English ZIM — becomes one book with all its chapters in order, its cover, author, year and
