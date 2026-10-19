@@ -1063,6 +1063,21 @@ export class ArchiveLibrary {
     });
     // Sizes (for the thickness on the shelf) in a pass of their own: read, or estimated.
     const sizes = await this._blobSizes(sizeEntries);
+    // An EPUB of no bytes is no EPUB (gutenberg_en_lcc-m_2026-03 has one, for a book without
+    // HTML). Seen where sizes are read, not estimated; for the others _epub says so when opened.
+    const emptyEpubs = recs.flatMap((r, i) => (r.epub && sizes[i] === 0 ? [i] : []));
+    if (emptyEpubs.length) {
+      const htmlSizes = await this._blobSizes(emptyEpubs.map((i) => recs[i].html));
+      emptyEpubs.forEach((i, k) => {
+        const rec = recs[i];
+        rec.epub = null;
+        rec.book.formats = { ...rec.book.formats, epub: false };
+        rec.book.readable = !!rec.html;
+        rec.book.epub = null;
+        sizes[i] = htmlSizes[k];
+      });
+      this._warn(`${this.file}: ${emptyEpubs.length} book(s) have an empty EPUB: ${emptyEpubs.map((i) => recs[i].book.id).join(', ')}`);
+    }
     for (let i = 0; i < recs.length; i++) recs[i].book.size = sizes[i];
     // Registered in rank order so iteration over the id map is deterministic.
     for (const rec of recs) this._byId.set(rec.book.id, rec);
@@ -1232,7 +1247,7 @@ export class ArchiveLibrary {
     if (!pending) {
       pending = (async () => {
         const content = await this.archive.getContent(rec.epub);
-        if (!content) throw new LibraryError(`EPUB of book ${key} has no content`);
+        if (!content?.data.length) throw new LibraryError(`EPUB of book ${key} has no content`);
         const epub = parseEpub(content.data);
         let bytes = content.data.length;
         for (const doc of epub.docs) bytes += doc.html.length * 2;

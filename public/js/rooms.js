@@ -32,14 +32,11 @@ export const ALL_PLACE = { id: '*', title: 'All libraries', kind: 'all' };
 /**
  * The demo set (see TODO: a small set for a version without a server): its libraries shelved
  * together, like ALL_PLACE. Libraries are matched by their id (the file name) without its date, so
- * a newer edition of a demo ZIM still belongs to it, but another flavour does not
- * (wikipedia_en_100_mini_2026-08 is not wikipedia_en_100_).
+ * a newer edition of a demo ZIM still belongs to it, but another class or flavour does not
+ * (gutenberg_en_lcc-ml_2026-03 is not gutenberg_en_lcc-m_).
  */
 export const DEMO_PLACE = { id: 'demo', title: 'Demo set', kind: 'demo' };
-export const DEMO_LIBRARIES = [
-  'gutenberg_en_lcc-p_', 'wikipedia_en_mathematics_mini_', 'wikipedia_en_physics_mini_', 'wikipedia_en_chemistry_mini_',
-  'wikipedia_en_100_', 'wikipedia_en_medicine_mini_', 'wikipedia_en_golf_maxi_',
-];
+export const DEMO_LIBRARIES = ['gutenberg_en_lcc-m_'];
 export const isDemoLibrary = (library) => {
   // Pre-rendered on the site, or the site's own ZIM files opened in the browser ('~' ids, `site`);
   // not a file the visitor opened, even with a demo ZIM's name.

@@ -10,8 +10,9 @@ import {
   ArchiveLibrary, Library, LibraryError, gutenbergBase, libraryIdFor, libraryTitle, parseIndexScript, splitTitle, zimUrl,
 } from '../server/library.js';
 import {
-  LONG_TITLE, png, writeGenericZim, writeGutenbergZim, writeOldGutenbergZim,
+  LONG_TITLE, bookHtml, js, png, writeGenericZim, writeGutenbergZim, writeOldGutenbergZim,
 } from './helpers/zim-fixtures.js';
+import { writeZim } from './helpers/zimwriter.js';
 import { ZimArchive } from '../public/js/core/zim/reader.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -278,6 +279,56 @@ describe('ArchiveLibrary: synthetic Gutenberg archive', () => {
     assert.deepEqual(zlib.gunzipSync(gz), chunks[0].json);
     assert.equal(await chunks[0].gzip(), gz, 'computed once');
     assert.deepEqual(JSON.parse(chunks[0].json), { index: 0, blocks: chunks[0].blocks });
+  });
+});
+
+describe('ArchiveLibrary: a Gutenberg EPUB of no bytes', () => {
+  // gutenberg_en_lcc-m_2026-03 has one, for an EPUB-only book (30156): no EPUB, not a broken one.
+  let file;
+  before(() => {
+    file = path.join(tmp, 'empty-epub.zim');
+    const rows = [['Has Html', 'Ann Author', '110', 1, 'M'], ['Empty Epub', 'Ann Author', '010', 2, 'M']];
+    writeZim(file, {
+      scheme: 'new',
+      entries: [
+        { ns: 'C', url: 'full_by_popularity.js', mime: 'text/javascript', content: js('json_data', rows) },
+        { ns: 'C', url: 'Has Html.1', mime: 'text/html', content: bookHtml('Has Html') },
+        { ns: 'C', url: 'Has Html.1.epub', mime: 'application/epub+zip', content: Buffer.alloc(0), compression: 'none' },
+        { ns: 'C', url: 'Empty Epub.2.epub', mime: 'application/epub+zip', content: Buffer.alloc(0), compression: 'none' },
+      ],
+    });
+  });
+
+  it('is no EPUB where sizes are read: the book is read from its HTML, or not at all', async () => {
+    const warn = collectLog();
+    const lib = await ArchiveLibrary.open(file, { log: quietLog, warn });
+    try {
+      const by = Object.fromEntries((await lib.books()).map((b) => [b.id, b]));
+      assert.equal(by['2'].readable, false);
+      assert.deepEqual(by['2'].formats, { html: false, epub: false, pdf: false });
+      assert.equal(by['2'].epub, null);
+      assert.equal(by['1'].readable, true);
+      assert.deepEqual(by['1'].formats, { html: true, epub: false, pdf: false });
+      assert.ok(by['1'].size > 0, 'its size is its HTML\'s');
+      assert.deepEqual(warn.lines, [
+        'empty-epub.zim: 2 book(s) have an empty EPUB: 1, 2',
+        'empty-epub.zim: 1 book(s) have neither HTML nor EPUB in the archive',
+      ]);
+      assert.ok((await lib.content('1')).chunks.length);
+      await assert.rejects(lib.content('2'), (err) => err instanceof LibraryError && err.status === 404);
+    } finally {
+      await lib.close();
+    }
+  });
+
+  it('has no content when opened, where sizes are estimated (a file opened in the browser)', async () => {
+    const lib = await ArchiveLibrary.open(file, { log: quietLog, estimateSizes: true });
+    try {
+      assert.equal((await lib.books()).find((b) => b.id === '2').readable, true, 'not known before it is opened');
+      await assert.rejects(lib.content('2'), (err) => err instanceof LibraryError && err.status === 404 && /EPUB of book 2 has no content/.test(err.message));
+    } finally {
+      await lib.close();
+    }
   });
 });
 

@@ -203,7 +203,7 @@ whole. It works on GitHub Pages (no server) and beside a server's own libraries.
   not opened."). Several files opened together go to the "Opened here" place (§5.6), one to its
   own room. Under the
   button, a line links an example to download
-  (`EXAMPLE_ZIM` in `local/local.js`: Gutenberg LCC-P, 37 MB, from tools/demo-set.txt, which a
+  (`EXAMPLE_ZIM` in `local/local.js`: Gutenberg LCC-M, 3.7 GB, from tools/demo-set.txt, which a
   test checks) and Kiwix's Gutenberg folder. In a headset, files are picked before entering VR;
   in VR the kiosk's footer says so ("Your own ZIM files: exit VR, then …"). Opened files last
   until the page is reloaded; a saved place naming a local library that is gone falls back as
@@ -1036,6 +1036,8 @@ dotfiles skipped), walked on every request since the files may change while the 
   "epub": "/zim/<libId>/C/The%20Elements%20of%20Style.37134.epub", "size": 123456 } ] }
 ```
 `rank` = 1-based popularity position. `readable` = has HTML or EPUB that exists in the archive.
+An EPUB of no bytes is no EPUB (`formats.epub` false, `epub` null) where sizes are read, not
+estimated; elsewhere opening that book answers 404 ("EPUB of book … has no content").
 `cover`/`epub` null when absent (verify existence with `findPath`). Ids are strings.
 `authorId`/`language`/`shelf` null when unknown. Wikisource books (§3.8) have `rank: null` and add
 `"genre": "Novels", "year": 1926, "parts": 44` (`year` may be null); the full list is returned
@@ -1572,11 +1574,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   together once there are two or more; opening several files at once goes there, and `'*'` is
   not offered when every library was opened here (a saved `'*'` opens this place). Likewise `DEMO_PLACE` (`settings.place =
   'demo'`, "Demo set") shelves the demo set's libraries together whenever at least one is present:
-  those whose id is an entry of `DEMO_LIBRARIES` (`gutenberg_en_lcc-p_`,
-  `wikipedia_en_mathematics_mini_`, `wikipedia_en_physics_mini_`, `wikipedia_en_chemistry_mini_`,
-  `wikipedia_en_100_`, `wikipedia_en_medicine_mini_`, `wikipedia_en_golf_maxi_`) followed by a
+  those whose id is an entry of `DEMO_LIBRARIES` (`gutenberg_en_lcc-m_`) followed by a
   date (`YYYY-MM`), so a newer
-  edition still counts but another flavour (`wikipedia_en_100_mini_…`) does not. Both are *group
+  edition still counts but another class or flavour (`gutenberg_en_lcc-ml_…`) does not. Both are *group
   places* (`groupPlaces`), listed first on the kiosk's Rooms tab. That tab lists all places in one
   scrolling list (`places`; ▲/▼, the mouse wheel over it), scrolled to the place shown and kept
   where it was scrolled while the place stays the same; a large library's filters follow it (the
