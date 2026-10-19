@@ -1,4 +1,4 @@
-# vrlbry
+# vrlbry - music
 
 A virtual library for your ZIM files. vrlbry finds the `.zim` files in a folder and shelves their
 books in a warm, candle-lit 3D reading room. Walk up to a shelf, pull a book out, look at its
