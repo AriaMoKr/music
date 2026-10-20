@@ -89,7 +89,7 @@ The deploy prints its address, `https://vrlbry-zim-proxy.<your subdomain>.worker
 repository variable `ZIM_PROXY` to it (Settings → Secrets and variables → Actions → Variables),
 and the next Pages build names it in the page. To try it before that, add
 `?zimproxy=<its address>` to the site's address. `node tools/zim-proxy/serve.mjs` runs it on
-this machine instead, for `http://localhost:8080/?zimproxy=http://localhost:8090/`.
+this machine instead, for `http://localhost:8080/?zimproxy=http://localhost:8094/`.
 
 How much it is used: `node tools/zim-proxy/stats.mjs` prints its requests per day (`--hours`:
 per hour, `--days <n>`: how far back, `--json`) from Cloudflare's GraphQL Analytics API. It needs
