@@ -57,14 +57,12 @@ Other ZIM files also work: their HTML articles become the books, up to 2,000 per
 
 | | |
 | --- | --- |
-| ![The whole library from above: rows of bookcases under a chandelier](docs/screenshots/library.jpg) | ![The Odyssey taken off the shelf, its cover beside the info panel](docs/screenshots/book.jpg) |
-| *Gutenberg · every book (EN): its 10,000 most-read books in rows, a room at a time* | *Take a book out: its cover, author and popularity, and Read* |
-| ![Alice's Adventures in Wonderland opened at its cover picture](docs/screenshots/alice-cover.jpg) | ![Chapter I of Alice beside the contents, whose entries are links](docs/screenshots/alice.jpg) |
-| *Open it and turn the pages: the book's own pictures* | *Links work: tap a chapter in the contents, a footnote, a Wikipedia reference* |
-| ![A Wikipedia article on tigers with photographs and a table](docs/screenshots/wikipedia.jpg) | ![Simple English Wikipedia as numbered encyclopedia volumes](docs/screenshots/volumes.jpg) |
-| *Wikipedia articles with their pictures, tables and links to other articles* | *A Wikipedia is a set of encyclopedia volumes, 1,000 articles each* |
-| ![The catalogue stand's Kiwix tab listing Gutenberg ZIM files](docs/screenshots/kiwix.jpg) | ![Close-up of Greek and Latin classics on the shelves](docs/screenshots/shelves.jpg) |
-| *Kiwix's library on the catalogue stand: open more books from the web, in VR too* | *Every spine shows its title and author* |
+| ![Books that play laid out by period: a sign over each period's bookcase, framed scores above, the gramophone by the wall](docs/screenshots/room.jpg) | ![How Music Developed open at a page of Listen links, its Sounds list beside it and the music stand playing the G scale](docs/screenshots/sounds.jpg) |
+| *Books that play, by period: from chant and the Middle Ages to the Romantics, then folk songs and scales* | *A book's Sounds list: Play all plays them in order and turns the pages, marking the one playing* |
+| ![The music stand showing Beethoven's Fifth as a piano roll, with its tempo, loop, key and parts](docs/screenshots/music-stand.jpg) | ![The gramophone by the door back to the Hallway](docs/screenshots/gramophone.jpg) |
+| *The music stand: a MIDI song as a piano roll; slow it down, loop a passage, change its key, mute a part* | *The gramophone plays on while you walk and read, and the lights dim* |
+| ![Framed scores on the wall above the bookcases of Gutenberg's books on music](docs/screenshots/score-wall.jpg) | ![The catalogue stand's Listen tab: Beethoven's Fifth on the gramophone, and the composers by birth](docs/screenshots/listen.jpg) |
+| *The wall of scores: point at one to hear it* | *The Listen tab: what the gramophone plays, by book, composer or period, all or only MIDI or MP3* |
 
 ## Run it
 
