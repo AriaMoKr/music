@@ -287,6 +287,17 @@
   `tools/door-views.mjs`, `views/views.json`), and the door shows vrlbry's (across the hall to the
   door opposite, as one would see it standing in that doorway); the painted view stays for when it
   cannot be read. To do there when the hall changes: run its tool again.
+- **The Hallway's door contract, the rest** (its README, "Going in"; reported 2026-10-19).
+  *Done (2026-10-19):* the way back from the Hallway's door says Hallway and shows its view
+  (`hallway.js`); the VR movement choice is the Hallway's `hallway.nav`, shared both ways
+  (`nav.js`, with smooth turning and left-stick teleporting); the shared session (`room`) is
+  joined and the others in the same room of the library are drawn (`together.js`, SPEC §5.6
+  "Together"), and the way out carries it on. Checked in the emulator and in two browser tabs
+  (join, avatars from the other tab's pose, rooms apart, Leave, leaving and coming back). Not
+  yet: in two headsets; starting a session here and an invite link (the Hallway's panel does
+  it); names and waves (the Hallway's); the arrival pose the door sends (`dx`, `yaw`, `pitch`:
+  arriving where the view through the door was taken), and taking the visit's parameters off
+  the address once read (`back` is kept, as the way out reads it on a reload).
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

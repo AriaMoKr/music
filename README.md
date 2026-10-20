@@ -176,7 +176,7 @@ Then press **Enter VR**.
 | | Desktop | Touch | Gamepad | VR |
 | --- | --- | --- | --- | --- |
 | Look | drag the mouse | drag one finger | right stick | turn your head |
-| Move | W A S D / arrows, Q E to turn, Shift to hurry | drag two fingers | left stick (click it to hurry) | right stick forward: teleport arc · flick right stick: snap turn · left stick: walk |
+| Move | W A S D / arrows, Q E to turn, Shift to hurry | drag two fingers | left stick (click it to hurry) | right stick forward: teleport arc · flick right stick: snap turn · left stick: walk (or teleport, and turning smoothly: the kiosk, or your choice in the Hallway) |
 | Take a book | click it | tap it | aim the crosshair, **A** | point and pull the trigger (or pinch) |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
@@ -236,6 +236,12 @@ pointing at it and pulling the trigger) takes you back there. So does the
 **← Hallway** link on the library card and on the catalogue stand. On a Meta Quest, walking
 through the door in VR keeps you in VR: Quest Browser hands the session to the next page when both are on one
 origin, as the Hallway and music are (`ariamokr.github.io`).
+
+In VR you move and turn as you chose in the Hallway (walking with the stick or teleporting,
+turning in steps or smoothly), and changing it on the catalogue stand changes it there too. Come in
+through the Hallway's door in a shared session and you stay in it: the others in the same room of
+the library are there with you, as heads, hands and names, the library card says who else is in
+the session, and the way back to the Hallway keeps you in it.
 
 To put music behind a door of your own hallway, or link to it from anywhere, name your page in
 the link and the way out leads back to it instead:

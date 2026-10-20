@@ -31,8 +31,10 @@
     "fflate": "^0.8.3",
     "fzstd": "^0.1.1",
     "htmlparser2": "^12.0.0",
+    "layersharedsession": "github:AriaMoKr/layersharedsession#c6420409f1e742a1cfaf30646106812f666bca2b",
     "selfsigned": "^5.5.0",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "trystero": "0.26.0"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",

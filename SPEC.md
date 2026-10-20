@@ -394,7 +394,7 @@ whole. It works on GitHub Pages (no server) and beside a server's own libraries.
   through it (§3.1 `via`) while it works and from `url` for good once it fails, with one
   warning. The library stays the file's: its catalogue `url`, the remembered addresses and the
   block cache's edition all name Kiwix's mirror, so switching the proxy on or off loses
-  nothing. `tools/zim-proxy/serve.mjs` runs it on this machine (port 8090) for trying. Deployed
+  nothing. `tools/zim-proxy/serve.mjs` runs it on this machine (port 8094) for trying. Deployed
   at `https://vrlbry-zim-proxy.vrlbry.workers.dev`. Measured from California through it (TODO,
   milestone 3 step 7): the top 1M opens in 0.9 s instead of 3.5-4.4 s and finds Albert Einstein
   in 4.4 s instead of 7.5 s.
@@ -1144,7 +1144,11 @@ max-age=86400`; honor `If-None-Match` (304) and single `Range: bytes=` requests 
 HTML entries are served as-is (debug aid; the client never navigates to them).
 
 **Static:** `/` → `public/index.html`; other paths → files under `public/`;
-`/vendor/three/*` → `node_modules/three/*`; `/vendor/iwer/*` → `node_modules/iwer/build/*`.
+`/vendor/three/*` → `node_modules/three/*`; `/vendor/iwer/*` → `node_modules/iwer/build/*`; the
+other packages of `server/vendor.js` (the local library's worker libraries, and the shared
+session's: `layersharedsession` → its `public/js`, `trystero-nostr`, `trystero-core`,
+`noble-secp256k1`), their bare imports made relative (`trystero`, `@trystero-p2p/core`,
+`@noble/secp256k1`), since the page names them by relative URL, not through the import map.
 Correct MIME types (`.js` → `text/javascript`, `.mjs`, `.css`, `.html`, `.json`, `.png`, `.jpg`,
 `.svg`, `.woff2`, `.wasm`, `.glb`, `.hdr`, `.ico`…). Reject path traversal (`..`) with 400/404.
 `Cache-Control: no-cache` for `public/` files (so edits show up), long cache for `/vendor/`.
@@ -1325,7 +1329,7 @@ page, the entry named by `HALLWAY_URL`'s `?from=`, a 2:1 picture and how to hang
 `pictureHeight`, `eye`, `horizon`, `aspect`, checked by `viewParams`; `Door.loadView`, `setPicture`),
 loaded after the room is built; until then, offline, or without one, a painted view down the
 Hallway (its lamps, its marble floor, this library's door glowing gold, dusk in the end window).
-A door to another place (`?back=`) shows that place's glow and name. 4 draw calls in
+A door to another place (`?back=` not on the Hallway) shows that place's glow and name. 4 draw calls in
 all. Pure helpers for Node: `doorPlace(room)`, `doorLocal` / `doorWorld` (its frame: origin at
 the sill's middle at the portal, +z into the room, +x to the right of someone facing it),
 `doorCrossed` (a head 0.06 m past its front, between the jambs), `doorCorridor` (`constrain`
@@ -1463,11 +1467,15 @@ export class Controls extends EventTarget {
   bookcase; this applies in every state, while books are pickable only when browsing), or the
   room (`world.raycastSolid` → `room.raycast`: the wall, the dome or ceiling, the floor, and the
   furniture as upright cylinders from its walking circles with heights).
-  Locomotion when enabled: **right stick forward → teleport arc** (release to teleport onto
-  `world.teleportTargets`, validated by `world.isWalkable`); while aiming, that controller's ray
-  and cursor are hidden and `pointer.teleporting` keeps it from hovering or selecting; right stick
-  left/right → snap turn (`PLAYER.snapTurn`), left stick → smooth move (optional setting, default
-  on) constrained by `world.constrain`. When locomotion is disabled, sticks only emit events.
+  Locomotion when enabled, as the visitor chose (`setNav`; nav.js: the Hallway's `hallway.nav`
+  = `{ move: 'smooth' | 'teleport', turn: 'snap' | 'smooth' }`): **right stick forward → teleport
+  arc** (release to teleport onto `world.teleportTargets`, validated by `world.isWalkable`; the
+  left stick aims one too when `move` is `'teleport'`, one arc at a time); while aiming, that
+  controller's ray and cursor are hidden and `pointer.teleporting` keeps it from hovering or
+  selecting; right stick left/right → snap turn (`PLAYER.snapTurn`), or with `turn: 'smooth'`
+  turning while held sideways (1.6 rad/s at full tilt, the Hallway's); left stick → smooth move
+  (`move: 'smooth'`, the default) constrained by `world.constrain`. When locomotion is disabled,
+  sticks only emit events.
 - **Desktop:** drag (any mouse button) to look, turning the way the mouse goes (drag right: look
   right; up: look up); a press that does not move more than a few pixels
   is a click = select at the mouse position. No pointer lock: it fights the DOM overlay and is
@@ -1660,7 +1668,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   - *Shelves & settings*: library summary, sort toggle Title/Author/Popularity (rebuilds shelves),
     A–Z letter grid over the shelved books (teleports to the first book with that letter via
     `shelves.locate` and highlights it for 4 s), "Surprise me" (random book), "Recently read"
-    list (opens directly into read), settings toggles (sound, smooth move).
+    list (opens directly into read), settings toggles (sound; "Stick walking" / "Teleport only"
+    and "Snap turning" / "Smooth turning": the Hallway's movement choice, nav.js, kept in its
+    `hallway.nav` so it is one choice across the sites on this origin; read at start, on Back
+    from the Hallway and when another tab changes it; before the Hallway has stored one,
+    `settings.smoothMove` decides `move`, and it follows the choice).
   - *Rooms*: the places that shelve several libraries (the demo set, *Books that play*: §5.6
     `rooms.js` `PLAYING_PLACE`, every library's books that play, the most sounds first, or
     *By period*: a section per period in time order with its sign, a timeline round the room,
@@ -1812,13 +1824,32 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   A place that has this library behind one of its doors names itself in the link that brings
   visitors here, and the way out leads there instead: `?back=<its address>&backname=<its name>`
   (URL-encoded; http(s) only, else the Hallway; the button shows the name, else the host, at most
-  24 characters). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
+  24 characters). The Hallway's own doors send no name: `?from=hallway` with a `back` on the
+  Hallway's address (`HALLWAY_URL`'s origin and path, any query: this site shares its origin) is
+  the Hallway, "← Hallway", its link kept as given (its `from`, which names the door view, and a
+  shared session's `room`). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
   on this page's origin (§5.7). The door back in the room (§5.3) leads there too: walking (or
   leaning) through it, clicking or tapping its opening, or pointing at it and pulling the trigger.
   The door and the kiosk's button go by `interaction.leave()`: the view fades to black (0.3 s in
   VR, 0.4 s else), then `onHallway` (main.js) goes; still there 12 s later, or brought back from
   the browser's cache by Back (`pageshow` with `persisted`), `cameBack()` puts the viewer 1.1 m in
   front of the door, facing the room, and fades back in.
+- **Together** (`together.js`, `together-space.js`): the Hallway's shared session (its README,
+  "Going in" and "Together"; AriaMoKr/layersharedsession at the Hallway's commit, peer to peer
+  over WebRTC with Trystero through public Nostr relays, the same app id). A valid `?room=` in the
+  address (`roomFromUrl`: the Hallway's door, or an invitation) joins it as page `vrlbry`; the
+  session's modules (~270 kB with Trystero) load only then (`import()`). Each visitor shares where
+  in the library they are (`spaceOf(place, room)`: place, genre, letter and page, which decide the
+  room's layout) as the shared value `vrlbry.space.<memberId>`, set by `showPlace` (main.js); the
+  others in the same room are drawn as in the Hallway (a head with a visor, a hand per tracked
+  controller, a ring on the floor, their name), placed every frame from their poses without
+  allocating. Joins, arrivals and departures are toasts (and `notice` in VR). The card's line
+  under its header and the kiosk's (*Shelves & settings*, above "Recently read") say who else is
+  in it ("With you: 1 here, 2 in another place") with a Leave, which leaves and takes `room` out
+  of the address. The way out carries `room` on (`withRoom`, the card's link and `onHallway`);
+  going out by `leave()` leaves the session first (`onLeaving`, so the others see it at once),
+  `cameBack()` and Back to a cached page join again (`onCameBack`, `pageshow`), and `pagehide`
+  leaves. Starting a session here, names and waves are the Hallway's (not here yet).
 - DOM overlay (non-VR): see `ui/overlay.js` — title with the same "Updated …" stamp, library
   cards (with indexing progress or "waiting to index"), a ⟳ rescan button, the way out, under the cards
   "Browse Kiwix's library…" first, on a line of its own (what a new visitor most likely wants),

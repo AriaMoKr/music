@@ -16,6 +16,10 @@ import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
 import { doorOf, wayOut } from './hallway.js';
+import { loadNav, NAV_KEY } from './nav.js';
+import { Together } from './together.js';
+import { sessionText, spaceOf } from './together-space.js';
+import { roomFromUrl, withRoom } from '../vendor/layersharedsession/room.js';
 import { placeFromSearch, placeHref } from './place-url.js';
 import { BackHistory } from './back-history.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
@@ -26,6 +30,14 @@ import { parseScene, restoreScene, saveScene, savedScene } from './scene.js';
 
 startErrorLog(); // first: the debug report lists the page's last errors
 const params = new URLSearchParams(location.search);
+/** localStorage itself (the Hallway's keys are not under storage.js's prefix), or null where it cannot be read. */
+const localStore = () => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
 // The way out: to the Hallway, or to the place that linked here naming itself (?back=, hallway.js).
 const way = wayOut(location.search);
 const overlay = new Overlay({ root: document.getElementById('overlay'), wayOut: way });
@@ -136,9 +148,8 @@ async function start() {
   const startPlace = settings.place; // what the first build shelved (savedPlace, or its fallback)
 
   const controls = new Controls({ renderer, camera, rig, scene, world, domElement: renderer.domElement });
-  controls.smoothMove = settings.smoothMove;
   controls.teleportTo(world.spawn.position, world.spawn.yaw);
-  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way });
+  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way, nav: loadNav(localStore(), settings) });
   if (catalog.static) {
     // A build without a server (GitHub Pages, tools/build-pages.mjs): nothing to rescan.
     interaction.setStatic(true);
@@ -186,10 +197,45 @@ async function start() {
   interaction.onReload = () => location.reload();
   // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there, on
   // this page's origin only (the Hallway takes a granted session, as this page does below).
-  interaction.onHallway = () => { location.href = way.url; };
+  // The shared session (together.js): joined when the address names a room (an invitation, or the
+  // Hallway's door), left for now while going out by the door, whose link carries the room on (the
+  // Hallway's README, "Going in": keep `room` on every link back).
+  const together = new Together({ scene, camera, renderer, hands: () => controls.xrInputs });
+  interaction.together = together;
+  const wayOutUrl = () => (together.room ? withRoom(way.url, together.room) : way.url);
+  const sessionNote = (text) => {
+    overlay.showToast(text, 'info', 4000);
+    if (renderer.xr.isPresenting) interaction.notice(text, '', 3);
+  };
+  together.onChange = () => {
+    overlay.setSession(sessionText({ room: together.room, active: together.active, company: together.active ? together.company() : {} }));
+    overlay.setWayOutHref(wayOutUrl());
+    interaction.sessionChanged();
+  };
+  together.onNotice = sessionNote;
+  const leaveSession = () => {
+    together.stop();
+    sessionNote('You left the shared session');
+  };
+  overlay.onLeaveSession(leaveSession);
+  interaction.onLeaveSession = leaveSession;
+  interaction.onLeaving = () => together.pause();
+  interaction.onCameBack = () => together.resume();
+  // Leaving another way (the card's link, the address bar, closing the tab): out of it too.
+  addEventListener('pagehide', () => together.pause());
+  interaction.onHallway = () => { location.href = wayOutUrl(); };
   // Back from there with the browser's Back, this page restored from its cache as it was left (dark,
   // in the doorway): in front of the door again.
-  addEventListener('pageshow', (e) => { if (e.persisted) interaction.cameBack(); });
+  // The Hallway's movement choice may have changed there meanwhile, or in another tab (nav.js).
+  addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    interaction.setNav(loadNav(localStore(), settings), { store: false });
+    interaction.cameBack();
+    together.resume();
+  });
+  addEventListener('storage', (e) => {
+    if (e.key === NAV_KEY) interaction.setNav(loadNav(localStore(), settings), { store: false });
+  });
   // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
   // followed in a book, as the toolbar's ↩ Back (back-history.js).
   const backHistory = new BackHistory({ history, load: performance.timeOrigin, onBack: (depth) => interaction.backTo(depth) });
@@ -198,6 +244,7 @@ async function start() {
   // The address names the place and room shown (place-url.js), replaced as they change (no history
   // entry per room), so it can be bookmarked, shared or reloaded.
   const showPlace = (place, room) => {
+    together.setSpace(spaceOf(place, room)); // where in the library, for the shared session
     const href = placeHref(location.href, place, room);
     if (href !== location.href) {
       try { history.replaceState(history.state, '', href); } catch { /* an address that cannot change (a sandbox) */ }
@@ -205,6 +252,8 @@ async function start() {
   };
   interaction.onShelved = showPlace;
   showPlace(settings.place, firstShelved.length === 1 ? firstShelved[0].room : null);
+  const invited = roomFromUrl(location.href);
+  if (invited) together.start(invited);
   // Scenes (scene.js): one saved in the browser (Save / Restore scene in the help dialog and on the
   // kiosk), or pasted into the help dialog (a saved scene or a debug report).
   const tell = (msg, kind = 'info') => {
@@ -737,6 +786,7 @@ async function start() {
     controls.update(dt);
     interaction.update(dt);
     world.update(dt, camera);
+    together.update(performance.now()); // the others in the session, and where this visitor is
   };
   renderer.setAnimationLoop((time) => {
     const start = perf.enabled ? performance.now() : 0;
@@ -756,7 +806,7 @@ async function start() {
   navigator.xr?.addEventListener?.('sessiongranted', takeGranted);
 
   window.__vrlbry = {
-    renderer, scene, camera, rig, world, controls, interaction, overlay, xrDevice, settings, enterVR,
+    renderer, scene, camera, rig, world, controls, interaction, overlay, xrDevice, settings, enterVR, together,
     /** When the site's files last changed as of this page load (GET /api/version), or null. */
     get version() { return loadedVersion; },
     /** Advances the app by n frames of dt seconds and renders (for automated tests). */

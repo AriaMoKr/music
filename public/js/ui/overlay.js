@@ -106,6 +106,7 @@ export class Overlay {
       </div>
       <section class="ov-card" aria-label="Library">
         <header><span class="ov-brand">vrlbry</span><span class="ov-version"></span><span class="ov-tools"><a class="ov-hallway" href="${esc(way.url)}" title="${esc(way.title)}">${esc(way.label)}</a><button class="ov-rescan" aria-label="Rescan the ZIM folder" title="Rescan the ZIM folder">⟳</button><button class="ov-collapse" aria-label="Collapse" title="Collapse">–</button></span></header>
+        <div class="ov-session" role="status" hidden><span class="ov-session-text"></span><button class="ov-session-leave" title="Leave the shared session">Leave</button></div>
         <div class="ov-libs"></div>
         <div class="ov-open">
           <button class="ov-kiwix-btn" hidden title="The ZIMs this library reads well, from library.kiwix.org">Browse Kiwix's library…</button>
@@ -633,6 +634,22 @@ export class Overlay {
    * under way, with kind 'busy' (a spinner) and progress(fraction) (a bar, from its first call).
    * @returns {{ update: (msg: string) => void, progress: (fraction: number) => void, close: () => void }}
    */
+  /** The shared session (together.js): its line under the card's header, or '' to hide it. */
+  setSession(text) {
+    this.$('.ov-session').hidden = !text;
+    this.$('.ov-session-text').textContent = text || '';
+  }
+
+  /** @param {() => void} fn the session line's Leave */
+  onLeaveSession(fn) {
+    this.$('.ov-session-leave').onclick = fn;
+  }
+
+  /** Where "← Hallway" leads now: the way out, carrying a shared session's room. */
+  setWayOutHref(url) {
+    this.$('.ov-hallway').href = url;
+  }
+
   showToast(msg, kind = 'info', ms = 3500) {
     if (kind === 'error') noteError('toast', msg); // in "Copy debug info"'s errors too
     const t = document.createElement('div');

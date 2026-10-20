@@ -71,6 +71,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ov-open-btn:hover { border-color: var(--accent); }
 .ov-open-hint { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .ov-reopen { margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+/* The shared session (together.js): who else is in it, and Leave. */
+.ov-session { margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--text); }
+.ov-session button { margin-left: 6px; padding: 1px 8px; font-size: 12px; }
 .ov-reopen-names { color: var(--text); }
 .ov-reopen button { margin-left: 6px; padding: 1px 8px; font-size: 12px; }
 .ov-open-hint a { color: var(--accent); }
