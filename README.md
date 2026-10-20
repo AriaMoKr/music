@@ -210,6 +210,12 @@ pointing at it and pulling the trigger) takes you back there, to vrlbry's door. 
 through the door in VR keeps you in VR: Quest Browser hands the session to the next page when both are on one
 origin, as the Hallway and vrlbry are (`ariamokr.github.io`).
 
+In VR you move and turn as you chose in the Hallway (walking with the stick or teleporting,
+turning in steps or smoothly), and changing it on the catalogue stand changes it there too. Come in
+through the Hallway's door in a shared session and you stay in it: the others in the same room of
+the library are there with you, as heads, hands and names, the library card says who else is in
+the session, and the way back to the Hallway keeps you in it.
+
 To put vrlbry behind a door of your own hallway, or link to it from anywhere, name your page in
 the link and the way out leads back to it instead:
 

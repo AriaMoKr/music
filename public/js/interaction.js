@@ -20,6 +20,7 @@ import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { wayOut as defaultWayOut } from './hallway.js';
 import { saveNav } from './nav.js';
+import { sessionText } from './together-space.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
@@ -120,6 +121,8 @@ export class Interaction {
     this.onHallway = null;
     /** Set by main.js: (place, room) after every rebuild of the shelves; the address names them (place-url.js). */
     this.onShelved = null;
+    /** Set by main.js: the shared session (together.js), shown on the kiosk while in one. */
+    this.together = null;
     this._leaving = false; // going out by the way out (leave)
     this._leaveTimer = 0;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
@@ -478,6 +481,12 @@ export class Interaction {
       id: 'scene-note', type: 'text', x: pad + 652, y: y + 4, w: W - 2 * pad - 652, h: 50, text: this._savedScene ?? 'No saved scene',
       size: 20, color: UI.muted, maxLines: 2,
     });
+    // The shared session (together.js), while in one: who else is in it, and a way out of it.
+    if (this.together?.room) {
+      y += 76;
+      p.add({ id: 'session-text', type: 'text', x: pad, y: y + 2, w: W - 2 * pad - 250, h: 54, text: this._sessionText(), size: 22, color: UI.text, maxLines: 2 });
+      p.add({ id: 'session-leave', type: 'button', x: W - pad - 236, y, w: 236, h: 56, label: 'Leave session', size: 24, onClick: () => this.onLeaveSession?.() });
+    }
     const recent = this._recentBooks().slice(0, 3);
     y += 76;
     p.add({ type: 'text', x: pad, y, w: W - 2 * pad, h: 34, text: recent.length ? 'Recently read' : 'Pick any book from the shelves to start reading.', size: 26, color: UI.muted });
@@ -2382,6 +2391,19 @@ export class Interaction {
     this.kiosk.set('sound', { label: this.settings.sound ? 'Sound on' : 'Sound off', active: this.settings.sound });
   }
 
+  /** The shared session changed (together.js): the kiosk's line about it. */
+  sessionChanged() {
+    if (this._kioskTab !== 'shelves' || this._resetForm) return;
+    const shown = !!this.kiosk.get('session-text');
+    if (shown !== !!this.together?.room) this._fillKiosk();
+    else if (shown) this.kiosk.set('session-text', { text: this._sessionText() });
+  }
+
+  _sessionText() {
+    const t = this.together;
+    return sessionText({ room: t.room, active: t.active, company: t.active ? t.company() : {} });
+  }
+
   /** Walking with the stick, or teleporting only (nav.js: the Hallway's `move`). */
   toggleSmooth() {
     this.setNav({ ...this.nav, move: this.nav.move === 'smooth' ? 'teleport' : 'smooth' });
@@ -2504,6 +2526,7 @@ export class Interaction {
     if (this._leaving || !this.onHallway || this.state !== 'browse') return;
     this._leaving = true;
     this.state = 'busy';
+    this.onLeaving?.(); // main.js: out of the shared session now, so the others see it at once
     await this._fadeTo(1, this.controls.presenting ? 0.3 : 0.4);
     this.onHallway();
     // Still here a while later (the navigation was stopped, or failed): back in the room.
@@ -2520,6 +2543,7 @@ export class Interaction {
     if (!this._leaving) return;
     clearTimeout(this._leaveTimer);
     this._leaving = false;
+    this.onCameBack?.(); // main.js: back in the shared session
     const spot = this.world.door?.inFront(1.1);
     if (spot) this.controls.teleportTo(spot.position, spot.yaw);
     this.state = 'browse';

@@ -1090,7 +1090,11 @@ max-age=86400`; honor `If-None-Match` (304) and single `Range: bytes=` requests 
 HTML entries are served as-is (debug aid; the client never navigates to them).
 
 **Static:** `/` → `public/index.html`; other paths → files under `public/`;
-`/vendor/three/*` → `node_modules/three/*`; `/vendor/iwer/*` → `node_modules/iwer/build/*`.
+`/vendor/three/*` → `node_modules/three/*`; `/vendor/iwer/*` → `node_modules/iwer/build/*`; the
+other packages of `server/vendor.js` (the local library's worker libraries, and the shared
+session's: `layersharedsession` → its `public/js`, `trystero-nostr`, `trystero-core`,
+`noble-secp256k1`), their bare imports made relative (`trystero`, `@trystero-p2p/core`,
+`@noble/secp256k1`), since the page names them by relative URL, not through the import map.
 Correct MIME types (`.js` → `text/javascript`, `.mjs`, `.css`, `.html`, `.json`, `.png`, `.jpg`,
 `.svg`, `.woff2`, `.wasm`, `.glb`, `.hdr`, `.ico`…). Reject path traversal (`..`) with 400/404.
 `Cache-Control: no-cache` for `public/` files (so edits show up), long cache for `/vendor/`.
@@ -1689,6 +1693,22 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   VR, 0.4 s else), then `onHallway` (main.js) goes; still there 12 s later, or brought back from
   the browser's cache by Back (`pageshow` with `persisted`), `cameBack()` puts the viewer 1.1 m in
   front of the door, facing the room, and fades back in.
+- **Together** (`together.js`, `together-space.js`): the Hallway's shared session (its README,
+  "Going in" and "Together"; AriaMoKr/layersharedsession at the Hallway's commit, peer to peer
+  over WebRTC with Trystero through public Nostr relays, the same app id). A valid `?room=` in the
+  address (`roomFromUrl`: the Hallway's door, or an invitation) joins it as page `vrlbry`; the
+  session's modules (~270 kB with Trystero) load only then (`import()`). Each visitor shares where
+  in the library they are (`spaceOf(place, room)`: place, genre, letter and page, which decide the
+  room's layout) as the shared value `vrlbry.space.<memberId>`, set by `showPlace` (main.js); the
+  others in the same room are drawn as in the Hallway (a head with a visor, a hand per tracked
+  controller, a ring on the floor, their name), placed every frame from their poses without
+  allocating. Joins, arrivals and departures are toasts (and `notice` in VR). The card's line
+  under its header and the kiosk's (*Shelves & settings*, above "Recently read") say who else is
+  in it ("With you: 1 here, 2 in another place") with a Leave, which leaves and takes `room` out
+  of the address. The way out carries `room` on (`withRoom`, the card's link and `onHallway`);
+  going out by `leave()` leaves the session first (`onLeaving`, so the others see it at once),
+  `cameBack()` and Back to a cached page join again (`onCameBack`, `pageshow`), and `pagehide`
+  leaves. Starting a session here, names and waves are the Hallway's (not here yet).
 - DOM overlay (non-VR): see `ui/overlay.js` — title with the same "Updated …" stamp, library
   cards (with indexing progress or "waiting to index"), a ⟳ rescan button, the way out, under the cards
   "Browse Kiwix's library…" first, on a line of its own (what a new visitor most likely wants),

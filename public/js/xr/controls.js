@@ -257,6 +257,11 @@ export class Controls extends EventTarget {
     }
   }
 
+  /** The XR controllers, each { controller, source, … }: the shared session's hands (together.js). */
+  get xrInputs() {
+    return this._xr;
+  }
+
   /** Sets how to move and turn in VR (nav.js): move 'smooth' | 'teleport', turn 'snap' | 'smooth'. */
   setNav({ move, turn }) {
     this.move = move === 'teleport' ? 'teleport' : 'smooth';
