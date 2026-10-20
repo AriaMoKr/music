@@ -1244,7 +1244,7 @@ page, the entry named by `HALLWAY_URL`'s `?from=`, a 2:1 picture and how to hang
 `pictureHeight`, `eye`, `horizon`, `aspect`, checked by `viewParams`; `Door.loadView`, `setPicture`),
 loaded after the room is built; until then, offline, or without one, a painted view down the
 Hallway (its lamps, its marble floor, this library's door glowing gold, dusk in the end window).
-A door to another place (`?back=`) shows that place's glow and name. 4 draw calls in
+A door to another place (`?back=` not on the Hallway) shows that place's glow and name. 4 draw calls in
 all. Pure helpers for Node: `doorPlace(room)`, `doorLocal` / `doorWorld` (its frame: origin at
 the sill's middle at the portal, +z into the room, +x to the right of someone facing it),
 `doorCrossed` (a head 0.06 m past its front, between the jambs), `doorCorridor` (`constrain`
@@ -1671,7 +1671,10 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   A place that has this library behind one of its doors names itself in the link that brings
   visitors here, and the way out leads there instead: `?back=<its address>&backname=<its name>`
   (URL-encoded; http(s) only, else the Hallway; the button shows the name, else the host, at most
-  24 characters). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
+  24 characters). The Hallway's own doors send no name: `?from=hallway` with a `back` on the
+  Hallway's address (`HALLWAY_URL`'s origin and path, any query: this site shares its origin) is
+  the Hallway, "← Hallway", its link kept as given (its `from`, which names the door view, and a
+  shared session's `room`). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
   on this page's origin (§5.7). The door back in the room (§5.3) leads there too: walking (or
   leaning) through it, clicking or tapping its opening, or pointing at it and pulling the trigger.
   The door and the kiosk's button go by `interaction.leave()`: the view fades to black (0.3 s in
