@@ -841,7 +841,7 @@ async function start() {
   }
   overlay.setLoading(null);
   if (!libraries.length && !reopenUrls.length) { // (web addresses opened before are reopening)
-    overlay.showToast(catalog.static ? 'This online version has no books of its own: open a ZIM file or a ZIM\'s web address here, or run vrlbry yourself.'
+    overlay.showToast(catalog.static ? 'This online version has no books of its own: open a ZIM file or a ZIM\'s web address here, or run music yourself.'
       : 'No .zim files found in the server folder.', catalog.static ? 'info' : 'error', 8000);
   }
 }
