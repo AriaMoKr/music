@@ -2,7 +2,7 @@
 // in"; AriaMoKr/layersharedsession, peer to peer over WebRTC with Trystero, through public Nostr
 // relays). Its room is in the address (?room=), so the address is the invitation: the Hallway's
 // door brings it here, and the way back carries it on (main.js), so the visitor stays in it.
-// This page is `vrlbry` in the session. The others in it who stand in the same room of the
+// This page is `music` in the session. The others in it who stand in the same room of the
 // library (together-space.js: each place and room is laid out on its own) are drawn as in the
 // Hallway: a head with a visor on its front, a hand per tracked controller, a ring on the floor
 // and their name.

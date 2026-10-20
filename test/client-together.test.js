@@ -6,9 +6,9 @@ import { describe, it } from 'node:test';
 import { APP_ID, companyText, PAGE_ID, sessionText, spaceKey, spaceOf } from '../public/js/together-space.js';
 
 describe('the shared session', () => {
-  it('is the Hallway\'s, with this page as vrlbry', () => {
+  it('is the Hallway\'s, with this page as music', () => {
     assert.equal(APP_ID, 'ariamokr-layersharedsession-test');
-    assert.equal(PAGE_ID, 'vrlbry');
+    assert.equal(PAGE_ID, 'music');
     // layersharedsession takes keys of at most 64 characters, and page ids of [a-z0-9-].
     assert.ok(spaceKey('u8yhkfn3h6as').length <= 64);
     assert.match(PAGE_ID, /^[a-z0-9-]{1,32}$/);

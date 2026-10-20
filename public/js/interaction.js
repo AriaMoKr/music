@@ -2014,7 +2014,7 @@ export class Interaction {
     g.font = `26px ${UI.serif}`;
     g.fillText(book.author || '', w / 2, by + 256, bw - 60);
     g.font = `22px ${UI.serif}`;
-    g.fillText(lib?.title || 'vrlbry', w / 2, by + bh - 34, bw - 60);
+    g.fillText(lib?.title || 'music', w / 2, by + bh - 34, bw - 60);
   }
 
   /** Prepares the neighbouring spreads so page turns are instant (reusing ones already drawn). */

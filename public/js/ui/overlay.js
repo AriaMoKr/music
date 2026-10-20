@@ -99,13 +99,13 @@ export class Overlay {
     this._pickArticle = null;
     root.innerHTML = `
       <div class="ov-loading" role="status" aria-live="polite">
-        <div class="ov-logo">vrlbry</div>
+        <div class="ov-logo">music</div>
         <div class="ov-loading-text">Opening the library…</div>
         <div class="ov-progress"><div class="ov-progress-bar"></div></div>
         <button class="ov-loading-debug" hidden>Copy debug info</button>
       </div>
       <section class="ov-card" aria-label="Library">
-        <header><span class="ov-brand">vrlbry</span><span class="ov-version"></span><span class="ov-tools"><a class="ov-hallway" href="${esc(way.url)}" title="${esc(way.title)}">${esc(way.label)}</a><button class="ov-rescan" aria-label="Rescan the ZIM folder" title="Rescan the ZIM folder">⟳</button><button class="ov-collapse" aria-label="Collapse" title="Collapse">–</button></span></header>
+        <header><span class="ov-brand">music</span><span class="ov-version"></span><span class="ov-tools"><a class="ov-hallway" href="${esc(way.url)}" title="${esc(way.title)}">${esc(way.label)}</a><button class="ov-rescan" aria-label="Rescan the ZIM folder" title="Rescan the ZIM folder">⟳</button><button class="ov-collapse" aria-label="Collapse" title="Collapse">–</button></span></header>
         <div class="ov-session" role="status" hidden><span class="ov-session-text"></span><button class="ov-session-leave" title="Leave the shared session">Leave</button></div>
         <div class="ov-libs"></div>
         <div class="ov-open">
@@ -412,7 +412,7 @@ export class Overlay {
             : `${(booksByLib[l.id]?.length || 0).toLocaleString()} ${l.kind === 'wikisource' ? 'works' : l.kind === 'wikipedia' ? `volumes (${(l.articles ?? 0).toLocaleString()} articles)` : 'books'}`}${soundsText(l.sounds)} · ${esc(l.file)}${l.site ? ' · from this site' : l.url ? ` · from ${esc(hostOf(l.url))}` : ''}</div></div>
           ${String(l.id).startsWith('~') ? `<button class="ov-lib-close" data-id="${esc(l.id)}" title="${l.site ? 'Close it (it opens again with the page)' : l.url ? 'Close it (and do not reopen it)' : 'Close this file'}" aria-label="Close ${esc(l.title)}">×</button>` : ''}
         </div>`).join('') + (libraries.length > 1 ? `<div class="ov-lib-meta">${total.toLocaleString()} books in ${libraries.length} libraries</div>` : '')
-      : `<div class="ov-lib-desc">${this._static ? 'This online version has no books yet. Open a ZIM file from this device or the web below, or run vrlbry yourself (see the README).' : 'No .zim files were found in the server folder. Add some and reload, or open one from this device or the web below.'}</div>`;
+      : `<div class="ov-lib-desc">${this._static ? 'This online version has no books yet. Open a ZIM file from this device or the web below, or run music yourself (see the README).' : 'No .zim files were found in the server folder. Add some and reload, or open one from this device or the web below.'}</div>`;
     fillLocalImages(this.$('.ov-libs'));
     // The search index is made at the first search, not with every catalogue: an entry and two
     // strings per book (80,000 with a 60,000-book library open) that every full garbage

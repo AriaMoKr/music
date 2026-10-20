@@ -2,8 +2,8 @@
 // is, so only those in the same room are drawn (each place and room is laid out on its own), and
 // the session in words.
 
-/** This page in the session (layersharedsession's `page`; the Hallway is `hallway`). */
-export const PAGE_ID = 'vrlbry';
+/** This page in the session (layersharedsession's `page`; the Hallway is `hallway`): music's door id there. */
+export const PAGE_ID = 'music';
 /** The app id every site in the session uses (the Hallway's together.js; layersharedsession's test page can watch). */
 export const APP_ID = 'ariamokr-layersharedsession-test';
 
@@ -24,7 +24,7 @@ export function spaceOf(place, room = null) {
  * Who else is in the session, in words: "Just you so far", or "With you: 2 here, 1 elsewhere in
  * the library, 1 in another place".
  * @param {{ here?: number, library?: number, away?: number }} c here: in this room; library:
- *   elsewhere in vrlbry; away: on another page of the session (the Hallway, outside, …)
+ *   elsewhere in music; away: on another page of the session (the Hallway, outside, …)
  */
 export function companyText({ here = 0, library = 0, away = 0 }) {
   const parts = [];
