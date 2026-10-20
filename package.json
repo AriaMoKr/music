@@ -1,15 +1,15 @@
 {
-  "name": "vrlbry",
+  "name": "music",
   "version": "0.2.0",
-  "description": "A candle-lit 3D library for Kiwix ZIM files: walk the shelves and read Project Gutenberg, Wikipedia and Wikisource in VR (Meta Quest), on a desktop or a phone.",
-  "keywords": ["webxr", "virtual-reality", "threejs", "meta-quest", "kiwix", "zim", "openzim", "project-gutenberg", "wikipedia", "wikisource", "ebook-reader", "digital-library", "offline-first"],
-  "homepage": "https://ariamokr.github.io/vrlbry/",
+  "description": "A candle-lit music room for Project Gutenberg's books on music: read them and hear their MIDI scores and recordings play, on a gramophone, a music stand or page by page, in VR (Meta Quest), on a desktop or a phone. A fork of vrlbry.",
+  "keywords": ["music", "midi", "synthesizer", "web-audio", "sheet-music", "webxr", "virtual-reality", "threejs", "meta-quest", "kiwix", "zim", "openzim", "project-gutenberg", "wikipedia", "wikisource", "ebook-reader", "digital-library", "offline-first"],
+  "homepage": "https://ariamokr.github.io/music/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AriaMoKr/vrlbry.git"
+    "url": "git+https://github.com/AriaMoKr/music.git"
   },
   "bugs": {
-    "url": "https://github.com/AriaMoKr/vrlbry/issues"
+    "url": "https://github.com/AriaMoKr/music/issues"
   },
   "type": "module",
   "private": true,
