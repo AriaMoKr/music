@@ -87,8 +87,8 @@ function resolve(spec, fromFile) {
   return null; // a URL or something else: not ours to copy
 }
 
-/** Every file reachable through imports from `entries` (absolute paths). */
-function closure(entries, read = (file) => fs.readFileSync(file, 'utf8')) {
+/** Every file reachable through imports from `entries` (absolute paths), `res` resolving each. */
+function closure(entries, read = (file) => fs.readFileSync(file, 'utf8'), res = resolve) {
   const seen = new Set();
   const todo = [...entries];
   while (todo.length) {
@@ -98,7 +98,7 @@ function closure(entries, read = (file) => fs.readFileSync(file, 'utf8')) {
     seen.add(file);
     if (!/\.m?js$/.test(file)) continue;
     for (const spec of importsOf(read(file))) {
-      const dep = resolve(spec, file);
+      const dep = res(spec, file);
       if (dep) todo.push(dep);
     }
   }
@@ -120,6 +120,22 @@ function vendorPathOf(file) {
     }
   }
   return null;
+}
+
+/**
+ * Resolves a vendor file's import (its bare ones made relative: vendorSource) as the browser does,
+ * among the site's vendor/<name>/ URLs, then back to the package file: a vendor name need not be
+ * its package's folder (trystero-nostr is @trystero-p2p/nostr/dist).
+ */
+function vendorResolve(spec, fromFile) {
+  const at = vendorPathOf(fromFile);
+  if (!at || !spec.startsWith('.')) return resolve(spec, fromFile);
+  const url = path.posix.normalize(path.posix.join(path.posix.dirname(`${at[0]}/${at[1]}`), spec));
+  const [name] = url.split('/');
+  if (!DEFAULT_VENDOR_DIRS[name] || name === 'three' || name === 'iwer') {
+    throw new Error(`${path.relative(ROOT, fromFile)}: no vendor package for ${spec}`);
+  }
+  return path.join(DEFAULT_VENDOR_DIRS[name], ...vendorFileOf(url).split('/').slice(1));
 }
 
 /** A vendor file's source with its bare imports made relative (server/vendor.js). */
@@ -664,7 +680,7 @@ async function main() {
     ...closure([path.join(IWER, 'iwer.module.js')]).map((file) => [file, path.join(OUT, 'vendor', 'iwer', path.relative(IWER, file))]),
   ];
   for (const [from, to] of vendor) copy(from, to);
-  const libs = closure([...libEntries], vendorSource);
+  const libs = closure([...libEntries], vendorSource, vendorResolve);
   for (const from of libs) {
     const [name, rel] = vendorPathOf(from);
     const to = path.join(vendorOut, name, ...rel.split('/'));

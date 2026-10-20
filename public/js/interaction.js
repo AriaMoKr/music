@@ -24,6 +24,8 @@ import { SoundQueue, soundRows, soundTitle } from './media/queue.js';
 import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { wayOut as defaultWayOut } from './hallway.js';
+import { saveNav } from './nav.js';
+import { sessionText } from './together-space.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
@@ -139,9 +141,13 @@ export class Interaction {
    * @param {Record<string, object[]>} o.booksByLib
    * @param {object} o.settings persisted settings (mutated + saved here)
    * @param {ReturnType<defaultWayOut>} [o.wayOut] where the catalogue stand's "← Hallway" leads (hallway.js)
+   * @param {{ move: string, turn: string }} [o.nav] how to move and turn in VR (nav.js loadNav)
    */
-  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut() }) {
+  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut(), nav }) {
     Object.assign(this, { renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut });
+    this.nav = { move: settings.smoothMove === false ? 'teleport' : 'smooth', turn: 'snap', ...nav };
+    controls.setNav(this.nav);
+    settings.smoothMove = this.nav.move === 'smooth'; // saved with the next change
     this.state = 'browse';
     this.book = null; // book descriptor in inspect/read
     this.book3d = null;
@@ -165,6 +171,8 @@ export class Interaction {
     this.onHallway = null;
     /** Set by main.js: (place, room) after every rebuild of the shelves; the address names them (place-url.js). */
     this.onShelved = null;
+    /** Set by main.js: the shared session (together.js), shown on the kiosk while in one. */
+    this.together = null;
     this._leaving = false; // going out by the way out (leave)
     this._leaveTimer = 0;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
@@ -538,15 +546,14 @@ export class Interaction {
 
     // Actions + recent.
     y += 3 * 66 + 18;
-    p.add({ type: 'button', x: pad, y, w: 300, h: 60, label: '✦ Surprise me', size: 28, onClick: () => this.surprise() });
+    p.add({ type: 'button', x: pad, y, w: 260, h: 60, label: '✦ Surprise me', size: 28, onClick: () => this.surprise() });
     p.add({
-      id: 'sound', type: 'button', x: pad + 320, y, w: 220, h: 60, label: this.settings.sound ? 'Sound on' : 'Sound off', size: 26,
+      id: 'sound', type: 'button', x: pad + 272, y, w: 190, h: 60, label: this.settings.sound ? 'Sound on' : 'Sound off', size: 26,
       active: this.settings.sound, onClick: () => this.toggleSound(),
     });
-    p.add({
-      id: 'smooth', type: 'button', x: pad + 560, y, w: W - 2 * pad - 560, h: 60, label: this.settings.smoothMove ? 'Stick walking' : 'Teleport only', size: 26,
-      active: this.settings.smoothMove, onClick: () => this.toggleSmooth(),
-    });
+    // How to move and turn in VR: the Hallway's choice, shared with it (nav.js).
+    p.add({ id: 'smooth', type: 'button', x: pad + 474, y, w: 220, h: 60, size: 24, ...this._moveButton(), onClick: () => this.toggleSmooth() });
+    p.add({ id: 'turn', type: 'button', x: pad + 706, y, w: W - 2 * pad - 706, h: 60, size: 24, ...this._turnButton(), onClick: () => this.toggleTurn() });
     // Save / restore the scene (scene.js; the same as in the help dialog, for the headset), and
     // Reset… (reset.js): this tab becomes the choice of what to clear.
     y += 80;
@@ -566,6 +573,12 @@ export class Interaction {
       id: 'scene-note', type: 'text', x: pad + 652, y: y + 4, w: W - 2 * pad - 652, h: 50, text: this._savedScene ?? 'No saved scene',
       size: 20, color: UI.muted, maxLines: 2,
     });
+    // The shared session (together.js), while in one: who else is in it, and a way out of it.
+    if (this.together?.room) {
+      y += 76;
+      p.add({ id: 'session-text', type: 'text', x: pad, y: y + 2, w: W - 2 * pad - 250, h: 54, text: this._sessionText(), size: 22, color: UI.text, maxLines: 2 });
+      p.add({ id: 'session-leave', type: 'button', x: W - pad - 236, y, w: 236, h: 56, label: 'Leave session', size: 24, onClick: () => this.onLeaveSession?.() });
+    }
     const recent = this._recentBooks().slice(0, 3);
     y += 76;
     p.add({ type: 'text', x: pad, y, w: W - 2 * pad, h: 34, text: recent.length ? 'Recently read' : 'Pick any book from the shelves to start reading.', size: 26, color: UI.muted });
@@ -3070,11 +3083,57 @@ export class Interaction {
     this.kiosk.set('sound', { label: this.settings.sound ? 'Sound on' : 'Sound off', active: this.settings.sound });
   }
 
+  /** The shared session changed (together.js): the kiosk's line about it. */
+  sessionChanged() {
+    if (this._kioskTab !== 'shelves' || this._resetForm) return;
+    const shown = !!this.kiosk.get('session-text');
+    if (shown !== !!this.together?.room) this._fillKiosk();
+    else if (shown) this.kiosk.set('session-text', { text: this._sessionText() });
+  }
+
+  _sessionText() {
+    const t = this.together;
+    return sessionText({ room: t.room, active: t.active, company: t.active ? t.company() : {} });
+  }
+
+  /** Walking with the stick, or teleporting only (nav.js: the Hallway's `move`). */
   toggleSmooth() {
-    this.settings.smoothMove = !this.settings.smoothMove;
-    this.controls.smoothMove = this.settings.smoothMove;
-    save('settings', this.settings);
-    this.kiosk.set('smooth', { label: this.settings.smoothMove ? 'Stick walking' : 'Teleport only', active: this.settings.smoothMove });
+    this.setNav({ ...this.nav, move: this.nav.move === 'smooth' ? 'teleport' : 'smooth' });
+  }
+
+  /** Turning in steps, or smoothly while the stick is held (nav.js: the Hallway's `turn`). */
+  toggleTurn() {
+    this.setNav({ ...this.nav, turn: this.nav.turn === 'snap' ? 'smooth' : 'snap' });
+  }
+
+  /**
+   * How to move and turn in VR: to the controls, the kiosk, the Hallway's key (nav.js), and
+   * `settings.smoothMove` (older pages and debug reports read it).
+   * @param {{ move: string, turn: string }} nav
+   * @param {{ store?: boolean }} [o] store: false when it came from storage
+   */
+  setNav(nav, { store = true } = {}) {
+    this.nav = { move: nav.move === 'teleport' ? 'teleport' : 'smooth', turn: nav.turn === 'smooth' ? 'smooth' : 'snap' };
+    this.controls.setNav(this.nav);
+    if (store) {
+      try { saveNav(localStorage, this.nav); } catch { /* no storage: this visit only */ }
+    }
+    if (this.settings.smoothMove !== (this.nav.move === 'smooth')) {
+      this.settings.smoothMove = this.nav.move === 'smooth';
+      save('settings', this.settings);
+    }
+    this.kiosk.set('smooth', this._moveButton());
+    this.kiosk.set('turn', this._turnButton());
+  }
+
+  _moveButton() {
+    const smooth = this.nav.move === 'smooth';
+    return { label: smooth ? 'Stick walking' : 'Teleport only', active: smooth };
+  }
+
+  _turnButton() {
+    const snap = this.nav.turn === 'snap';
+    return { label: snap ? 'Snap turning' : 'Smooth turning', active: !snap };
   }
 
   _recentBooks() {
@@ -3159,6 +3218,7 @@ export class Interaction {
     if (this._leaving || !this.onHallway || this.state !== 'browse') return;
     this._leaving = true;
     this.state = 'busy';
+    this.onLeaving?.(); // main.js: out of the shared session now, so the others see it at once
     await this._fadeTo(1, this.controls.presenting ? 0.3 : 0.4);
     this.onHallway();
     // Still here a while later (the navigation was stopped, or failed): back in the room.
@@ -3175,6 +3235,7 @@ export class Interaction {
     if (!this._leaving) return;
     clearTimeout(this._leaveTimer);
     this._leaving = false;
+    this.onCameBack?.(); // main.js: back in the shared session
     const spot = this.world.door?.inFront(1.1);
     if (spot) this.controls.teleportTo(spot.position, spot.yaw);
     this.state = 'browse';
