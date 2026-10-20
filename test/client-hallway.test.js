@@ -7,7 +7,7 @@ import { doorOf, wayOut } from '../public/js/hallway.js';
 
 describe('the way out', () => {
   it('leads to the Hallway, naming this library as the door to come back to', () => {
-    assert.equal(HALLWAY_URL, 'https://ariamokr.github.io/hallway/?from=vrlbry');
+    assert.equal(HALLWAY_URL, 'https://ariamokr.github.io/hallway/?from=music');
     for (const search of ['', '?place=demo', '?back=', '?xr=emulate&perf']) {
       assert.deepEqual(wayOut(search), {
         url: HALLWAY_URL, label: '← Hallway', title: 'Back to the Hallway, whose doors lead to other places',
@@ -31,7 +31,7 @@ describe('the way out', () => {
 
   it('knows the Hallway\'s own doors: from=hallway and a way back on its address, kept as given', () => {
     // The link the Hallway's door opens (its README, "Going in"), in a shared session.
-    const back = 'https://ariamokr.github.io/hallway/?from=vrlbry&room=k3vd-q8hn';
+    const back = 'https://ariamokr.github.io/hallway/?from=music&room=k3vd-q8hn';
     const search = `?place=%7Egutenberg_en_all_2025-11&from=hallway&back=${encodeURIComponent(back)}&dx=0.12&yaw=-8&pitch=-3&dw=1.1&dh=2.25&glow=d9b26a`;
     assert.deepEqual(wayOut(search), {
       url: back, label: '← Hallway', title: 'Back to the Hallway, whose doors lead to other places',
@@ -59,7 +59,7 @@ describe('the way out', () => {
   it('puts the same place on the door back: the Hallway\'s corridor through it, or another place\'s name', () => {
     assert.deepEqual(doorOf(wayOut('')), {
       title: 'Hallway', subtitle: 'Doors to other places', sign: 'Hallway', color: '#9cc6b4', view: 'hallway',
-      views: 'https://ariamokr.github.io/hallway/views/views.json', viewId: 'vrlbry',
+      views: 'https://ariamokr.github.io/hallway/views/views.json', viewId: 'music',
     });
     const door = doorOf(wayOut(`?back=${encodeURIComponent('https://example.org/hall/')}&backname=Garden%20Hall`));
     assert.deepEqual([door.title, door.subtitle, door.sign, door.view, door.views], ['Garden Hall', 'example.org', 'Garden Hall', 'plain', null]);
