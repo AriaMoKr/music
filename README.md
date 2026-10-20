@@ -1,29 +1,46 @@
-# vrlbry - music
+# music
 
-A virtual library for your ZIM files. vrlbry finds the `.zim` files in a folder and shelves their
+A music room for Project Gutenberg's books on music, in VR or in the browser. Take a score or a
+book about music off the shelf, read it page by page and hear it: the MIDI files of its examples
+play through a synthesizer of its own, its MP3 recordings through the browser.
+
+**Try it in your browser: <https://ariamokr.github.io/music/>.** There is nothing to install. On a
+Meta Quest, open the address in its browser and choose *Enter VR*. The room holds Kiwix's ZIM of
+Project Gutenberg's Music class (scores, writing about music, and music instruction): 456 books,
+115 of them with 5,215 sounds.
+
+![The music room: bookcases of Project Gutenberg's books on music under a wall of framed scores, a gramophone by the window](public/social.jpg)
+
+What music adds to the library it grew from:
+
+- **The sounds.** Tap **Listen** beside an example to hear it. A book that plays has a ♪ on its
+  spine and a **Sounds** list beside its contents: **Play all** plays them in order and turns the
+  pages as it goes, marking the example that is playing.
+- **The synthesizer.** MIDI files play through a General MIDI synthesizer written for the page,
+  with nothing to download: a timbre for each family of instruments, drums, up to 40 voices.
+- **Books that play.** A room of only the books with sounds, laid out by period if you like
+  (Renaissance, Baroque, Classical, Romantic, into the 20th century), a sign over each.
+- **The gramophone.** It stands in every room whose books play and plays on while you walk and
+  read: its sound comes from its horn, and the lights dim while it plays. Choose what it plays on
+  the catalogue stand's **♪ Listen** tab: a book, a composer or a period, all of the sounds or
+  only the MIDI songs or only the MP3 recordings.
+- **The music stand.** Beside the open book, it shows the MIDI song playing as a piano roll (a
+  recording, its picture) and lets you slow it down or speed it up without changing its pitch,
+  loop a passage, change its key, and mute a part or give it another instrument.
+- **The wall of scores.** Framed scores hang on the walls: point at one to hear it.
+
+music is a fork of [vrlbry](https://github.com/AriaMoKr/vrlbry), a virtual library for your ZIM
+files, and still does all that vrlbry does. It finds the `.zim` files in a folder and shelves their
 books in a warm, candle-lit 3D reading room. Walk up to a shelf, pull a book out, look at its
 cover, open it and read it page by page. It works in a VR headset (Meta Quest and other WebXR
-browsers), on a desktop with mouse and keyboard, and on a phone.
-
-**Try it in your browser: <https://ariamokr.github.io/vrlbry/>.** There is nothing to install. On a
-Meta Quest, open the address in its browser and choose *Enter VR*. More books come from
+browsers), on a desktop with mouse and keyboard, and on a phone. More books come from
 [Kiwix's library](https://library.kiwix.org/), right on the page or on the catalogue stand in VR,
 or from ZIM files on your own device.
-
-![An aisle of the library: Project Gutenberg's 10,000 most-read English books on facing bookcases](docs/screenshots/aisle.jpg)
 
 It understands three kinds of [Kiwix ZIM files](https://library.kiwix.org/) especially well:
 
 - **Project Gutenberg** (gutenberg2zim): real covers, authors, popularity ranks and the books' own
-  illustrations. The music in its music books plays: tap **Listen** beside an example to hear it
-  (MIDI files through a small built-in synthesizer, MP3 recordings through the browser). A book
-  that plays has a ♪ on its spine and a **Sounds** list beside its contents (**Play all** turns
-  the pages as it goes); a music stand beside it shows a MIDI song's notes as a piano roll and
-  lets you slow it down, loop a passage, change its key or mute a part. *Books that play* shelves
-  them together, by period if you like, a gramophone in the room plays on while you walk and
-  read (choose what on the catalogue stand's **♪ Listen** tab: by book, composer or period, all of
-the sounds or only the MIDI songs or only the MP3 recordings), and
-  the scores hang on the wall: point at one to hear it.
+  illustrations, and the music in its music books.
 - **Wikisource** (mwoffliner): every multi-part work — novels, collections, histories; 17,693 in
   the English ZIM — becomes one book with all its chapters in order, its cover, author, year and
   genre.
@@ -204,7 +221,7 @@ someone sent you, and restore it: you see what they saw.
 
 ## The online version
 
-<https://ariamokr.github.io/vrlbry/> is the same app as a static website, without the Node server.
+<https://ariamokr.github.io/music/> is the same app as a static website, without the Node server.
 It has a demo set of Kiwix's ZIM files (Project Gutenberg's Music class: scores, writing about
 music, and music instruction), opens more from Kiwix's library or from your
 device, and notices a new version within seconds and offers to reload. How it is built and
@@ -212,24 +229,24 @@ deployed is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-online-version-gith
 
 ## The Hallway, or your own
 
-vrlbry is behind one of the doors of the [Hallway](https://ariamokr.github.io/hallway/), a WebXR
+music is behind one of the doors of the [Hallway](https://ariamokr.github.io/hallway/), a WebXR
 corridor whose doors lead to other places. A door like the Hallway's stands in the library, behind
 where you arrive: through it you see the Hallway, and walking through it (or clicking it, or
-pointing at it and pulling the trigger) takes you back there, to vrlbry's door. So does the
+pointing at it and pulling the trigger) takes you back there. So does the
 **← Hallway** link on the library card and on the catalogue stand. On a Meta Quest, walking
 through the door in VR keeps you in VR: Quest Browser hands the session to the next page when both are on one
-origin, as the Hallway and vrlbry are (`ariamokr.github.io`).
+origin, as the Hallway and music are (`ariamokr.github.io`).
 
-To put vrlbry behind a door of your own hallway, or link to it from anywhere, name your page in
+To put music behind a door of your own hallway, or link to it from anywhere, name your page in
 the link and the way out leads back to it instead:
 
 ```
-https://ariamokr.github.io/vrlbry/?back=https%3A%2F%2Fexample.org%2Fhall%2F%3Ffrom%3Dvrlbry&backname=My%20Hall
+https://ariamokr.github.io/music/?back=https%3A%2F%2Fexample.org%2Fhall%2F%3Ffrom%3Dmusic&backname=My%20Hall
 ```
 
 `back` is your page's address and `backname` its name on the button and on the door (both
 URL-encoded; without a name they show your host). Only `http` and `https` addresses are taken. Between your site
-and vrlbry, a Quest visitor leaves VR and presses Enter VR again, since the two are on different
+and music, a Quest visitor leaves VR and presses Enter VR again, since the two are on different
 origins.
 
 ## Developing

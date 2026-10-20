@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "music",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/index.js", "--dir", ".demo/render", "--port", "8093", "--no-watch"],
+      "port": 8093
+    }
+  ]
+}
