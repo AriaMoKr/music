@@ -16,6 +16,7 @@ import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
 import { doorOf, wayOut } from './hallway.js';
+import { loadNav, NAV_KEY } from './nav.js';
 import { placeFromSearch, placeHref } from './place-url.js';
 import { BackHistory } from './back-history.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
@@ -26,6 +27,14 @@ import { parseScene, restoreScene, saveScene, savedScene } from './scene.js';
 
 startErrorLog(); // first: the debug report lists the page's last errors
 const params = new URLSearchParams(location.search);
+/** localStorage itself (the Hallway's keys are not under storage.js's prefix), or null where it cannot be read. */
+const localStore = () => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
 // The way out: to the Hallway, or to the place that linked here naming itself (?back=, hallway.js).
 const way = wayOut(location.search);
 const overlay = new Overlay({ root: document.getElementById('overlay'), wayOut: way });
@@ -136,9 +145,8 @@ async function start() {
   const startPlace = settings.place; // what the first build shelved (savedPlace, or its fallback)
 
   const controls = new Controls({ renderer, camera, rig, scene, world, domElement: renderer.domElement });
-  controls.smoothMove = settings.smoothMove;
   controls.teleportTo(world.spawn.position, world.spawn.yaw);
-  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way });
+  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way, nav: loadNav(localStore(), settings) });
   if (catalog.static) {
     // A build without a server (GitHub Pages, tools/build-pages.mjs): nothing to rescan.
     interaction.setStatic(true);
@@ -189,7 +197,15 @@ async function start() {
   interaction.onHallway = () => { location.href = way.url; };
   // Back from there with the browser's Back, this page restored from its cache as it was left (dark,
   // in the doorway): in front of the door again.
-  addEventListener('pageshow', (e) => { if (e.persisted) interaction.cameBack(); });
+  // The Hallway's movement choice may have changed there meanwhile, or in another tab (nav.js).
+  addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    interaction.setNav(loadNav(localStore(), settings), { store: false });
+    interaction.cameBack();
+  });
+  addEventListener('storage', (e) => {
+    if (e.key === NAV_KEY) interaction.setNav(loadNav(localStore(), settings), { store: false });
+  });
   // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
   // followed in a book, as the toolbar's ↩ Back (back-history.js).
   const backHistory = new BackHistory({ history, load: performance.timeOrigin, onBack: (depth) => interaction.backTo(depth) });

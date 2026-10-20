@@ -151,7 +151,7 @@ Then press **Enter VR**.
 | | Desktop | Touch | Gamepad | VR |
 | --- | --- | --- | --- | --- |
 | Look | drag the mouse | drag one finger | right stick | turn your head |
-| Move | W A S D / arrows, Q E to turn, Shift to hurry | drag two fingers | left stick (click it to hurry) | right stick forward: teleport arc · flick right stick: snap turn · left stick: walk |
+| Move | W A S D / arrows, Q E to turn, Shift to hurry | drag two fingers | left stick (click it to hurry) | right stick forward: teleport arc · flick right stick: snap turn · left stick: walk (or teleport, and turning smoothly: the kiosk, or your choice in the Hallway) |
 | Take a book | click it | tap it | aim the crosshair, **A** | point and pull the trigger (or pinch) |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |

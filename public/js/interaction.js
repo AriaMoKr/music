@@ -19,6 +19,7 @@ import { resolveLink } from './api.js';
 import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { wayOut as defaultWayOut } from './hallway.js';
+import { saveNav } from './nav.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
@@ -89,9 +90,13 @@ export class Interaction {
    * @param {Record<string, object[]>} o.booksByLib
    * @param {object} o.settings persisted settings (mutated + saved here)
    * @param {ReturnType<defaultWayOut>} [o.wayOut] where the catalogue stand's "← Hallway" leads (hallway.js)
+   * @param {{ move: string, turn: string }} [o.nav] how to move and turn in VR (nav.js loadNav)
    */
-  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut() }) {
+  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut(), nav }) {
     Object.assign(this, { renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut });
+    this.nav = { move: settings.smoothMove === false ? 'teleport' : 'smooth', turn: 'snap', ...nav };
+    controls.setNav(this.nav);
+    settings.smoothMove = this.nav.move === 'smooth'; // saved with the next change
     this.state = 'browse';
     this.book = null; // book descriptor in inspect/read
     this.book3d = null;
@@ -446,15 +451,14 @@ export class Interaction {
 
     // Actions + recent.
     y += 3 * 66 + 18;
-    p.add({ type: 'button', x: pad, y, w: 300, h: 60, label: '✦ Surprise me', size: 28, onClick: () => this.surprise() });
+    p.add({ type: 'button', x: pad, y, w: 260, h: 60, label: '✦ Surprise me', size: 28, onClick: () => this.surprise() });
     p.add({
-      id: 'sound', type: 'button', x: pad + 320, y, w: 220, h: 60, label: this.settings.sound ? 'Sound on' : 'Sound off', size: 26,
+      id: 'sound', type: 'button', x: pad + 272, y, w: 190, h: 60, label: this.settings.sound ? 'Sound on' : 'Sound off', size: 26,
       active: this.settings.sound, onClick: () => this.toggleSound(),
     });
-    p.add({
-      id: 'smooth', type: 'button', x: pad + 560, y, w: W - 2 * pad - 560, h: 60, label: this.settings.smoothMove ? 'Stick walking' : 'Teleport only', size: 26,
-      active: this.settings.smoothMove, onClick: () => this.toggleSmooth(),
-    });
+    // How to move and turn in VR: the Hallway's choice, shared with it (nav.js).
+    p.add({ id: 'smooth', type: 'button', x: pad + 474, y, w: 220, h: 60, size: 24, ...this._moveButton(), onClick: () => this.toggleSmooth() });
+    p.add({ id: 'turn', type: 'button', x: pad + 706, y, w: W - 2 * pad - 706, h: 60, size: 24, ...this._turnButton(), onClick: () => this.toggleTurn() });
     // Save / restore the scene (scene.js; the same as in the help dialog, for the headset), and
     // Reset… (reset.js): this tab becomes the choice of what to clear.
     y += 80;
@@ -2378,11 +2382,44 @@ export class Interaction {
     this.kiosk.set('sound', { label: this.settings.sound ? 'Sound on' : 'Sound off', active: this.settings.sound });
   }
 
+  /** Walking with the stick, or teleporting only (nav.js: the Hallway's `move`). */
   toggleSmooth() {
-    this.settings.smoothMove = !this.settings.smoothMove;
-    this.controls.smoothMove = this.settings.smoothMove;
-    save('settings', this.settings);
-    this.kiosk.set('smooth', { label: this.settings.smoothMove ? 'Stick walking' : 'Teleport only', active: this.settings.smoothMove });
+    this.setNav({ ...this.nav, move: this.nav.move === 'smooth' ? 'teleport' : 'smooth' });
+  }
+
+  /** Turning in steps, or smoothly while the stick is held (nav.js: the Hallway's `turn`). */
+  toggleTurn() {
+    this.setNav({ ...this.nav, turn: this.nav.turn === 'snap' ? 'smooth' : 'snap' });
+  }
+
+  /**
+   * How to move and turn in VR: to the controls, the kiosk, the Hallway's key (nav.js), and
+   * `settings.smoothMove` (older pages and debug reports read it).
+   * @param {{ move: string, turn: string }} nav
+   * @param {{ store?: boolean }} [o] store: false when it came from storage
+   */
+  setNav(nav, { store = true } = {}) {
+    this.nav = { move: nav.move === 'teleport' ? 'teleport' : 'smooth', turn: nav.turn === 'smooth' ? 'smooth' : 'snap' };
+    this.controls.setNav(this.nav);
+    if (store) {
+      try { saveNav(localStorage, this.nav); } catch { /* no storage: this visit only */ }
+    }
+    if (this.settings.smoothMove !== (this.nav.move === 'smooth')) {
+      this.settings.smoothMove = this.nav.move === 'smooth';
+      save('settings', this.settings);
+    }
+    this.kiosk.set('smooth', this._moveButton());
+    this.kiosk.set('turn', this._turnButton());
+  }
+
+  _moveButton() {
+    const smooth = this.nav.move === 'smooth';
+    return { label: smooth ? 'Stick walking' : 'Teleport only', active: smooth };
+  }
+
+  _turnButton() {
+    const snap = this.nav.turn === 'snap';
+    return { label: snap ? 'Snap turning' : 'Smooth turning', active: !snap };
   }
 
   _recentBooks() {

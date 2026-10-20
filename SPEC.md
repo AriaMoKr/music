@@ -1382,11 +1382,15 @@ export class Controls extends EventTarget {
   bookcase; this applies in every state, while books are pickable only when browsing), or the
   room (`world.raycastSolid` → `room.raycast`: the wall, the dome or ceiling, the floor, and the
   furniture as upright cylinders from its walking circles with heights).
-  Locomotion when enabled: **right stick forward → teleport arc** (release to teleport onto
-  `world.teleportTargets`, validated by `world.isWalkable`); while aiming, that controller's ray
-  and cursor are hidden and `pointer.teleporting` keeps it from hovering or selecting; right stick
-  left/right → snap turn (`PLAYER.snapTurn`), left stick → smooth move (optional setting, default
-  on) constrained by `world.constrain`. When locomotion is disabled, sticks only emit events.
+  Locomotion when enabled, as the visitor chose (`setNav`; nav.js: the Hallway's `hallway.nav`
+  = `{ move: 'smooth' | 'teleport', turn: 'snap' | 'smooth' }`): **right stick forward → teleport
+  arc** (release to teleport onto `world.teleportTargets`, validated by `world.isWalkable`; the
+  left stick aims one too when `move` is `'teleport'`, one arc at a time); while aiming, that
+  controller's ray and cursor are hidden and `pointer.teleporting` keeps it from hovering or
+  selecting; right stick left/right → snap turn (`PLAYER.snapTurn`), or with `turn: 'smooth'`
+  turning while held sideways (1.6 rad/s at full tilt, the Hallway's); left stick → smooth move
+  (`move: 'smooth'`, the default) constrained by `world.constrain`. When locomotion is disabled,
+  sticks only emit events.
 - **Desktop:** drag (any mouse button) to look, turning the way the mouse goes (drag right: look
   right; up: look up); a press that does not move more than a few pixels
   is a click = select at the mouse position. No pointer lock: it fights the DOM overlay and is
@@ -1533,7 +1537,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   - *Shelves & settings*: library summary, sort toggle Title/Author/Popularity (rebuilds shelves),
     A–Z letter grid over the shelved books (teleports to the first book with that letter via
     `shelves.locate` and highlights it for 4 s), "Surprise me" (random book), "Recently read"
-    list (opens directly into read), settings toggles (sound, smooth move).
+    list (opens directly into read), settings toggles (sound; "Stick walking" / "Teleport only"
+    and "Snap turning" / "Smooth turning": the Hallway's movement choice, nav.js, kept in its
+    `hallway.nav` so it is one choice across the sites on this origin; read at start, on Back
+    from the Hallway and when another tab changes it; before the Hallway has stored one,
+    `settings.smoothMove` decides `move`, and it follows the choice).
   - *Rooms*: one button per library (with its book count, its indexing progress or "waiting to index"), and for a
     library browsed by rooms the current room ("Now: Poetry, titles starting with A · 39 works")
     with a "✕ Clear filters" button, genre buttons and a title-letter grid. Genre and letter are
