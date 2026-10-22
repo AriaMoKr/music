@@ -16,8 +16,11 @@ What music adds to the library it grew from:
 - **The sounds.** Tap **Listen** beside an example to hear it. A book that plays has a ♪ on its
   spine and a **Sounds** list beside its contents: **Play all** plays them in order and turns the
   pages as it goes, marking the example that is playing.
-- **The synthesizer.** MIDI files play through a General MIDI synthesizer written for the page,
-  with nothing to download: a timbre for each family of instruments, drums, up to 40 voices.
+- **The instruments.** MIDI files play with sampled instruments: the General MIDI set of
+  [GeneralUser GS](https://www.schristiancollins.com/generaluser.php), all 128 instruments and its
+  drum kit in 4 MB, of which a song loads only what it plays. Or, with **Synth** on the music
+  stand (or in the help), through a synthesizer written for the page, with nothing to download: a
+  timbre for each family of instruments, drums, up to 40 voices.
 - **Books that play.** A room of only the books with sounds, laid out by period if you like
   (Renaissance, Baroque, Classical, Romantic, into the 20th century), a sign over each.
 - **The gramophone.** It stands in every room whose books play and plays on while you walk and

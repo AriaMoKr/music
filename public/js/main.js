@@ -737,6 +737,10 @@ async function start() {
     else if (outdated) showUpdate();
   }
   overlay.setUpdateNotices(notices(), setUpdateNotices);
+  // What MIDI songs are played with (media/samples.js): the help dialog's checkbox and the music
+  // stand's button change it (settings.midiInstruments), each showing the other's change.
+  overlay.setSampledInstruments(settings.midiInstruments !== 'synth', (on) => interaction.setInstruments(on ? 'sampled' : 'synth'));
+  interaction.onInstruments = (kind) => overlay.setSampledInstruments(kind !== 'synth');
   async function isOutdated() {
     if (outdated || !loadedVersion) return outdated;
     const { changed } = await getVersion();

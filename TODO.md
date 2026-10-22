@@ -354,11 +354,37 @@
   - *Not checked:* on the Quest, in VR. The synthesizer runs on the audio thread and a 200 ms
     timer, not the frame loop, but a dense passage (138 notes at once in one file, 40 voices at
     most) should be measured there (`quest-perf.mjs`, with a scenario playing a symphony).
-  - *Next:* a better sound for MIDI (a small General MIDI sound font, if one fits the site and the
-    Quest; a choice for the reader); seeking within a sound (the time could become a bar); the
+  - *Next:* seeking within a sound (the time could become a bar); the
     sounds inside an EPUB-only book's EPUB (none in `lcc-m`; its links are still dropped);
     reading MP3s through the edge proxy when the site has one (now only from Kiwix's mirror);
     showing which links are sounds before they are tapped (a ♪).
+- **Done (2026-10-21): sampled instruments for MIDI** (SPEC §5.6 "Sounds", `media/samples.js`,
+  `tools/build-samples.mjs`). What the collection plays, measured with `midi.js` over the site's
+  2,219 MIDI files (304,449 notes): 51 General MIDI programs and 35 drum keys; piano in 1,508
+  files, choir aahs (52) in 365, violin (40) in 146, string ensemble (48) in 41, cello (42) 37,
+  bassoon (70) 24, church organ (19) 24, viola (41) 21 (26,203 notes), harpsichord (6) 20, flute
+  (73) 20, clarinet (71) 19; drums in only 4 files. GeneralUser GS v2.0.3 (32 MB SF2, its license
+  allowing use in software and repackaging; a local copy, not a link to its download) gives all
+  128 programs and its standard kit as 1,030 + 61 zones in 745 files of mono Opus at 40 kbps:
+  3.9 MB (5.8 MB on disk here, in 4 KB blocks) and a 158 KB manifest, built in 34 s; so the whole
+  set ships, any MIDI file of another ZIM and the stand's instrument swap find theirs. One
+  velocity layer (100), the samples as recorded: the font's filters (its piano's base cutoff is
+  ~800 Hz, opened by a filter envelope and velocity modulators) and modulators are not kept.
+  Loudness: `SAMPLE_PEAK` 9.5, from offline renders of five songs against the oscillators
+  (RMS ratios 0.88–1.5 after, most within 4 %). On this PC (Chrome, local server) Beethoven's
+  Fifth's finale loads 108 files, 13 MB decoded at 32 kHz, in 159 ms, and sounds 186 ms after
+  the tap; a piano piece 3–5 files, 1 MB. Checked in the browser: the symphony on samples, the
+  stand's Sampled / Synth button and the help dialog's checkbox switching it while it plays (each
+  showing the other's change, kept in the settings), the strings swapped to ensemble loading
+  their 22 zones as it played.
+  - *Not checked:* on the Quest, in VR: the decoding of a symphony's 100-odd files before it
+    starts and their 13 MB, and 40 sampled voices on its audio thread (`quest-perf.mjs`, with a
+    scenario playing a symphony on samples). Safari before 18.4 cannot decode Ogg Opus: there
+    every song plays the oscillators (not seen: no Mac here). Not heard by ear: the loops'
+    seams after lossy coding (short loops are repeated to 0.3 s so a seam comes round less often).
+  - *Next:* velocity layers (the font has up to 8 a piano key: a soft note is a softer recording),
+    a velocity-to-brightness filter in place of the font's, and a reverb (CC 91; the font sends
+    some to one).
 - **Done (2026-10-18): listening views of the Music collection** (SPEC §3.5 sound lists, §4
   `/sounds`, §5.3 Music, §5.6 "Sounds"). A sound index per Gutenberg ZIM (115 books, 5,215
   sounds in the Music ZIM: 4 s on the server, 169 KB gzipped; the static site's `sounds.json`);

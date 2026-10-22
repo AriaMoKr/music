@@ -20,6 +20,7 @@ import { booksThatPlay, fillListenTab, isOfKind } from './ui/listen-tab.js';
 import { PERIODS, attributeAll, bookPeriod } from './media/composers.js';
 import { MusicStand, STAND_W, STAND_H } from './ui/music-stand.js';
 import { SOUND_PATH, SoundPlayer, clock, isMidi } from './media/player.js';
+import { SampleBank } from './media/samples.js';
 import { SoundQueue, soundRows, soundTitle } from './media/queue.js';
 import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
@@ -125,6 +126,7 @@ export const DEFAULT_SETTINGS = {
   pageView: 'auto', // one page or two at a time (reader/spreads.js singlePage): 'auto', 'single' or 'spread'
   updateNotices: true, // tell when the site has been updated (main.js; "Don't show again" turns it off)
   listenKind: 'all', // the Listen tab's sounds (ui/listen-tab.js): 'all', 'midi' or 'audio' (recordings)
+  midiInstruments: 'sampled', // what MIDI songs are played with (media/samples.js): 'sampled' or 'synth' (the oscillators)
 };
 
 export class Interaction {
@@ -197,7 +199,11 @@ export class Interaction {
       },
       bytes: soundBytes,
       url: soundUrl,
+      samples: new SampleBank(),
+      instruments: () => this.settings.midiInstruments,
     });
+    /** Set by main.js: told when the instruments MIDI songs are played with change ('sampled' or 'synth'). */
+    this.onInstruments = null;
     this.sound.onChange = () => this._showSound();
     this.sound.onError = (message) => this.notice('The sound cannot be played', message, 5);
     this.sound.onEnded = () => this._soundEnded();
@@ -226,7 +232,11 @@ export class Interaction {
     this._buildToc();
     // The music stand beside the book while a sound plays (ui/music-stand.js): the piano roll,
     // practice. Shown by itself where there is room beside the book, else by tapping the time.
-    this.stand = new MusicStand({ onClose: () => this.toggleStand(false) });
+    this.stand = new MusicStand({
+      onClose: () => this.toggleStand(false),
+      instruments: () => this.settings.midiInstruments,
+      onInstruments: (kind) => this.setInstruments(kind),
+    });
     this.holder.add(this.stand.mesh);
     this._standWanted = null; // the visitor's choice (✕, the time tapped), else where there is room
     this._standRoom = true; // whether the stand fits beside the book (_placeReadingPanels)
@@ -3074,6 +3084,20 @@ export class Interaction {
       await this._tween(0.5, () => {});
       await this.pick(book);
     }
+  }
+
+  /**
+   * What MIDI songs are played with (SPEC §5.6 "Sounds"): 'sampled' (media/samples.js) or 'synth'
+   * (the oscillators); the song playing changes at once. Kept in the settings.
+   */
+  setInstruments(kind) {
+    const k = kind === 'synth' ? 'synth' : 'sampled';
+    if (this.settings.midiInstruments === k) return;
+    this.settings.midiInstruments = k;
+    save('settings', this.settings);
+    this.sound.setInstruments(k);
+    if (this.stand.visible) this.stand.fill();
+    this.onInstruments?.(k);
   }
 
   toggleSound() {

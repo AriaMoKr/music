@@ -9,6 +9,9 @@ import { MidiSynth, RATE_MAX, RATE_MIN } from './synth.js';
 
 export { SOUND_PATH, isMidi } from '../core/content/sounds.js';
 
+/** How long a song waits for its sampled instruments (ms) before it starts with what has come (the rest join as they do). */
+export const SAMPLES_WAIT_MS = 5000;
+
 /** "1:05" for 65 seconds. */
 export function clock(seconds) {
   const s = Math.max(0, Math.floor(seconds || 0));
@@ -24,12 +27,17 @@ export class SoundPlayer {
    * @param {(media: object) => Promise<{ url: string, release: () => void }>} o.url where an
    *   <audio> plays a sound from (api.soundUrl)
    * @param {() => HTMLAudioElement} [o.createAudio]
+   * @param {import('./samples.js').SampleBank|null} [o.samples] the sampled instruments, or none
+   * @param {() => string} [o.instruments] 'sampled' or 'synth' (settings.midiInstruments): what a
+   *   MIDI song is played with
    */
-  constructor({ context, bytes, url, createAudio = () => new Audio() }) {
+  constructor({ context, bytes, url, createAudio = () => new Audio(), samples = null, instruments = () => 'sampled' }) {
     this._context = context;
     this._bytes = bytes;
     this._url = url;
     this._createAudio = createAudio;
+    this._samples = samples;
+    this._instruments = instruments;
     /** The sound loaded (SPEC §3.5 `media`), or null. */
     this.media = null;
     /** 'idle', 'loading', 'playing', 'paused', or 'blocked' (the browser wants a tap on ▶ first). */
@@ -71,6 +79,17 @@ export class SoundPlayer {
     this._rate = Math.max(RATE_MIN, Math.min(RATE_MAX, rate));
     this._synth?.setRate(this._rate);
     if (this._el) this._el.playbackRate = this._rate;
+  }
+
+  /**
+   * What the MIDI song playing is played with, from now on: 'sampled' (its sampled instruments,
+   * loading while the oscillators play) or 'synth' (the oscillators alone). Later songs ask
+   * `instruments()`.
+   */
+  setInstruments(kind) {
+    const synth = this._synth;
+    if (!synth) return;
+    synth.setSamples(kind !== 'synth' && this._samples ? this._samples.voices(synth.ctx, synth.song, { transpose: synth.transpose }) : null);
   }
 
   /** Practice: goes round from b back to a (s), or not (null); for this sound only. */
@@ -130,7 +149,17 @@ export class SoundPlayer {
     // Resumed on the tap that led here (audio.init); were it still suspended, its clock waits
     // and the song starts when it runs.
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    this._synth = new MidiSynth(ctx, song, this._dest ? { destination: this._dest } : {});
+    // Its sampled instruments (samples.js), loaded first: at most SAMPLES_WAIT_MS, then it starts
+    // with what has come, the oscillators playing the rest until theirs arrive.
+    let samples = null;
+    if (this._samples && this._instruments() !== 'synth') {
+      samples = this._samples.voices(ctx, song);
+      let timer = 0;
+      await Promise.race([samples.ready, new Promise((resolve) => { timer = setTimeout(resolve, SAMPLES_WAIT_MS); })]);
+      clearTimeout(timer);
+      if (token !== this._token) return;
+    }
+    this._synth = new MidiSynth(ctx, song, { ...(this._dest ? { destination: this._dest } : {}), samples });
     if (this._rate !== 1) this._synth.setRate(this._rate);
     this._synth.onEnd = () => this._ended(token);
     this._synth.play(0);

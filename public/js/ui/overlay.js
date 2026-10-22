@@ -146,6 +146,7 @@ export class Overlay {
             <span class="ov-view-note">Back to the start, looking into the room; a book that is out goes back on its shelf.</span>
           </div>
           <label class="ov-update-pref"><input type="checkbox" checked> Tell me when this site has been updated</label>
+          <label class="ov-instruments-pref" title="Off: the synthesizer's own tones, with nothing to download"><input type="checkbox" checked> Play MIDI songs with sampled instruments</label>
           <footer class="ov-debug">
             <div><button class="ov-debug-btn">Copy debug info</button><button class="ov-shot-btn" title="The 3D view as a PNG, without this page's menus">Save screenshot</button><span class="ov-debug-note">Something wrong? Copy this and paste it into your bug report, with the screenshot.</span></div>
             <div><button class="ov-scene-save">Save scene</button><button class="ov-scene-restore" disabled>Restore scene</button><button class="ov-scene-paste">Paste a scene…</button><span class="ov-scene-note">No saved scene</span></div>
@@ -451,6 +452,13 @@ export class Overlay {
   /** The help dialog's "Tell me when this site has been updated" (settings.updateNotices): onChange(on). */
   setUpdateNotices(on, onChange) {
     const box = this.$('.ov-update-pref input');
+    box.checked = !!on;
+    if (onChange) box.onchange = () => onChange(box.checked);
+  }
+
+  /** The help dialog's "Play MIDI songs with sampled instruments" (settings.midiInstruments): onChange(on). */
+  setSampledInstruments(on, onChange) {
+    const box = this.$('.ov-instruments-pref input');
     box.checked = !!on;
     if (onChange) box.onchange = () => onChange(box.checked);
   }

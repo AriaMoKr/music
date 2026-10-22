@@ -64,6 +64,7 @@ export const MIME_TYPES = Object.freeze({
   '.bin': 'application/octet-stream',
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg', // Ogg Opus: the sampled instruments (public/sounds/gm)
   '.wav': 'audio/wav',
   '.m4a': 'audio/mp4',
   '.mp4': 'video/mp4',
