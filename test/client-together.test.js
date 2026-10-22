@@ -3,14 +3,16 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { DOOR_ID } from '../public/js/config.js';
 import { APP_ID, companyText, PAGE_ID, sessionText, spaceKey, spaceOf } from '../public/js/together-space.js';
 
 describe('the shared session', () => {
-  it('is the Hallway\'s, with this page as music', () => {
+  it('is the Hallway\'s, with this page as its door', () => {
     assert.equal(APP_ID, 'ariamokr-layersharedsession-test');
-    assert.equal(PAGE_ID, 'music');
+    assert.equal(PAGE_ID, DOOR_ID, 'the page is its door (config.js)');
     // layersharedsession takes keys of at most 64 characters, and page ids of [a-z0-9-].
-    assert.ok(spaceKey('u8yhkfn3h6as').length <= 64);
+    assert.equal(spaceKey('u8yhkfn3h6as'), `${DOOR_ID}.space.u8yhkfn3h6as`);
+    assert.ok(`${'x'.repeat(32)}.space.u8yhkfn3h6as`.length <= 64, 'the longest page id too');
     assert.match(PAGE_ID, /^[a-z0-9-]{1,32}$/);
   });
 

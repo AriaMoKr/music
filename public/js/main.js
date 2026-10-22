@@ -16,10 +16,11 @@ import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
 import { PLAYER, XR_FRAME_RATE } from './config.js';
 import { doorOf, wayOut } from './hallway.js';
-import { loadNav, NAV_KEY } from './nav.js';
+import { loadNav, NAV_KEY, navDefaults } from './nav.js';
 import { Together } from './together.js';
 import { sessionText, spaceOf } from './together-space.js';
-import { roomFromUrl, withRoom } from '../vendor/layersharedsession/room.js';
+import { roomFromUrl } from '../vendor/layersharedsession/room.js';
+import { leaveUrl } from '../vendor/common/door.js';
 import { placeFromSearch, placeHref } from './place-url.js';
 import { BackHistory } from './back-history.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
@@ -149,7 +150,7 @@ async function start() {
 
   const controls = new Controls({ renderer, camera, rig, scene, world, domElement: renderer.domElement });
   controls.teleportTo(world.spawn.position, world.spawn.yaw);
-  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way, nav: loadNav(localStore(), settings) });
+  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way, nav: loadNav(localStore(), navDefaults(settings)) });
   if (catalog.static) {
     // A build without a server (GitHub Pages, tools/build-pages.mjs): nothing to rescan.
     interaction.setStatic(true);
@@ -198,11 +199,12 @@ async function start() {
   // The way out (hallway.js): leaving in VR, Quest Browser can keep the visitor in VR there, on
   // this page's origin only (the Hallway takes a granted session, as this page does below).
   // The shared session (together.js): joined when the address names a room (an invitation, or the
-  // Hallway's door), left for now while going out by the door, whose link carries the room on (the
-  // Hallway's README, "Going in": keep `room` on every link back).
+  // Hallway's door), left for now while going out by the door, whose link carries the room on, and
+  // out of any once the visitor has left it (common's leaveUrl; its README, "Going in": keep `room`
+  // on every link back).
   const together = new Together({ scene, camera, renderer, hands: () => controls.xrInputs });
   interaction.together = together;
-  const wayOutUrl = () => (together.room ? withRoom(way.url, together.room) : way.url);
+  const wayOutUrl = () => leaveUrl(way, together.room);
   const sessionNote = (text) => {
     overlay.showToast(text, 'info', 4000);
     if (renderer.xr.isPresenting) interaction.notice(text, '', 3);
@@ -224,17 +226,18 @@ async function start() {
   // Leaving another way (the card's link, the address bar, closing the tab): out of it too.
   addEventListener('pagehide', () => together.pause());
   interaction.onHallway = () => { location.href = wayOutUrl(); };
+  together.onChange(); // the card's link: out of any session until one is joined
   // Back from there with the browser's Back, this page restored from its cache as it was left (dark,
   // in the doorway): in front of the door again.
   // The Hallway's movement choice may have changed there meanwhile, or in another tab (nav.js).
   addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
-    interaction.setNav(loadNav(localStore(), settings), { store: false });
+    interaction.setNav(loadNav(localStore(), navDefaults(settings)), { store: false });
     interaction.cameBack();
     together.resume();
   });
   addEventListener('storage', (e) => {
-    if (e.key === NAV_KEY) interaction.setNav(loadNav(localStore(), settings), { store: false });
+    if (e.key === NAV_KEY) interaction.setNav(loadNav(localStore(), navDefaults(settings)), { store: false });
   });
   // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
   // followed in a book, as the toolbar's ↩ Back (back-history.js).

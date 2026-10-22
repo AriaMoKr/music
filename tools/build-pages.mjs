@@ -125,11 +125,14 @@ function vendorPathOf(file) {
 /**
  * Resolves a vendor file's import (its bare ones made relative: vendorSource) as the browser does,
  * among the site's vendor/<name>/ URLs, then back to the package file: a vendor name need not be
- * its package's folder (trystero-nostr is @trystero-p2p/nostr/dist).
+ * its package's folder (trystero-nostr is @trystero-p2p/nostr/dist). A bare import left (three, in
+ * layersharedsession's avatars.js, which only the page loads) is the import map's: three is copied
+ * apart, and the map's entry versioned with the app's.
  */
 function vendorResolve(spec, fromFile) {
   const at = vendorPathOf(fromFile);
-  if (!at || !spec.startsWith('.')) return resolve(spec, fromFile);
+  if (!at) return resolve(spec, fromFile);
+  if (!spec.startsWith('.')) return null;
   const url = path.posix.normalize(path.posix.join(path.posix.dirname(`${at[0]}/${at[1]}`), spec));
   const [name] = url.split('/');
   if (!DEFAULT_VENDOR_DIRS[name] || name === 'three' || name === 'iwer') {
