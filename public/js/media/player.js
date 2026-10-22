@@ -153,10 +153,12 @@ export class SoundPlayer {
     // with what has come, the oscillators playing the rest until theirs arrive.
     let samples = null;
     if (this._samples && this._instruments() !== 'synth') {
+      const t1 = performance.now();
       samples = this._samples.voices(ctx, song);
       let timer = 0;
       await Promise.race([samples.ready, new Promise((resolve) => { timer = setTimeout(resolve, SAMPLES_WAIT_MS); })]);
       clearTimeout(timer);
+      if (perf.enabled) perf.event('samples', { t: t1, ms: performance.now() - t1, files: samples.files, loaded: samples.loaded, mb: Math.round(this._samples.bytes / 104857.6) / 10 });
       if (token !== this._token) return;
     }
     this._synth = new MidiSynth(ctx, song, { ...(this._dest ? { destination: this._dest } : {}), samples });

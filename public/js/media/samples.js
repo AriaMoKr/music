@@ -136,6 +136,9 @@ export class SampleBank {
     return this._manifest;
   }
 
+  /** The decoded bytes kept. */
+  get bytes() { return this._bytes; }
+
   /** A decoded file, if it is loaded (now the most recently used). */
   buffer(file) {
     const b = this._buffers.get(file);
@@ -218,10 +221,15 @@ export class SongVoices {
     this.manifest = bank.manifestNow; // at once when it has come: the buffers kept play before ready
     /** The playable sample last found (reused: read it before asking again). */
     this.hit = { zone: null, buffer: null };
+    /** How many files the song's notes play, and whether they have all been loaded (or failed). */
+    this.files = 0;
+    this.loaded = false;
     this.ready = bank.manifest().then((m) => {
       this.manifest = m;
-      return this._loadAll(songFiles(m, song, { transpose }));
-    });
+      const files = songFiles(m, song, { transpose });
+      this.files = files.size;
+      return this._loadAll(files);
+    }).then(() => { this.loaded = true; });
   }
 
   /** Loads what playing `transpose` semitones off, or with `programs` (channel → program), needs. */
