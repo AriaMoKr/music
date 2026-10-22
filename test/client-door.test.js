@@ -4,9 +4,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import * as THREE from 'three';
-import {
+import './helpers/vendor.js'; // door.js imports ../../vendor/common/portal.js
+
+const {
   DOOR, doorCorridor, doorCrossed, doorLocal, doorPlace, doorWorld, rayDoor, viewParams, wallBehind, windowAnglesBesideDoor,
-} from '../public/js/world/door.js';
+} = await import('../public/js/world/door.js');
 
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 const rotunda = { kind: 'rotunda', R: 4 };
