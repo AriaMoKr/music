@@ -1960,7 +1960,13 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   - `perf.run(only)` loads `perf-scenarios.js`: small-idle, room-walk, filters, all-enter,
     all-idle, all-walk, read (small-idle and read use the smallest library that is not a
     Wikipedia), and, when a Wikipedia is present, wiki-walk and wiki-read in the largest one
-    (wiki-read opens the middle volume, then jumps to its longest article). The viewer glides
+    (wiki-read opens the middle volume, then jumps to its longest article), and, when books
+    play, midi-samples and midi-synth: the densest MIDI song (the largest file) on the
+    gramophone for 30 s with its sampled instruments (their loading the player's `samples`
+    event: ms, files, MB decoded) and with the oscillators, an `audio` event each with what the
+    browser says of its audio thread (`AudioContext.playbackStats` underruns, `renderCapacity`
+    load, where it has them). The tool runs them as a gesture (`userGesture`), so the audio
+    context may start. The viewer glides
     along the aisles at 1.2 m/s, and the settings are restored afterwards. A notice in front of the
     viewer (`interaction.notice`, visible in the headset) says "Performance test starting" for
     3 s before the first scenario (outside every segment) and "Performance test finished" at the

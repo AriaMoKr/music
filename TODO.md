@@ -377,10 +377,21 @@
   stand's Sampled / Synth button and the help dialog's checkbox switching it while it plays (each
   showing the other's change, kept in the settings), the strings swapped to ensemble loading
   their 22 zones as it played.
-  - *Not checked:* on the Quest, in VR: the decoding of a symphony's 100-odd files before it
-    starts and their 13 MB, and 40 sampled voices on its audio thread (`quest-perf.mjs`, with a
-    scenario playing a symphony on samples). Safari before 18.4 cannot decode Ogg Opus: there
-    every song plays the oscillators (not seen: no Mac here). Not heard by ear: the loops'
+  - *Measured on the Quest 3, in VR* (2026-10-21, `quest-perf.mjs run --only midi-samples,midi-synth`,
+    Quest Browser 152, the local server over adb reverse on Wi-Fi; `perf/quest-2026-10-22_03-35-38.json`):
+    Beethoven's Fifth's finale (the collection's densest MIDI file, 236 KB) on the gramophone, 30 s
+    with its samples, then 30 s on the oscillators. Its 108 files (13 MB decoded) load and decode
+    in 496 ms from the tap (the `samples` event), dropping 4 of the 33 frames meanwhile (worst 62
+    ms; 3 major GCs, 18 ms). Playing, the two are alike: 2 of 2,161 frames dropped (0.09 %, worst
+    36 ms) with samples, 2 of 2,164 (worst 69 ms) with the oscillators; the audio thread
+    (`AudioContext.playbackStats`) had 1 underrun of 4 ms in 30 s with samples, none with the
+    oscillators (output latency 56 ms). Garbage collection was busier with samples (42 pauses,
+    84 ms = 0.28 % of the time, longest 18.7 ms, against 13 pauses, 32 ms) but cost no frame;
+    worth a heap profile if a longer piece shows drops. The headset over the whole run: 72.1 fps
+    average (min 55, at the room switches), CPU 24 %, GPU 30 %, 45 °C at most.
+  - *Not checked:* Safari before 18.4 cannot decode Ogg Opus: there every song plays the
+    oscillators (not seen: no Mac here). The live site's load on the Quest over the internet
+    (from GitHub Pages: 744 KB, 2.45 s on the PC's first visit). Not heard by ear: the loops'
     seams after lossy coding (short loops are repeated to 0.3 s so a seam comes round less often).
   - *Next:* velocity layers (the font has up to 8 a piano key: a soft note is a softer recording),
     a velocity-to-brightness filter in place of the font's, and a reverb (CC 91; the font sends

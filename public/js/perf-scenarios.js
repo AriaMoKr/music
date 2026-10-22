@@ -1,14 +1,17 @@
 // Built-in performance scenarios (?perf), started by tools/quest-perf.mjs through
 // window.__vrlbry.perf.run(). Each one is a recorder segment, so the dump breaks the numbers down
 // per scenario. They drive the real app: room switches, walking (the rig glides along aisles),
-// filter changes, reading, and the largest Wikipedia room. Settings are restored afterwards.
+// filter changes, reading, the largest Wikipedia room, and a MIDI song played with sampled
+// instruments and with the oscillators. Settings are restored afterwards.
 
 import { perf } from './perf.js';
 import { facetsOf, isFaceted, ALL_PLACE } from './rooms.js';
 import { BOOKCASE } from './config.js';
 import { save } from './util/storage.js';
 
-export const SCENARIOS = ['small-idle', 'room-walk', 'filters', 'all-enter', 'all-idle', 'all-walk', 'read', 'wiki-walk', 'wiki-read'];
+export const SCENARIOS = ['small-idle', 'room-walk', 'filters', 'all-enter', 'all-idle', 'all-walk', 'read', 'wiki-walk', 'wiki-read', 'midi-samples', 'midi-synth'];
+/** How long each MIDI scenario plays its song (ms). */
+const MIDI_MS = 30000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const NOTICE_S = 3; // the starting notice, shown before the first scenario
@@ -37,6 +40,60 @@ export function walkPath(world) {
     pts = Array.from({ length: 13 }, (_, i) => [Math.sin((i / 12) * 2 * Math.PI) * r, Math.cos((i / 12) * 2 * Math.PI) * r]);
   }
   return pts.map(([x, z]) => ({ x, z })).filter((p) => world.isWalkable(p.x, p.z));
+}
+
+/** Waits until fn() is true, at most `ms`; whether it became so. */
+async function until(fn, ms) {
+  const end = Date.now() + ms;
+  while (!fn()) {
+    if (Date.now() >= end) return false;
+    await sleep(100);
+  }
+  return true;
+}
+
+/**
+ * The densest MIDI song of the libraries whose books play (the largest file: a symphony's
+ * movement), as a queue item { libId, bookId, sound }; null when none plays or its sound index
+ * is not ready within 20 s.
+ */
+async function densestSong(I) {
+  let catalog = null;
+  await until(() => (catalog = I.soundCatalog()), 20000);
+  let best = null;
+  for (const it of catalog?.items ?? []) {
+    if (it.sound.k === 'midi' && (!best || (it.sound.media?.bytes ?? 0) > (best.sound.media?.bytes ?? 0))) best = it;
+  }
+  return best && { libId: best.libId, bookId: best.bookId, sound: best.sound };
+}
+
+/**
+ * How the audio thread keeps up while a song plays, where the browser says (Chrome's
+ * AudioContext.playbackStats, renderCapacity): start(), then stop() for the numbers.
+ */
+function audioStats(ctx) {
+  const ps = ctx?.playbackStats;
+  const first = ps ? { events: ps.underrunEvents, secs: ps.underrunDuration, total: ps.totalDuration } : null;
+  const rc = ctx?.renderCapacity?.start ? ctx.renderCapacity : null;
+  let peak = 0, sum = 0, n = 0, underrun = 0;
+  if (rc) {
+    rc.onupdate = (e) => {
+      peak = Math.max(peak, e.peakLoad);
+      sum += e.averageLoad;
+      n++;
+      underrun = Math.max(underrun, e.underrunRatio);
+    };
+    try { rc.start({ updateInterval: 1 }); } catch { /* not this browser */ }
+  }
+  return {
+    stop() {
+      try { rc?.stop(); } catch { /* not started */ }
+      const out = { sampleRate: ctx?.sampleRate ?? null, baseLatency: ctx?.baseLatency ?? null, outputLatency: ctx?.outputLatency ?? null };
+      if (first) Object.assign(out, { underrunEvents: ps.underrunEvents - first.events, underrunSecs: ps.underrunDuration - first.secs, playedSecs: ps.totalDuration - first.total });
+      if (n) Object.assign(out, { loadAvg: sum / n, loadPeak: peak, underrunRatio: underrun });
+      return out;
+    },
+  };
 }
 
 /** Glides the viewer along points at `speed` m/s, moved every frame like stick walking. */
@@ -200,6 +257,36 @@ export async function runScenarios(app, { only = null } = {}) {
         }
         await I.putBack();
       });
+    }
+
+    // MIDI (SPEC §5.6 "Sounds"): the densest song on the gramophone, with its sampled instruments
+    // (their loading: the player's 'samples' event) and then with the oscillators; what the audio
+    // thread says as an 'audio' event each.
+    if (want('midi-samples') || want('midi-synth')) {
+      const song = await densestSong(I);
+      if (!song) log('no MIDI song');
+      const playSong = async (kind) => {
+        const before = settings.midiInstruments;
+        settings.midiInstruments = kind;
+        try {
+          if (settings.place !== song.libId) await goTo(song.libId);
+          atSpawn();
+          I.playSounds([song], 0, 'gramophone');
+          await until(() => I.sound.state !== 'loading', 20000);
+          log(`${kind}: ${I.sound.state} (${song.sound.media?.name})`);
+          const stats = audioStats(I.sound.synth?.ctx);
+          await sleep(MIDI_MS);
+          const voices = I.sound.synth?._voices ?? [];
+          perf.event('audio', { kind, state: I.sound.state, ...stats.stop(), sampledVoices: voices.filter((v) => v.sources[0]?.buffer).length, voices: voices.length });
+        } finally {
+          I.stopSounds();
+          settings.midiInstruments = before;
+        }
+      };
+      if (song) {
+        await scenario('midi-samples', () => playSong('sampled'));
+        await scenario('midi-synth', () => playSong('synth'));
+      }
     }
   } finally {
     // Back to where the visitor was.
