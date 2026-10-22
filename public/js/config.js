@@ -44,8 +44,10 @@ export const XR_FRAME_RATE = 72;
 export const STORAGE_PREFIX = 'vrlbry:';
 
 /**
- * The Hallway (https://github.com/AriaMoKr/hallway): a WebXR corridor whose doors lead to other
- * environments, this library behind one of them. The link back names this one (?from=vrlbry), so
- * the visitor arrives in front of its door. Only a link: nothing is loaded from there.
+ * This library's door in the Hallway (https://github.com/AriaMoKr/hallway: a WebXR corridor whose
+ * doors lead to other environments): the way back names it (?from=, common's hallwayUrl), so the
+ * visitor arrives in front of its door, and it is this page in a shared session (together-space.js).
+ * The one site-specific id: a site made from this one changes it here (and in index.html's
+ * <noscript> link, which a test checks against it).
  */
-export const HALLWAY_URL = 'https://ariamokr.github.io/hallway/?from=vrlbry';
+export const DOOR_ID = 'vrlbry';

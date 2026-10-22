@@ -91,7 +91,7 @@ export class Interaction {
    * @param {Record<string, object[]>} o.booksByLib
    * @param {object} o.settings persisted settings (mutated + saved here)
    * @param {ReturnType<defaultWayOut>} [o.wayOut] where the catalogue stand's "← Hallway" leads (hallway.js)
-   * @param {{ move: string, turn: string }} [o.nav] how to move and turn in VR (nav.js loadNav)
+   * @param {{ move: string, turn: string }} [o.nav] how to move and turn in VR (nav.js: common's loadNav)
    */
   constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut(), nav }) {
     Object.assign(this, { renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut });
@@ -2424,7 +2424,7 @@ export class Interaction {
     this.nav = { move: nav.move === 'teleport' ? 'teleport' : 'smooth', turn: nav.turn === 'smooth' ? 'smooth' : 'snap' };
     this.controls.setNav(this.nav);
     if (store) {
-      try { saveNav(localStorage, this.nav); } catch { /* no storage: this visit only */ }
+      saveNav(this.nav); // false without storage: this visit only
     }
     if (this.settings.smoothMove !== (this.nav.move === 'smooth')) {
       this.settings.smoothMove = this.nav.move === 'smooth';

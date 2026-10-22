@@ -1,46 +1,24 @@
 // The way out (SPEC §5.6 "Kiosk panel"): the card's and the catalogue stand's "← Hallway" lead to
-// the Hallway this library was made for (config.js HALLWAY_URL), or to whatever place has it
+// the Hallway, in front of this library's door (config.js DOOR_ID), or to whatever place has it
 // behind one of its doors and says so in the link that brings visitors here:
 //   https://ariamokr.github.io/vrlbry/?back=<that place's address>&backname=<its name>
-// (both URL-encoded). Only http(s) addresses are taken, and another place is named on the button
-// (by `backname`, else its host), so a link cannot send visitors somewhere unsaid. The Hallway's
-// own doors send no name: they say `from=hallway` and a `back` on the Hallway's address (its
-// README, "Going in"), which is the Hallway, kept as given (its `from` and the session's `room`).
-// The door back in the room (world/door.js) leads there too, saying where (doorOf). Pure.
+// (both URL-encoded). The rules are the Hallway's door contract, in AriaMoKr/common (door.js
+// wayBack; its README, "Linking back"): only http(s) addresses are taken, another place is named
+// on the button (by `backname`, else its host), so a link cannot send visitors somewhere unsaid,
+// and the Hallway's own doors (`from=hallway`, a `back` on the Hallway's own page) are the
+// Hallway, kept as given (its `from` and a shared session's `room`). The door back in the room
+// (world/door.js) leads there too, saying where (doorOf). Pure.
 
-import { HALLWAY_URL } from './config.js';
-
-/** The longest name shown on the button (characters). */
-const NAME_MAX = 24;
-
-const HALLWAY = new URL(HALLWAY_URL);
-
-/** Whether an address is the Hallway's own page: its origin and path, whatever its query. */
-const isHallway = (url) => url.origin === HALLWAY.origin && url.pathname === HALLWAY.pathname;
+import { hallwayViews, wayBack } from '../vendor/common/door.js';
+import { DOOR_ID } from './config.js';
 
 /**
- * Where the way out leads, from the page's query string.
+ * Where the way out leads, from the page's query string: common's wayBack for this library's door.
  * @param {string} search location.search
- * @returns {{ url: string, label: string, title: string, name: string, host: string, custom: boolean }}
+ * @returns {{ url: string, label: string, title: string, name: string, host: string, hallway: boolean }}
  */
 export function wayOut(search = '') {
-  const params = new URLSearchParams(search);
-  let url = null;
-  try {
-    url = params.get('back') ? new URL(params.get('back')) : null;
-  } catch {
-    url = null;
-  }
-  if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) url = null;
-  if (!url || (params.get('from') === 'hallway' && isHallway(url))) {
-    return {
-      url: url ? url.href : HALLWAY_URL, label: '← Hallway', title: 'Back to the Hallway, whose doors lead to other places',
-      name: 'Hallway', host: HALLWAY.host, custom: false,
-    };
-  }
-  const name = (params.get('backname') || '').replace(/\s+/g, ' ').trim() || url.host;
-  const shown = name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1).trimEnd()}…` : name;
-  return { url: url.href, label: `← ${shown}`, title: `Back to ${name} (${url.host})`, name, host: url.host, custom: true };
+  return wayBack(search, DOOR_ID);
 }
 
 /**
@@ -49,12 +27,12 @@ export function wayOut(search = '') {
  * @param {ReturnType<typeof wayOut>} way
  */
 export function doorOf(way) {
-  if (way.custom) return { title: way.name, subtitle: way.host, sign: way.name, color: '#9cc6b4', view: 'plain', views: null, viewId: null };
-  // The Hallway publishes the view out of each of its doors (its README, "The view from your
-  // door"): this library's is the one the way back's ?from= names.
-  const url = new URL(way.url);
+  if (!way.hallway) return { title: way.name, subtitle: way.host, sign: way.name, color: '#9cc6b4', view: 'plain', views: null, viewId: null };
+  // The Hallway publishes the view out of each of its doors (common's README, "The view from your
+  // door"): this library's is the one the way back's ?from= names, else this door's.
+  const views = hallwayViews(way, DOOR_ID);
   return {
     title: 'Hallway', subtitle: 'Doors to other places', sign: 'Hallway', color: '#9cc6b4', view: 'hallway',
-    views: new URL('views/views.json', url).href, viewId: url.searchParams.get('from'),
+    views: views?.views ?? null, viewId: views?.id ?? null,
   };
 }

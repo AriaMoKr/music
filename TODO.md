@@ -298,6 +298,11 @@
   it); names and waves (the Hallway's); the arrival pose the door sends (`dx`, `yaw`, `pitch`:
   arriving where the view through the door was taken), and taking the visit's parameters off
   the address once read (`back` is kept, as the way out reads it on a reload).
+  *Shared packages (2026-10-21):* the door contract and the movement choice now come from
+  AriaMoKr/common v0.1.0 (`door.js` `wayBack`, `hallwayViews`, `leaveUrl`; `nav.js`), the
+  avatars from layersharedsession v0.2.0 (`avatars.js`), and the door id is one constant
+  (`config.js` `DOOR_ID`). `leaveUrl` also fixed the way out after Leave, which kept the room the
+  Hallway's link had. Still for later: common's `readVisit` (the arrival pose) and `withoutVisit`.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

@@ -2,13 +2,15 @@
 // is, so only those in the same room are drawn (each place and room is laid out on its own), and
 // the session in words.
 
-/** This page in the session (layersharedsession's `page`; the Hallway is `hallway`). */
-export const PAGE_ID = 'vrlbry';
+import { DOOR_ID } from './config.js';
+
+/** This page in the session (layersharedsession's `page`; the Hallway is `hallway`): its door's id. */
+export const PAGE_ID = DOOR_ID;
 /** The app id every site in the session uses (the Hallway's together.js; layersharedsession's test page can watch). */
 export const APP_ID = 'ariamokr-layersharedsession-test';
 
 /** The shared value (layersharedsession's session.set) that says where a member is in the library. */
-export const spaceKey = (memberId) => `vrlbry.space.${memberId}`;
+export const spaceKey = (memberId) => `${PAGE_ID}.space.${memberId}`;
 
 /**
  * Where in the library: the place and its room's filters and page (rooms.js), which together

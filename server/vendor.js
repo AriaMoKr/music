@@ -1,8 +1,9 @@
 // The third-party modules the browser loads from /vendor/<name>/ (the server maps node_modules;
 // tools/build-pages.mjs copies what the client imports): three and IWER for the page, for the
-// local library's worker (public/js/local/) htmlparser2, entities, fzstd and fflate, and for a
-// shared session (public/js/together.js) layersharedsession and Trystero (its Nostr strategy, the
-// core it runs on, and noble's secp256k1), the Hallway's.
+// local library's worker (public/js/local/) htmlparser2, entities, fzstd and fflate, for the
+// Hallway's door contract (public/js/hallway.js, nav.js) common, and for a shared session
+// (public/js/together.js) layersharedsession and Trystero (its Nostr strategy, the core it runs on,
+// and noble's secp256k1), the Hallway's.
 //
 // A module worker has no import map, so a vendor module's bare imports must become relative URLs:
 // rewriteVendorImports does that for the ones the worker and the session reach (htmlparser2's
@@ -24,6 +25,7 @@ export const DEFAULT_VENDOR_DIRS = Object.freeze({
   entities: modules('entities'),
   fzstd: modules('fzstd'),
   fflate: modules('fflate'),
+  common: modules('common', 'src'),
   layersharedsession: modules('layersharedsession', 'public', 'js'),
   'trystero-nostr': modules('@trystero-p2p', 'nostr', 'dist'),
   'trystero-core': modules('@trystero-p2p', 'core', 'dist'),

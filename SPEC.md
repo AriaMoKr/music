@@ -1091,8 +1091,9 @@ HTML entries are served as-is (debug aid; the client never navigates to them).
 
 **Static:** `/` → `public/index.html`; other paths → files under `public/`;
 `/vendor/three/*` → `node_modules/three/*`; `/vendor/iwer/*` → `node_modules/iwer/build/*`; the
-other packages of `server/vendor.js` (the local library's worker libraries, and the shared
-session's: `layersharedsession` → its `public/js`, `trystero-nostr`, `trystero-core`,
+other packages of `server/vendor.js` (the local library's worker libraries; `common` → its `src`,
+the Hallway's door contract; and the shared session's: `layersharedsession` → its `public/js`,
+`trystero-nostr`, `trystero-core`,
 `noble-secp256k1`), their bare imports made relative (`trystero`, `@trystero-p2p/core`,
 `@noble/secp256k1`), since the page names them by relative URL, not through the import map.
 Correct MIME types (`.js` → `text/javascript`, `.mjs`, `.css`, `.html`, `.json`, `.png`, `.jpg`,
@@ -1244,7 +1245,7 @@ and a rim glow in the door's colour, brighter when pointed at, a little when sto
 1.7 m), a plaque on the wall to its right and a sign over it in the Hallway's green enamel and
 gold. Through it: the Hallway's own view out of this library's door there, which the Hallway
 renders and publishes (its README, "The view from your door": `views/views.json` beside its
-page, the entry named by `HALLWAY_URL`'s `?from=`, a 2:1 picture and how to hang it: `depth`,
+page, the entry named by the way back's `?from=`, else this door's id: common's `hallwayViews`, a 2:1 picture and how to hang it: `depth`,
 `pictureHeight`, `eye`, `horizon`, `aspect`, checked by `viewParams`; `Door.loadView`, `setPicture`),
 loaded after the room is built; until then, offline, or without one, a painted view down the
 Hallway (its lamps, its marble floor, this library's door glowing gold, dusk in the end window).
@@ -1386,7 +1387,7 @@ export class Controls extends EventTarget {
   bookcase; this applies in every state, while books are pickable only when browsing), or the
   room (`world.raycastSolid` → `room.raycast`: the wall, the dome or ceiling, the floor, and the
   furniture as upright cylinders from its walking circles with heights).
-  Locomotion when enabled, as the visitor chose (`setNav`; nav.js: the Hallway's `hallway.nav`
+  Locomotion when enabled, as the visitor chose (`setNav`; nav.js, common's: the Hallway's `hallway.nav`
   = `{ move: 'smooth' | 'teleport', turn: 'snap' | 'smooth' }`): **right stick forward → teleport
   arc** (release to teleport onto `world.teleportTargets`, validated by `world.isWalkable`; the
   left stick aims one too when `move` is `'teleport'`, one arc at a time); while aiming, that
@@ -1542,7 +1543,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
     A–Z letter grid over the shelved books (teleports to the first book with that letter via
     `shelves.locate` and highlights it for 4 s), "Surprise me" (random book), "Recently read"
     list (opens directly into read), settings toggles (sound; "Stick walking" / "Teleport only"
-    and "Snap turning" / "Smooth turning": the Hallway's movement choice, nav.js, kept in its
+    and "Snap turning" / "Smooth turning": the Hallway's movement choice, nav.js (AriaMoKr/common's
+    `loadNav` / `saveNav`, with vrlbry's `navDefaults(settings)`), kept in its
     `hallway.nav` so it is one choice across the sites on this origin; read at start, on Back
     from the Hallway and when another tab changes it; before the Hallway has stored one,
     `settings.smoothMove` decides `move`, and it follows the choice).
@@ -1679,14 +1681,17 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   dialog's "Tell me when this site has been updated" checkbox turns it back on.
 - **The way out** (`hallway.js`, always shown: the card's header and the kiosk's): "← Hallway" leads
   to the Hallway (https://ariamokr.github.io/hallway/, a WebXR corridor whose doors lead to other
-  places) as `config.HALLWAY_URL`, `?from=vrlbry`, so the visitor arrives at this library's door.
-  A place that has this library behind one of its doors names itself in the link that brings
-  visitors here, and the way out leads there instead: `?back=<its address>&backname=<its name>`
-  (URL-encoded; http(s) only, else the Hallway; the button shows the name, else the host, at most
-  24 characters). The Hallway's own doors send no name: `?from=hallway` with a `back` on the
-  Hallway's address (`HALLWAY_URL`'s origin and path, any query: this site shares its origin) is
-  the Hallway, "← Hallway", its link kept as given (its `from`, which names the door view, and a
-  shared session's `room`). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
+  places) with `?from=` this library's door id (`config.DOOR_ID`, `vrlbry`: common's
+  `hallwayUrl`), so the visitor arrives at this library's door. The rules are the Hallway's door
+  contract in AriaMoKr/common (`door.js` `wayBack(search, DOOR_ID)`, its README "Linking back"; the
+  way is `{ url, label, title, name, host, hallway }`). A place that has this library behind one of
+  its doors names itself in the link that brings visitors here, and the way out leads there
+  instead: `?back=<its address>&backname=<its name>` (URL-encoded; http(s) only, else the Hallway;
+  the button shows the name, else the host, at most 24 characters; the tooltip the name and host,
+  or the address). The Hallway's own doors send no name: `?from=hallway` with a `back` on the
+  Hallway's own page (its origin and path, any query: this site shares its origin) is the
+  Hallway, "← Hallway", its link kept as given (its `from`, which names the door view, and a
+  shared session's `room`). The `<noscript>` link in index.html names the same door (a test checks). A plain navigation, so leaving in VR can keep the visitor in VR there when it is
   on this page's origin (§5.7). The door back in the room (§5.3) leads there too: walking (or
   leaning) through it, clicking or tapping its opening, or pointing at it and pulling the trigger.
   The door and the kiosk's button go by `interaction.leave()`: the view fades to black (0.3 s in
@@ -1694,18 +1699,20 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   the browser's cache by Back (`pageshow` with `persisted`), `cameBack()` puts the viewer 1.1 m in
   front of the door, facing the room, and fades back in.
 - **Together** (`together.js`, `together-space.js`): the Hallway's shared session (its README,
-  "Going in" and "Together"; AriaMoKr/layersharedsession at the Hallway's commit, peer to peer
-  over WebRTC with Trystero through public Nostr relays, the same app id). A valid `?room=` in the
-  address (`roomFromUrl`: the Hallway's door, or an invitation) joins it as page `vrlbry`; the
+  "Going in" and "Together"; AriaMoKr/layersharedsession v0.2.0, peer to peer over WebRTC with
+  Trystero through public Nostr relays, the same app id). A valid `?room=` in the address
+  (`roomFromUrl`: the Hallway's door, or an invitation) joins it as page `DOOR_ID`; the
   session's modules (~270 kB with Trystero) load only then (`import()`). Each visitor shares where
   in the library they are (`spaceOf(place, room)`: place, genre, letter and page, which decide the
-  room's layout) as the shared value `vrlbry.space.<memberId>`, set by `showPlace` (main.js); the
-  others in the same room are drawn as in the Hallway (a head with a visor, a hand per tracked
-  controller, a ring on the floor, their name), placed every frame from their poses without
-  allocating. Joins, arrivals and departures are toasts (and `notice` in VR). The card's line
+  room's layout) as the shared value `<DOOR_ID>.space.<memberId>`, set by `showPlace` (main.js);
+  the others in the same room are drawn by the layer's `avatars.js` (`createAvatars`: a head with a
+  visor, a hand per tracked controller, a ring on the floor, their name), placed every frame from
+  their poses (`place`, with an `isHere` made once, each avatar keeping its key) and the
+  visitor's own pose read by `readPose`, without allocating. Joins, arrivals and departures are toasts (and `notice` in VR). The card's line
   under its header and the kiosk's (*Shelves & settings*, above "Recently read") say who else is
   in it ("With you: 1 here, 2 in another place") with a Leave, which leaves and takes `room` out
-  of the address. The way out carries `room` on (`withRoom`, the card's link and `onHallway`);
+  of the address. The way out carries `room` on, and once the visitor has left the session no room
+  at all, though the Hallway's link had one (common's `leaveUrl`, the card's link and `onHallway`);
   going out by `leave()` leaves the session first (`onLeaving`, so the others see it at once),
   `cameBack()` and Back to a cached page join again (`onCameBack`, `pageshow`), and `pagehide`
   leaves. Starting a session here, names and waves are the Hallway's (not here yet).
