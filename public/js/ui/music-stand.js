@@ -22,9 +22,15 @@ const RATE_STEP = 0.1;
 const SWAP_FAMILIES = 12;
 
 export class MusicStand {
-  /** @param {{ onClose: () => void }} o ✕ */
-  constructor({ onClose }) {
+  /**
+   * @param {{ onClose: () => void, instruments?: () => string, onInstruments?: (kind: string) => void }} o
+   *   onClose: ✕; instruments: what MIDI songs are played with ('sampled' or 'synth'), and
+   *   onInstruments(kind) to change it (the stand's button)
+   */
+  constructor({ onClose, instruments = () => 'sampled', onInstruments = null }) {
     this.onClose = onClose;
+    this._instruments = instruments;
+    this.onInstruments = onInstruments;
     this.panel = new Panel({ width: STAND_W, height: STAND_H, pxPerMeter: PX });
     this.panel.visible = false;
     this.panel.mesh.name = 'music-stand';
@@ -84,9 +90,18 @@ export class MusicStand {
       this._from = -1;
     }
     p.clear();
-    p.add({ type: 'text', x: 18, y: 16, w: 500, h: 36, size: 24, weight: '600', serif: true, color: UI.accent, maxLines: 1, text: `♪ ${this._title || 'Sound'}` });
-    p.add({ id: 'stand-close', type: 'button', x: p.w - 66, y: 10, w: 52, h: 46, label: '✕', size: 24, onClick: () => this.onClose() });
     const synth = player.synth;
+    // A song's instruments: sampled, or the synthesizer's oscillators (settings.midiInstruments).
+    const kindW = song && synth && this.onInstruments ? 150 : 0;
+    p.add({ type: 'text', x: 18, y: 16, w: p.w - 92 - (kindW ? kindW + 8 : 0) - 18, h: 36, size: 24, weight: '600', serif: true, color: UI.accent, maxLines: 1, text: `♪ ${this._title || 'Sound'}` });
+    if (kindW) {
+      const sampled = this._instruments() !== 'synth';
+      p.add({
+        id: 'instruments', type: 'button', x: p.w - 66 - 8 - kindW, y: 10, w: kindW, h: 46, size: 18,
+        label: sampled ? 'Sampled' : 'Synth', active: sampled, onClick: () => this.onInstruments(sampled ? 'synth' : 'sampled'),
+      });
+    }
+    p.add({ id: 'stand-close', type: 'button', x: p.w - 66, y: 10, w: 52, h: 46, label: '✕', size: 24, onClick: () => this.onClose() });
     if (song) {
       p.add({
         id: 'roll', type: 'custom', ...ROLL,

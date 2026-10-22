@@ -1184,7 +1184,8 @@ public/
     rooms.js             which books are shelved: the current place (one library, or one room of a huge one).
     audio.js             tiny WebAudio synth: page turn, book slide/thud, UI click; the audio context (`audio.context`).
     media/midi.js        Standard MIDI Files → a song: notes in seconds with their instrument, loudness, pan, bend (pure).
-    media/synth.js       MidiSynth: plays a song through WebAudio (oscillators, envelopes, noise drums; ≤ 40 voices).
+    media/synth.js       MidiSynth: plays a song through WebAudio (sampled instruments, else oscillators, envelopes, noise drums; ≤ 40 voices).
+    media/samples.js     SampleBank, SongVoices: the sampled instruments (public/sounds/gm), loaded per song.
     media/player.js      SoundPlayer: the one sound playing (MIDI through MidiSynth, else <audio>); tempo, loop.
     media/queue.js       SoundQueue (what plays next) and how sounds are named and listed (pure).
     media/roll.js        the piano roll: a song's pitch range and parts, a window of it drawn (pure).
@@ -1599,14 +1600,39 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   no trail (`_playSound`, `interaction.sound`: media/player.js): one sound at a time, its name in
   a notice; while it is loaded the toolbar's top row has ▶ / ❚❚, ■ and its time ("0:12 / 1:30",
   redrawn when the second changes) between a shorter progress bar and the page label. A MIDI file
-  is played by the synthesizer (media/synth.js: an oscillator timbre per General MIDI family,
-  filtered noise and falling tones for the drums of channel 10, notes scheduled 1 s ahead from a
-  timer, never from the frame loop, at most 40 voices); any other sound by an `<audio>` element
+  is played by the synthesizer (media/synth.js: notes scheduled 1 s ahead from a timer, never from
+  the frame loop, at most 40 voices), with sampled instruments where it has them (below) and else
+  an oscillator timbre per General MIDI family and filtered noise and falling tones for the drums
+  of channel 10; any other sound by an `<audio>` element
   (the server's URL, which streams; a blob of its bytes for a local file or a sound read from
   Kiwix's mirror). The audio context is made or resumed on the tap itself (`audio.init`, before
   anything is awaited); a browser that refuses to start an `<audio>` without a recent tap leaves
   it waiting for ▶ ("tap ▶"). A book's sound stops when the book is put back (the gramophone's
-  plays on). Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
+  plays on). **Sampled instruments** (media/samples.js, `settings.midiInstruments`: 'sampled', the
+  default, or 'synth'): GeneralUser GS v2.0.3's General MIDI set (S. Christian Collins; its
+  LICENSE.txt beside it), made by tools/build-samples.mjs into public/sounds/gm/: for each of the
+  128 programs and the standard drum kit (keys 27–87), the region each key plays at velocity 100
+  (of layers that sound together, the loudest: the body of the sound), its sample cut to what is
+  heard (to its loop's end, a loop shorter than 0.3 s repeated until it is not, else at most 4 s,
+  faded) and encoded as mono Ogg Opus at 40 kbps, named by its content; 745 files, 3.9 MB, and a
+  manifest (`manifest.json`, 158 KB) of zones `{ lo, hi, file, root, cents?, scale?, loop?: [s, e],
+  len, att? (cB), env: [attack, hold, decay, sustain (cB down), release], keyToHold?,
+  keyToDecay?, exclusive? }` (s, from the file's start), keys in order without gaps. The font's
+  filters and modulators are not kept: the samples play as recorded, louder or softer with the
+  note's velocity. A song loads only the files its notes play (`songFiles`: each note's zone and
+  two keys either side; a program the set lacks plays its family's first), decoded at 32 kHz into
+  an LRU of 64 MB kept for the page; it waits for them at most 5 s (`SAMPLES_WAIT_MS`, the player
+  `loading`), then starts with what has come. A note whose zone is not loaded plays the nearest
+  loaded zone of its program, else the oscillator; a part given another instrument (⇄) or a new
+  key loads what it needs while it plays (`prepare`). A sampled note's rate is
+  2^((scale·(key − root)·100 + cents + bend)/1200); its loop holds it while the key is down; its
+  gain is `SAMPLE_PEAK` (9.5, measured: as loud as the oscillators, RMS over five songs) ×
+  velocity × 10^(−att/200) through the SoundFont volume envelope (attack, hold, decay towards the
+  sustain level, the release once the note ends: 100 dB in the time given); a drum plays its
+  sample out, and one of an exclusive class (the hi-hats) cuts the others of it. The music
+  stand's "Sampled" / "Synth" button and the help dialog's "Play MIDI songs with sampled
+  instruments" change it, the song playing at once (`SoundPlayer.setInstruments`). Without the
+  manifest, or where Opus cannot be decoded, every song plays the oscillators. Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
   the font size), kept while links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
   to the same spread while the font size is the same. So does the browser's Back (its button, a

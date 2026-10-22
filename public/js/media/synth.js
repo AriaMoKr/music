@@ -1,9 +1,12 @@
-// Plays a song of midi.js through WebAudio: a small General MIDI synthesizer of oscillators,
-// envelopes and filtered noise (no sound fonts to download), a timbre per instrument family and a
-// few drums. Notes are scheduled a little ahead (LOOKAHEAD) from a timer, not from the frame
-// loop: requestAnimationFrame does not run in VR or in a hidden page, and a song's thousands of
-// notes are never all scheduled at once. At most MAX_VOICES sound together (a Quest's audio
-// thread), the one ending soonest giving way.
+// Plays a song of midi.js through WebAudio: sampled instruments where the song's voices
+// (samples.js) have a note's sample loaded, else a small General MIDI synthesizer of oscillators,
+// envelopes and filtered noise, a timbre per instrument family and a few drums. Notes are
+// scheduled a little ahead (LOOKAHEAD) from a timer, not from the frame loop:
+// requestAnimationFrame does not run in VR or in a hidden page, and a song's thousands of notes
+// are never all scheduled at once. At most MAX_VOICES sound together (a Quest's audio thread),
+// the one ending soonest giving way.
+
+import { rateOf } from './samples.js';
 
 /** Notes scheduled this far ahead (s), from a timer every TICK_MS. */
 const LOOKAHEAD = 1.0;
@@ -14,6 +17,11 @@ const LATE = 0.25;
 export const MAX_VOICES = 40;
 /** How loud a note of full velocity starts, before the master volume. */
 const PEAK = 0.32;
+/** The same for a sample, before its zone's attenuation: as loud as the oscillators, measured (SPEC §5.6). */
+export const SAMPLE_PEAK = 9.5;
+/** SoundFont envelope times are for 100 dB: as time constants of an exponential, that divided by ln(10^5). */
+const DB100 = 11.5;
+const DB60 = 0.6; // of a release: the time it takes to fall 60 dB, when the voice is let go
 
 /**
  * Timbres by General MIDI family (program >> 3): oscillator, attack and release (s), how far it
@@ -81,11 +89,13 @@ export class MidiSynth {
   /**
    * @param {BaseAudioContext} ctx
    * @param {{ notes: object[], duration: number }} song midiSong's
-   * @param {{ destination?: AudioNode, volume?: number }} [opts]
+   * @param {{ destination?: AudioNode, volume?: number, samples?: import('./samples.js').SongVoices|null }} [opts]
+   *   samples: the song's sampled voices (null: the oscillators alone)
    */
-  constructor(ctx, song, { destination = ctx.destination, volume = 0.7 } = {}) {
+  constructor(ctx, song, { destination = ctx.destination, volume = 0.7, samples = null } = {}) {
     this.ctx = ctx;
     this.song = song;
+    this._samples = samples;
     this.onEnd = null;
     this._out = ctx.createGain();
     this._out.gain.value = volume;
@@ -140,6 +150,7 @@ export class MidiSynth {
   /** Plays it `semitones` higher (or lower), drums aside. */
   setTranspose(semitones) {
     this._again(() => { this._transpose = Math.max(-24, Math.min(24, Math.round(semitones))); });
+    this._prepare();
   }
 
   /** Mutes a channel (or plays it again). */
@@ -150,6 +161,19 @@ export class MidiSynth {
   /** Plays a channel with another program (General MIDI), or its own again (null). */
   setProgram(ch, program) {
     this._again(() => { if (program == null) this._programs.delete(ch); else this._programs.set(ch, program & 127); });
+    this._prepare();
+  }
+
+  /** The sampled voices it plays with, or the oscillators alone (null); heard at once. */
+  get samples() { return this._samples; }
+  setSamples(samples) {
+    this._again(() => { this._samples = samples; });
+    this._prepare();
+  }
+
+  /** Loads the samples another key or instrument needs (until then the nearest, or the oscillators). */
+  _prepare() {
+    this._samples?.prepare({ transpose: this._transpose, programs: this._programs.size ? this._programs : null });
   }
 
   /** Goes round from b back to a (song seconds), or not (null). */
@@ -309,8 +333,61 @@ export class MidiSynth {
 
   _start(n, when) {
     this._room(when);
-    if (n.ch === 9) this._drum(n, when);
+    const s = this._samples;
+    if (n.ch === 9) {
+      const hit = s?.drum(n.key);
+      if (hit) this._sampled(n, when, hit, true);
+      else this._drum(n, when);
+      return;
+    }
+    const key = Math.max(0, Math.min(127, n.key + this._transpose));
+    const hit = s?.tone(this._programs.get(n.ch) ?? n.program, key);
+    if (hit) this._sampled(n, when, hit, false);
     else this._tone(n, when);
+  }
+
+  /**
+   * A note played by its sample (samples.js): the zone's root and tuning give its rate, its loop
+   * holds it, and its volume envelope (SoundFont's: attack, hold, decay to the sustain level, and
+   * the release once the note ends) shapes it. A drum plays its sample out, and one of an
+   * exclusive class (the hi-hats) cuts the others of it short.
+   */
+  _sampled(n, when, hit, drum) {
+    const ctx = this.ctx;
+    const z = hit.zone;
+    const key = drum ? n.key : Math.max(0, Math.min(127, n.key + this._transpose));
+    const rate = rateOf(z, key, drum ? 0 : n.bend);
+    const cls = drum ? z.exclusive ?? 0 : 0;
+    if (cls) {
+      for (const v of this._voices) if (v.cls === cls && v.end > when && !v.cut) this._silence(v, when);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = hit.buffer;
+    src.playbackRate.value = rate;
+    if (z.loop) {
+      src.loop = true;
+      src.loopStart = z.loop[0];
+      src.loopEnd = z.loop[1];
+    }
+    const g = ctx.createGain();
+    src.connect(g).connect(this._pan(n.pan));
+    const env = z.env; // [attack, hold, decay (s), sustain (cB down), release (s)]
+    const attack = env[0], hold = env[1], decay = env[2], sustain = env[3], release = env[4];
+    const byKey = (tc) => (tc ? 2 ** (((60 - key) * tc) / 1200) : 1);
+    const peak = SAMPLE_PEAK * PEAK * n.gain * 10 ** (-(z.att ?? 0) / 200);
+    const top = when + Math.max(0.002, attack);
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(peak, top);
+    if (sustain > 0) g.gain.setTargetAtTime(peak * 10 ** (-sustain / 200), top + hold * byKey(z.keyToHold), Math.max(0.005, (decay * byKey(z.keyToDecay)) / DB100));
+    const sampleEnd = z.loop ? Infinity : when + z.len / rate;
+    const off = drum ? sampleEnd : Math.max(when + n.d / this._rate, top);
+    const rel = Math.max(0.03, Math.min(3, release));
+    let end = Math.min(sampleEnd, off + rel * DB60);
+    if (off < sampleEnd) g.gain.setTargetAtTime(0, off, rel / DB100);
+    end = Math.max(end, top) + 0.01;
+    src.start(when);
+    src.stop(end);
+    this._voices.push({ nodes: [src, g], sources: [src], gain: g, end, cls });
   }
 
   _tone(n, when) {
