@@ -1315,7 +1315,7 @@ uploaded once: an upload per picture would cost a frame each). The page picks th
 most sounds first); pointing at one plays it from where it hangs. A section's sign says its
 `title` when it has one (a period), else its library's.
 
-**The door** (`world/door.js`, `world/portal.js`): a doorway like the Hallway's own
+**The door** (`world/door.js`; its portal is AriaMoKr/common's `portal.js`): a doorway like the Hallway's own
 (https://ariamokr.github.io/hallway/), leading where the way out leads (§5.6). It stands against the
 wall behind the spawn point, the way one came in: in the rotunda at the far side of the circle
 (`{ x: 0, z: R − 0.1, yaw: π }`; the wall curves forward to its sides, so it stands a little off
@@ -1328,7 +1328,7 @@ and a rim glow in the door's colour, brighter when pointed at, a little when sto
 gold. Through it: the Hallway's own view out of this library's door there, which the Hallway
 renders and publishes (its README, "The view from your door": `views/views.json` beside its
 page, the entry named by the way back's `?from=`, else this door's id: common's `hallwayViews`, a 2:1 picture and how to hang it: `depth`,
-`pictureHeight`, `eye`, `horizon`, `aspect`, checked by `viewParams`; `Door.loadView`, `setPicture`),
+`pictureHeight`, `eye`, `horizon`, `aspect`, checked by `viewParams`; `Door.loadView`, common's `setView`),
 loaded after the room is built; until then, offline, or without one, a painted view down the
 Hallway (its lamps, its marble floor, this library's door glowing gold, dusk in the end window).
 A door to another place (`?back=` not on the Hallway) shows that place's glow and name. 4 draw calls in
@@ -1489,7 +1489,9 @@ export class Controls extends EventTarget {
   `selectend` (and the active pointer while it touches), like the mouse's left button and XR
   select. Pointers also have `setHovering(bool)`; extra events
   `teleport` and `turn` report locomotion.
-  **Gamepad** (`xr/gamepad.js`, W3C standard mapping, desktop and phone only; not polled in XR):
+  **Gamepad** (`xr/gamepad.js`, W3C standard mapping, desktop and phone only; not polled in XR; its
+  dead zone, stick scaling, held buttons and pad choice are AriaMoKr/common's `gamepad.js`, as in
+  the Hallway and outside, its `readPad` with each button's presses and releases vrlbry's own):
   the first connected pad becomes active when used and inactive when the mouse moves, and emits
   `gamepad { active }`, which the overlay uses for its hint and help. While it is active, a
   pointer `gamepad` through the screen centre (crosshair `.pad-crosshair`) replaces the mouse

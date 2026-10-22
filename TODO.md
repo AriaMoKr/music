@@ -303,6 +303,10 @@
   avatars from layersharedsession v0.2.0 (`avatars.js`), and the door id is one constant
   (`config.js` `DOOR_ID`). `leaveUrl` also fixed the way out after Leave, which kept the room the
   Hallway's link had. Still for later: common's `readVisit` (the arrival pose) and `withoutVisit`.
+  *common v0.2.0 (2026-10-21):* the door's portal is common's (`portal.js`, `setView`;
+  `world/portal.js` gone) and the gamepad's pieces too (`gamepad.js`; vrlbry's `readPad` stays).
+  Checked in the browser: the Hallway's view through the door, its veil and glow; a stand-in pad
+  walking, looking, its dead zone and A.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

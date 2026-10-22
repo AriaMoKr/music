@@ -13,7 +13,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture } from './canvas-texture.js';
-import { openingGeometry, placePortal, portalMaterial, setPicture } from './portal.js';
+// The doorway's portal, the Hallway's (AriaMoKr/common portal.js): the picture as the far wall of a
+// room behind the opening, with parallax, a veil and a rim glowing in the door's colour.
+import { openingGeometry, placePortal, portalMaterial, setView } from '../../vendor/common/portal.js';
 import { roomMaterials } from './room.js';
 
 export const DOOR = {
@@ -394,7 +396,7 @@ export class Door {
       // Flipped and unconverted, as three would upload it (canvas-texture.js).
       const bitmap = await createImageBitmap(await image.blob(), { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
       const painted = this.portal.material.uniforms.uMap.value;
-      setPicture(this.portal.material, canvasTexture(bitmap, { anisotropy: 4 }), v);
+      setView(this.portal.material, canvasTexture(bitmap, { anisotropy: 4 }), v);
       painted.dispose();
       return true;
     } catch (err) {
