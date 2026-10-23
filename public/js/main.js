@@ -14,7 +14,7 @@ import { handleStore, pickFiles, reopen, supportsHandles } from './local/handles
 import { fileNameOf, onKiwixMirror, zimUrl } from './local/zim-url.js';
 import { defaultLanguage, kiwixCatalog } from './local/kiwix.js';
 import { idbStore } from './local/idb-store.js';
-import { PLAYER, XR_FRAME_RATE } from './config.js';
+import { PLAYER, SCENE_LABEL, XR_FRAME_RATE } from './config.js';
 import { doorOf, wayOut } from './hallway.js';
 import { loadNav, NAV_KEY, navDefaults } from './nav.js';
 import { Together } from './together.js';
@@ -99,6 +99,9 @@ async function start() {
   // the GPU within budget; the reading position is central, where foveation does not blur.
   renderer.xr.setFramebufferScaleFactor(1.0);
   renderer.xr.setFoveation(0.5);
+  // The 3D view, named for a screen reader (the overlay's controls are the page's own elements).
+  renderer.domElement.setAttribute('role', 'img');
+  renderer.domElement.setAttribute('aria-label', SCENE_LABEL);
   document.getElementById('app').appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();

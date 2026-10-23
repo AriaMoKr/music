@@ -51,3 +51,6 @@ export const STORAGE_PREFIX = 'vrlbry:';
  * <noscript> link, which a test checks against it).
  */
 export const DOOR_ID = 'vrlbry';
+
+/** What the 3D view shows, for a screen reader (the canvas's aria-label, role img): this site's own words. */
+export const SCENE_LABEL = 'A candle-lit library: bookcases, a reading table and a door back to the Hallway';
