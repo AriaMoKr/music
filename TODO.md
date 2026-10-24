@@ -344,6 +344,12 @@
   - Not yet: a real screen reader (NVDA, VoiceOver, TalkBack), and a phone in the hand.
   - The saved position is still the 3D page's first block, so a reload opens the view at the top
     of that page, not at the exact block.
+  - Fixed 2026-10-24: the place landed under the toolbar on opening (about three lines hidden),
+    since the toolbar's height was read while the view was hidden (0); it is now set before each
+    jump. And a book picked from the search is said ("…, in your hands. Enter reads it, T as
+    text, Esc puts it back."), and T reads it straight into the view. Checked with the keys on
+    "The Principles of Language-Study": the place starts at the toolbar's edge on a first opening
+    and on reopening.
 - **The browser's Back puts the book away** (requested 2026-10-24; done the same day; SPEC §5.6,
   "Links"). A book leaving its shelf now adds a history entry of its own under the links' ones,
   so Back goes back along the links followed and then puts the book away (it left the page
@@ -352,9 +358,10 @@
     being opened (cancelled); one read with a link in its volume and one into another volume
     (back, back, put away); Put back from the page; a book from search while another was open,
     with less motion.
-  - Not checked: the browser's own button, since the window could not take input that day. Chrome's
-    button skips entries a page added before any user gesture
-    ([history manipulation intervention](https://chromium.googlesource.com/chromium/src/+/127.0.6533.99/docs/history_manipulation_intervention.md));
+  - The browser's own button checked the next day: a book picked from the search with the keys,
+    opened as text with T, Back: put away, the view closed, the page kept. (Also reported working
+    from a link in the text view.) Chrome's button skips entries a page added before any user
+    gesture ([history manipulation intervention](https://chromium.googlesource.com/chromium/src/+/127.0.6533.99/docs/history_manipulation_intervention.md));
     a book always comes out after one.
   - The address: a room changed while a book is out (a link into another room's volume) changed
     only the entry then current, so Back showed the earlier room's address. Back and Forward now

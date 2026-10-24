@@ -1864,9 +1864,13 @@ overlay's `announce`).
 - **Opening and closing.** While a book is open on a screen (not in a headset):
   - Ways in: T, the overlay's "Text view" button (shown only while reading), or the help
     dialog's "Open books as text" (`settings.textView`), which opens each book in it at once.
-  - Opening a book says its title politely (`overlay.announce`, a `role="status"` region):
-    "<title> is open.", plus " Text view: T." while the view is not on. A Wikipedia volume says
-    the article's title.
+    T with a book in hand (`inspect`) reads it and opens the view (`openOnRead`).
+  - A book taken out and left in hand (picked from the search, or clicked) is said politely
+    (`bookInHand`, `overlay.announce`, a `role="status"` region): "<title>, in your hands. Enter
+    reads it, T as text, Esc puts it back." One opened at once (an article found, a link, a
+    recent book) is not: `pick` says it only if the state is still `inspect` a moment later.
+  - Opening a book says its title politely: "<title> is open.", plus " Text view: T." while the
+    view is not on. A Wikipedia volume says the article's title.
   - The view takes focus at its heading (an `h1` with `tabindex="-1"`).
   - T or Esc closes it (Esc closes the contents first). Focus goes back to the "Text view" button,
     or to the search box when the book was put back.
@@ -1935,7 +1939,9 @@ overlay's `announce`).
   - Links are underlined, and focus outlines take the link colour.
   - The browser's zoom reflows it, with no sideways scroll at 320 px (checked at 320 × 568 and
     320 × 200).
-  - What Tab or a jump scrolls to stops below the toolbar (`scroll-margin-top`; a scroll-padding
+  - What Tab or a jump scrolls to stops below the toolbar (`scroll-margin-top: var(--tv-bar-h)`,
+    set from the toolbar's height before each jump, as its observer saw it hidden while the view
+    was closed, and the toolbar shown for the jump; a scroll-padding
     would count the toolbar's own buttons as hidden).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
   links, the top block, the round trip from a page to the view and back to the same block, and

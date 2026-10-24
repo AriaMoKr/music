@@ -1243,6 +1243,9 @@ export class Interaction {
     } else if (this.state === 'inspect') {
       if (key === 'Enter' || key === ' ') {
         if (this.book.readable) this.read();
+      } else if (code === 'KeyT' && this.textView && this.book.readable) {
+        this.textView.openOnRead(); // read, straight into the text view (a screen's)
+        this.read();
       } else if (key === 'Escape' || key === 'Backspace') this.putBack();
       else if (code === 'KeyF') this.bookToFront();
     } else if (this.state === 'opening' && (key === 'Escape' || key === 'Backspace')) {
@@ -1347,6 +1350,9 @@ export class Interaction {
     p.visible = true;
     this.state = 'inspect';
     this.overlay?.setBookOut?.(true);
+    // Said when it stays in hand: a caller that opens it at once (an article found, a link, a
+    // recent book) has called read() before this runs.
+    setTimeout(() => { if (this.state === 'inspect' && this.book === book) this.textView?.bookInHand(); }, 0);
   }
 
   /** Returns the book to its shelf (keepTrail: a link leads to another book: back() returns). */
