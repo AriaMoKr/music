@@ -148,6 +148,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ov-update-never { text-decoration: underline; font-size: 13px; }
 .ov-update-close { font-size: 20px; line-height: 1; }
 .ov-update-pref { display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 13px; }
+/* The accessibility settings (common's access.js), in the help dialog. */
+.ov-comfort { margin: 14px 0 0; padding: 8px 12px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; }
+.ov-comfort legend { padding: 0 4px; color: var(--text); }
+.ov-comfort-note { color: var(--muted); }
+.ov-comfort label { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-top: 4px; }
+.ov-comfort select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font: inherit; }
 .ov-update-btn { padding: 4px 14px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent); color: #1a120a; font-weight: 600; }
 /* width: max-content, or a box at left: 50% shrinks to the half of the page right of its start: on
    a phone each toast wrapped into a tall oval over the search field. */

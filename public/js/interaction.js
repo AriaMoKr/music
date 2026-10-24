@@ -20,6 +20,8 @@ import { makeRoom } from './world/room-ahead.js';
 import { RESET_PARTS, defaultResetParts } from './reset.js';
 import { wayOut as defaultWayOut } from './hallway.js';
 import { saveNav } from './nav.js';
+import { comfortButtons, nextMotion } from './comfort.js';
+import { ACCESS_DEFAULTS, normalizeAccess, reduceMotion, saveAccess } from '../vendor/common/access.js';
 import { sessionText } from './together-space.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
@@ -92,12 +94,20 @@ export class Interaction {
    * @param {object} o.settings persisted settings (mutated + saved here)
    * @param {ReturnType<defaultWayOut>} [o.wayOut] where the catalogue stand's "← Hallway" leads (hallway.js)
    * @param {{ move: string, turn: string }} [o.nav] how to move and turn in VR (nav.js: common's loadNav)
+   * @param {{ motion: string, vignette: boolean, seated: boolean }} [o.access] the accessibility
+   *   settings (common's access.js loadAccess)
    */
-  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut(), nav }) {
+  constructor({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut = defaultWayOut(), nav, access }) {
     Object.assign(this, { renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut });
     this.nav = { move: settings.smoothMove === false ? 'teleport' : 'smooth', turn: 'snap', ...nav };
     controls.setNav(this.nav);
     settings.smoothMove = this.nav.move === 'smooth'; // saved with the next change
+    // The accessibility settings, every site's (common's access.js, `hallway.access`): with less
+    // motion the view's eased moves cut (_ease) and its fades blink (_fadeTo); the vignette and
+    // the seated eye height are the controls'.
+    this.access = normalizeAccess(access ?? ACCESS_DEFAULTS);
+    this.reduced = false;
+    this._applyAccess();
     this.state = 'browse';
     this.book = null; // book descriptor in inspect/read
     this.book3d = null;
@@ -462,6 +472,13 @@ export class Interaction {
     // How to move and turn in VR: the Hallway's choice, shared with it (nav.js).
     p.add({ id: 'smooth', type: 'button', x: pad + 474, y, w: 220, h: 60, size: 24, ...this._moveButton(), onClick: () => this.toggleSmooth() });
     p.add({ id: 'turn', type: 'button', x: pad + 706, y, w: W - 2 * pad - 706, h: 60, size: 24, ...this._turnButton(), onClick: () => this.toggleTurn() });
+    // Comfort: less motion, the vignette, seated (common's access.js, shared with the Hallway).
+    y += 72;
+    const comfort = comfortButtons(this.access, this.reduced);
+    const cw = (W - 2 * pad - 24) / 3;
+    p.add({ id: 'motion', type: 'button', x: pad, y, w: cw, h: 56, size: 24, ...comfort.motion, onClick: () => this.toggleMotion() });
+    p.add({ id: 'vignette', type: 'button', x: pad + cw + 12, y, w: cw, h: 56, size: 24, ...comfort.vignette, onClick: () => this.toggleVignette() });
+    p.add({ id: 'seated', type: 'button', x: pad + 2 * (cw + 12), y, w: cw, h: 56, size: 24, ...comfort.seated, onClick: () => this.toggleSeated() });
     // Save / restore the scene (scene.js; the same as in the help dialog, for the headset), and
     // Reset… (reset.js): this tab becomes the choice of what to clear.
     y += 80;
@@ -1263,12 +1280,19 @@ export class Interaction {
     return new Promise((resolve) => this._tweens.push({ t: 0, duration, step, resolve }));
   }
 
+  /** An eased move of the view or a book: a _tween, or a cut with less motion (its end at once). */
+  _ease(duration, step) {
+    if (!this.reduced) return this._tween(duration, step);
+    step(1);
+    return Promise.resolve();
+  }
+
   /** Animates an object's world transform to a target (position, quaternion, scale) with an arc. */
   async _fly(obj, toPos, toQuat, toScale, duration = 0.55, arc = 0.12) {
     const fromPos = obj.position.clone();
     const fromQuat = obj.quaternion.clone();
     const fromScale = obj.scale.x;
-    await this._tween(duration, (t) => {
+    await this._ease(duration, (t) => {
       const e = easeInOut(t);
       obj.position.lerpVectors(fromPos, toPos, e);
       obj.position.y += Math.sin(Math.PI * e) * arc;
@@ -1597,7 +1621,7 @@ export class Interaction {
       await this._fadeTo(0, 0.2);
     } else {
       const at = new THREE.Vector3();
-      await this._tween(0.3, (t) => C.teleportTo(at.lerpVectors(from, to, easeInOut(t))));
+      await this._ease(0.3, (t) => C.teleportTo(at.lerpVectors(from, to, easeInOut(t))));
     }
   }
 
@@ -2173,7 +2197,7 @@ export class Interaction {
     const g = this.book3d.group;
     const from = g.position.x;
     const to = this._bookX();
-    const moves = [this._tween(0.35, (t) => { g.position.x = from + (to - from) * easeInOut(t); })];
+    const moves = [this._ease(0.35, (t) => { g.position.x = from + (to - from) * easeInOut(t); })];
     if (!this.controls.presenting) {
       const { target, quat, k } = await this._readingTarget();
       moves.push(this._fly(this.holder, target, quat, k, 0.35, 0));
@@ -2404,6 +2428,51 @@ export class Interaction {
     return sessionText({ room: t.room, active: t.active, company: t.active ? t.company() : {} });
   }
 
+  /** Motion as the system prefers, less, or full (common's access.js `motion`). */
+  toggleMotion() {
+    this.setAccess({ ...this.access, motion: nextMotion(this.access.motion) });
+  }
+
+  /** The comfort vignette while moving or turning smoothly in VR, or none. */
+  toggleVignette() {
+    this.setAccess({ ...this.access, vignette: !this.access.vignette });
+  }
+
+  /** Seated: the eye 0.45 m higher in VR (common's eyeLift), or standing. */
+  toggleSeated() {
+    this.setAccess({ ...this.access, seated: !this.access.seated });
+  }
+
+  /**
+   * The accessibility settings: kept where every site reads them (common's saveAccess,
+   * `hallway.access`) unless they came from there, and applied (_applyAccess).
+   * @param {{ motion?: string, vignette?: boolean, seated?: boolean }} access
+   * @param {{ store?: boolean }} [o] store: false when they came from storage
+   */
+  setAccess(access, { store = true } = {}) {
+    this.access = normalizeAccess(access);
+    if (store) saveAccess(this.access); // false without storage: this visit only
+    this._applyAccess();
+  }
+
+  /**
+   * Applies the settings, and the system's preference when motion follows it (main.js calls this
+   * again when that changes): less motion here and in the world (the door's shimmer held), the
+   * vignette and the eye height in the controls, and both menus.
+   */
+  _applyAccess() {
+    this.reduced = reduceMotion(this.access);
+    this.world.reducedMotion = this.reduced;
+    this.controls.setAccess?.(this.access);
+    this.overlay?.setAccess?.(this.access);
+    if (this.kiosk) {
+      const b = comfortButtons(this.access, this.reduced);
+      this.kiosk.set('motion', b.motion);
+      this.kiosk.set('vignette', b.vignette);
+      this.kiosk.set('seated', b.seated);
+    }
+  }
+
   /** Walking with the stick, or teleporting only (nav.js: the Hallway's `move`). */
   toggleSmooth() {
     this.setNav({ ...this.nav, move: this.nav.move === 'smooth' ? 'teleport' : 'smooth' });
@@ -2509,7 +2578,8 @@ export class Interaction {
     const m = this._fade;
     const from = m.material.opacity;
     m.visible = true;
-    await this._tween(duration, (t) => { m.material.opacity = from + (target - from) * t; });
+    // With less motion a blink: dark (or clear) at once.
+    if (!this.reduced) await this._tween(duration, (t) => { m.material.opacity = from + (target - from) * t; });
     m.material.opacity = target;
     m.visible = target > 0;
   }

@@ -211,7 +211,9 @@ through the door in VR keeps you in VR: Quest Browser hands the session to the n
 origin, as the Hallway and vrlbry are (`ariamokr.github.io`).
 
 In VR you move and turn as you chose in the Hallway (walking with the stick or teleporting,
-turning in steps or smoothly), and changing it on the catalogue stand changes it there too. Come in
+turning in steps or smoothly), and changing it on the catalogue stand changes it there too. So do
+the comfort settings, on the stand and in the help (?): less motion (or as your system asks), a
+vignette while moving smoothly, and seated, which raises your eyes 45 cm. Come in
 through the Hallway's door in a shared session and you stay in it: the others in the same room of
 the library are there with you, as heads, hands and names, the library card says who else is in
 the session, and the way back to the Hallway keeps you in it.

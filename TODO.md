@@ -313,6 +313,14 @@
   walk 71.6 → 71.7, all-libraries idle 68.3 → 69.0, all-libraries walk 72 → 72: one run each, no
   cost. Painting the panorama: 45-68 ms there, once. `public/social.jpg` and
   `docs/social-preview.jpg` taken again (2026-10-23): the same aisle, the afternoon in its window.
+  *common v0.4.0 (2026-10-23):* the comfort settings (`access.js`, `hallway.access`) on the kiosk
+  and in the help dialog; less motion cuts the eased moves, blinks the fades and holds the door's
+  shimmer (the cover and page turns still move, as chosen); the vignette from smooth walking and
+  turning; seated lifts the eye in VR. Checked in the browser and the emulator, and a Hallway
+  choice holds after a reload. On a Quest 3 with the vignette forced fully closed all the time:
+  rotunda idle 71.1 fps (dropped 1.2 %), hall walk 71.7 (0.4 %), all-libraries walk 72 (0 %),
+  the same as without it. (A first run, in a long session, showed the hall walk at 60 fps and
+  16.6 % dropped; repeated on a fresh page with the vignette still closed, it was 71.7 and 0.4 %.)
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

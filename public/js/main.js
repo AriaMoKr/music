@@ -17,6 +17,7 @@ import { idbStore } from './local/idb-store.js';
 import { PLAYER, SCENE_LABEL, XR_FRAME_RATE } from './config.js';
 import { doorOf, wayOut } from './hallway.js';
 import { loadNav, NAV_KEY, navDefaults } from './nav.js';
+import { ACCESS_KEY, loadAccess, watchMotion } from '../vendor/common/access.js';
 import { Together } from './together.js';
 import { sessionText, spaceOf } from './together-space.js';
 import { roomFromUrl } from '../vendor/layersharedsession/room.js';
@@ -153,7 +154,7 @@ async function start() {
 
   const controls = new Controls({ renderer, camera, rig, scene, world, domElement: renderer.domElement });
   controls.teleportTo(world.spawn.position, world.spawn.yaw);
-  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way, nav: loadNav(localStore(), navDefaults(settings)) });
+  const interaction = new Interaction({ renderer, scene, camera, rig, world, controls, overlay, libraries, booksByLib, settings, wayOut: way, nav: loadNav(localStore(), navDefaults(settings)), access: loadAccess(localStore()) });
   if (catalog.static) {
     // A build without a server (GitHub Pages, tools/build-pages.mjs): nothing to rescan.
     interaction.setStatic(true);
@@ -236,12 +237,18 @@ async function start() {
   addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
     interaction.setNav(loadNav(localStore(), navDefaults(settings)), { store: false });
+    interaction.setAccess(loadAccess(localStore()), { store: false });
     interaction.cameBack();
     together.resume();
   });
   addEventListener('storage', (e) => {
     if (e.key === NAV_KEY) interaction.setNav(loadNav(localStore(), navDefaults(settings)), { store: false });
+    if (e.key === ACCESS_KEY) interaction.setAccess(loadAccess(localStore()), { store: false });
   });
+  // The accessibility settings (common's access.js, every site's): the help dialog's choices, and
+  // the system's reduced-motion preference changing while motion follows it.
+  overlay.onAccess((change) => interaction.setAccess({ ...interaction.access, ...change }));
+  watchMotion(() => interaction._applyAccess());
   // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
   // followed in a book, as the toolbar's ↩ Back (back-history.js).
   const backHistory = new BackHistory({ history, load: performance.timeOrigin, onBack: (depth) => interaction.backTo(depth) });
