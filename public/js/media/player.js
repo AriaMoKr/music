@@ -12,6 +12,13 @@ export { SOUND_PATH, isMidi } from '../core/content/sounds.js';
 /** How long a song waits for its sampled instruments (ms) before it starts with what has come (the rest join as they do). */
 export const SAMPLES_WAIT_MS = 5000;
 
+/**
+ * Each <audio> element's MediaElementSourceNode: an element gets at most one, ever, and once it has
+ * one its sound goes only through it. The page plays every recording in one element (audio.js
+ * mediaElement), so its node is kept and connected anew for each sound.
+ */
+const SOURCES = new WeakMap();
+
 /** "1:05" for 65 seconds. */
 export function clock(seconds) {
   const s = Math.max(0, Math.floor(seconds || 0));
@@ -26,7 +33,8 @@ export class SoundPlayer {
    * @param {(media: object) => Promise<Uint8Array>} o.bytes a sound's bytes (api.soundBytes)
    * @param {(media: object) => Promise<{ url: string, release: () => void }>} o.url where an
    *   <audio> plays a sound from (api.soundUrl)
-   * @param {() => HTMLAudioElement} [o.createAudio]
+   * @param {() => HTMLAudioElement} [o.createAudio] the element a recording plays in: the page's one
+   *   (audio.js mediaElement, unlocked on a tap), or a new one each time
    * @param {import('./samples.js').SampleBank|null} [o.samples] the sampled instruments, or none
    * @param {() => string} [o.instruments] 'sampled' or 'synth' (settings.midiInstruments): what a
    *   MIDI song is played with
@@ -183,13 +191,23 @@ export class SoundPlayer {
     };
     el.src = url;
     el.preservesPitch = true; // slower or faster for practice, not lower or higher
-    if (this._rate !== 1) el.playbackRate = this._rate;
+    // The tempo kept from the sound before (the element may be the one it played in: a load
+    // sets playbackRate back to defaultPlaybackRate).
+    el.defaultPlaybackRate = this._rate;
+    el.playbackRate = this._rate;
     this._el = el;
-    // Through an audio node (the gramophone's): the element's sound goes there instead.
-    const ctx = this._dest && this._context();
-    if (ctx?.createMediaElementSource) {
-      this._source = ctx.createMediaElementSource(el);
-      this._source.connect(this._dest);
+    // Through an audio node (the gramophone's): the element's sound goes there instead; an element
+    // that has a node already (it played on the gramophone before) goes through it to the speakers.
+    let source = SOURCES.get(el) ?? null;
+    const ctx = this._dest || source ? this._context() : null;
+    if (!source && this._dest && ctx?.createMediaElementSource) {
+      source = ctx.createMediaElementSource(el);
+      SOURCES.set(el, source);
+    }
+    if (source && ctx) {
+      source.disconnect();
+      source.connect(this._dest ?? ctx.destination);
+      this._source = source;
     }
     await this._start(el, token);
   }

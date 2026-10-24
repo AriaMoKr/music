@@ -213,13 +213,22 @@ export class Interaction {
       },
       bytes: soundBytes,
       url: soundUrl,
+      // Every recording in the page's one <audio>, unlocked on the first tap (audio.js): it plays
+      // once its bytes have come, long after the tap, where a browser wants one.
+      createAudio: () => audio.mediaElement(),
       samples: new SampleBank(),
       instruments: () => this.settings.midiInstruments,
     });
     /** Set by main.js: told when the instruments MIDI songs are played with change ('sampled' or 'synth'). */
     this.onInstruments = null;
+    /** Set by main.js: (text, kind) what the sound player has to say, for the page too (a toast; the notice is in 3D only). */
+    this.onSoundMessage = null;
+    this._soundWas = 'idle';
     this.sound.onChange = () => this._showSound();
-    this.sound.onError = (message) => this.notice('The sound cannot be played', message, 5);
+    this.sound.onError = (message) => {
+      this.notice('The sound cannot be played', message, 5);
+      this.onSoundMessage?.(`The sound cannot be played: ${message}`, 'error');
+    };
     this.sound.onEnded = () => this._soundEnded();
     this._soundSecond = -1; // the second the toolbar shows (its text is redrawn when that changes)
     // What plays next (Play all in a book's Sounds list, the gramophone: media/queue.js), and the
@@ -2754,6 +2763,12 @@ export class Interaction {
   /** The sound's controls on the toolbar, as the player's state changes. */
   _showSound() {
     const s = this.sound;
+    // The browser waits for a tap on ▶ before a recording plays: said, not only drawn as "tap ▶".
+    if (s.state === 'blocked' && this._soundWas !== 'blocked') {
+      this.notice('♪ Press ▶ to hear it', 'The browser waits for a tap before it plays this recording', 5);
+      this.onSoundMessage?.('Press ▶ (Play) to hear the recording: the browser waits for a tap first.', 'info');
+    }
+    this._soundWas = s.state;
     this.world.gramophone?.setMusic(s.state === 'playing' && this.queue.source === 'gramophone');
     this.nowPlaying?.update();
     this._showStand();

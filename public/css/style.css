@@ -370,3 +370,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #overlay:has(> .tv:not([hidden])) > .ov-np { left: 0; right: 0; bottom: 0; width: auto; border-radius: 0; border-width: 1px 0 0; box-shadow: none;
   padding-bottom: max(4px, env(safe-area-inset-bottom)); }
 #overlay:has(> .ov-np:not([hidden])) > .tv { bottom: var(--np-h, 0px); }
+/* Toasts (a recording that waits for ▶ or cannot be played) over the text view and the bar too. */
+#overlay > .ov-toasts { z-index: 5; }

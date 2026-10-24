@@ -198,6 +198,11 @@ async function start() {
     returnFocus: () => (textView.isOpen ? textView.el.querySelector('.tv-title')
       : document.querySelector(interaction.state === 'read' ? '.ov-textview' : '.ov-search input')),
   });
+  // What the sound player has to say (a recording waiting for ▶, one that cannot be played) reaches
+  // the page as a toast, over the text view too: its notice is drawn in 3D only.
+  interaction.onSoundMessage = (text, kind) => {
+    if (!renderer.xr.isPresenting) overlay.showToast(text, kind, 6000);
+  };
   overlay.onTextView(() => textView.toggle());
   overlay.setTextViewPref(settings.textView, (on) => {
     settings.textView = on;

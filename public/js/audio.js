@@ -1,11 +1,71 @@
 // Tiny WebAudio synthesizer for UI sounds (no audio files): page turns, a book sliding off the
 // shelf, a soft thud, clicks. Every function is a safe no-op until init() runs on a user gesture
-// (browsers keep audio suspended before that) or while sound is disabled.
+// (browsers keep audio suspended before that) or while sound is disabled. It also keeps the page's
+// one <audio> element for the books' recordings (mediaElement), unlocked on the first tap.
 
 let ctx = null;
 let master = null;
 let enabled = true;
 let noiseBuf = null;
+let mediaEl = null; // the <audio> the books' recordings play in (media/player.js): one for the page
+let mediaPrimed = false;
+
+/** A tenth of a second of silence, as a WAV (8 kHz, 8-bit) data URL. */
+function silence() {
+  const n = 800;
+  const b = new Uint8Array(44 + n);
+  const dv = new DataView(b.buffer);
+  const tag = (at, s) => { for (let i = 0; i < 4; i++) b[at + i] = s.charCodeAt(i); };
+  tag(0, 'RIFF');
+  dv.setUint32(4, 36 + n, true);
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); // PCM
+  dv.setUint16(22, 1, true); // mono
+  dv.setUint32(24, 8000, true);
+  dv.setUint32(28, 8000, true);
+  dv.setUint16(32, 1, true);
+  dv.setUint16(34, 8, true);
+  tag(36, 'data');
+  dv.setUint32(40, n, true);
+  b.fill(128, 44); // 8-bit silence
+  let s = '';
+  for (const x of b) s += String.fromCharCode(x);
+  return `data:audio/wav;base64,${btoa(s)}`;
+}
+
+/**
+ * On a tap, once: the recordings' <audio> plays a moment of silence while it holds nothing. A
+ * browser that lets media play only from a tap (Safari; others on a page not yet tapped) then lets
+ * that element play later, after a recording's bytes have been fetched: media/player.js plays every
+ * recording in it. Before, each recording had an element of its own, started after the fetch, and
+ * stayed silent there while MIDI songs played (the audio context is resumed on the tap itself).
+ */
+function primeMedia() {
+  if (mediaPrimed || typeof Audio !== 'function') return;
+  const el = audio.mediaElement();
+  if (el.getAttribute('src')) return; // a recording is in it
+  mediaPrimed = true;
+  const quiet = silence();
+  el.src = quiet;
+  let played = null;
+  try {
+    played = el.play();
+  } catch (err) {
+    played = Promise.reject(err);
+  }
+  const done = () => {
+    if (el.getAttribute('src') !== quiet) return; // a recording took it meanwhile
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+  };
+  Promise.resolve(played).then(done, (err) => {
+    if (err?.name === 'NotAllowedError') mediaPrimed = false; // not a tap after all: the next one
+    done();
+  });
+}
 
 function noise() {
   if (!noiseBuf) {
@@ -61,6 +121,7 @@ function tone({ dur, gain = 0.2, f0, f1 = f0, type = 'sine', delay = 0 }) {
 export const audio = {
   /** Creates/resumes the audio context; call from a user gesture (click, tap, XR select). */
   init() {
+    primeMedia();
     try {
       if (!ctx) {
         const AC = window.AudioContext || window.webkitAudioContext;
@@ -79,6 +140,11 @@ export const audio = {
    */
   get context() {
     return ctx;
+  },
+  /** The <audio> element every recording plays in (media/player.js): one for the page, unlocked on the first tap (init). */
+  mediaElement() {
+    mediaEl ??= new Audio();
+    return mediaEl;
   },
   setEnabled(on) {
     enabled = !!on;
