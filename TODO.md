@@ -328,6 +328,22 @@
   count, so a screen reader hears the highlighted result as the arrow keys move it. Checked at
   667 × 375 (every control in the card reachable and uncovered, axe clean) and 375 × 667, and in
   the accessibility tree ("Chemistry": "14 results", ArrowDown through each).
+- **The text view** (requested 2026-10-23; done the same day; SPEC §5.8). The open book's part as a
+  page of text on a screen: T, "Text view", or "Open books as text" in the help. It shares the
+  reader's place with the 3D book: the 3D book follows the view's scrolling once it rests, so
+  closing, a size, Back or a turn start from where the reader is. T now opens it, C (and a pad's
+  X) the contents.
+  - Checked in the browser:
+    - a keyboard-only walk from the search box: open, T, a link and ↩ Back, the contents (1000
+      articles, focus on the current one), Previous and Next part, PageDown, A+, the themes, Esc,
+      and Put back (focus to the search box);
+    - axe clean in paper, sepia and night, with and without the contents;
+    - no sideways scroll at 320 × 568 (a two-row toolbar) or at 320 × 200 (400 % zoom; the
+      toolbar slides away);
+    - Enter VR closes it.
+  - Not yet: a real screen reader (NVDA, VoiceOver, TalkBack), and a phone in the hand.
+  - The saved position is still the 3D page's first block, so a reload opens the view at the top
+    of that page, not at the exact block.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

@@ -155,7 +155,8 @@ Then press **Enter VR**.
 | Take a book | click it | tap it | aim the crosshair, **A** | point and pull the trigger (or pinch) |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
-| Text size, theme, contents | + / −, toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |
+| Text size, theme, contents | + / − · **N** · **C**, or the toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |
+| Read as text (screen readers, zoom) | **T**, or **Text view** | **Text view** | | |
 | One page or two | **P**, or **1 page** / **2 pages** | **1 page** / **2 pages** (one page while the phone is upright) | toolbar | toolbar |
 | Book distance / size | mouse wheel | pinch | triggers | right stick up/down · left stick up/down · grip to move the book |
 | Follow a link | click it | tap it | **A** on it | trigger on it |
@@ -181,6 +182,12 @@ is running. The search box (desktop and phone), or the kiosk's Search tab with i
 keyboard (in a headset), finds any book by title or author and takes you to it, and any
 Wikipedia article by title and opens its volume there. Your reading position, text size, theme and
 rooms are remembered in the browser.
+
+On a screen, **Text view** (or **T**) shows the part you are reading as an ordinary page of text,
+for a screen reader, the keyboard, the browser's zoom or a small phone. It has the contents, the
+text size and theme, the page slider, Back and the parts in its toolbar, and its links work as in
+the book. It keeps your place with the 3D book: close it (**T** or Esc) and the book is open
+where you were reading. **Open books as text** in the help (**?**) opens every book this way.
 
 To report a problem, open the help (**?**) and press **Copy debug info**, then paste the result
 into your message: it says which browser, graphics and version of the site you have, where you

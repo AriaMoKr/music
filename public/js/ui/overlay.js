@@ -41,6 +41,7 @@ const HELP = {
     ['Take a book', 'Click it on the shelf'],
     ['Read', 'Click the book or “Read” · turn pages with ← → / Space / click a page'],
     ['Text size', '+ / − or the A− A+ buttons'],
+    ['Text view', 'T while reading: the part as a page of text (T or Esc: back to the book) · C: the contents'],
     ['One page or two', 'P or the “1 page” / “2 pages” button (one page when the window is taller than wide)'],
     ['Put it back', 'Esc or “Put back”'],
     ['Book out of sight', 'F, or “Bring the book in front of me” below'],
@@ -53,6 +54,7 @@ const HELP = {
     ['Take a book', 'Tap it on the shelf'],
     ['Read', 'Tap “Read” · swipe or tap the page edges to turn'],
     ['One page or two', '“1 page” / “2 pages” under the book (one page while the phone is upright)'],
+    ['Text view', '“Text view” at the foot while reading: the part as a page of text'],
     ['Put it back', 'Tap “Put back”'],
     ['Book out of sight', '“Bring the book in front of me” below'],
   ],
@@ -134,6 +136,7 @@ export class Overlay {
       </div>
       <div class="ov-bottom">
         <button class="ov-help-btn" aria-label="Controls help" title="Controls">?</button>
+        <button class="ov-textview" title="The part you are reading, as a page of text (T)">Text view</button>
         <button class="ov-vr" hidden>Enter VR</button>
       </div>
       <div class="ov-hint"></div>
@@ -147,6 +150,7 @@ export class Overlay {
             <span class="ov-view-note">Back to the start, looking into the room; a book that is out goes back on its shelf.</span>
           </div>
           <label class="ov-update-pref"><input type="checkbox" checked> Tell me when this site has been updated</label>
+          <label class="ov-update-pref ov-textview-pref"><input type="checkbox"> Open books as text (the text view, at once)</label>
           <fieldset class="ov-comfort">
             <legend>Comfort <span class="ov-comfort-note">(kept for every site behind the Hallway's doors)</span></legend>
             <label>Motion <select class="ov-comfort-motion">${MOTIONS.map((m) => `<option value="${m}">${esc(MOTION_LABELS[m])}</option>`).join('')}</select></label>
@@ -174,6 +178,7 @@ export class Overlay {
         <button class="ov-update-close" aria-label="Dismiss" title="Dismiss">×</button>
       </div>
       <div class="ov-toasts" aria-live="polite"></div>
+      <div class="ov-announce ov-sr" role="status" aria-live="polite"></div>
       <section class="ov-status" aria-label="Your ZIM files" hidden>
         <div class="ov-status-head">
           <span class="ov-status-text" role="status"></span>
@@ -708,6 +713,25 @@ export class Overlay {
 
   /** Fades the card, search and hint away while a book is open (they cover the pages). */
   setReading(on) { this.root.classList.toggle('ov-reading', !!on); }
+
+  /** Says something politely to a screen reader (a book opening), once each time it is said. */
+  announce(text) {
+    const el = this.$('.ov-announce');
+    el.textContent = '';
+    setTimeout(() => { el.textContent = text; }, 50);
+  }
+
+  /** @param {() => void} fn the "Text view" button's (while a book is open on a screen) */
+  onTextView(fn) {
+    this.$('.ov-textview').onclick = fn;
+  }
+
+  /** The help dialog's "Open books as text" (settings.textView): onChange(on). */
+  setTextViewPref(on, onChange) {
+    const box = this.$('.ov-textview-pref input');
+    box.checked = !!on;
+    if (onChange) box.onchange = () => onChange(box.checked);
+  }
 
   _search(q) {
     const s = q.trim().toLowerCase();

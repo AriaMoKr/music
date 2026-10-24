@@ -1427,7 +1427,7 @@ export class Controls extends EventTarget {
   unchanged:
   - A: `select` plus `button a`; B and Back: `button b`;
   - LB / RB and D-pad ← / →: `key` ArrowLeft / ArrowRight; D-pad ↑ / ↓: `key` `+` / `-`;
-  - X: `key t` (contents); Y: `key n` (theme); right stick press: `key f` (the book in front, as
+  - X: `key c` (contents); Y: `key n` (theme); right stick press: `key f` (the book in front, as
     a headset's thumbstick press);
   - the triggers: a repeating `wheel` (100 · (RT − LT) every 0.12 s).
 - XR controller gamepads follow xr-standard: buttons 0 trigger, 1 squeeze, 3 thumbstick press,
@@ -1517,7 +1517,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   up/down = move book nearer/farther, left stick up/down = scale (READ.minScale..maxScale), grip
   drag = reposition (bonus). Next spread is pre-rendered for instant turns. Saves position on every
   turn. Close/Esc → closes, flies back, → **browse**; B/Y/Backspace → back along the links followed,
-  then closes. Locomotion disabled while inspecting/reading.
+  then closes. C: the contents; T (on a screen): the text view (§5.8). Locomotion disabled while
+  inspecting/reading.
   **Links** (§3.5): the trigger (a click, a tap) on a link follows it instead of turning the page;
   the link under a pointer gets a translucent band per line (meshes in front of the page, which
   is not drawn again). `at` jumps within the book (a turn); `href` is asked of the library first
@@ -1842,3 +1843,90 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
     events become pauses (nested events merged), stored as `dump.gc.pauses`, and `dump.gc.summary`
     gives per scenario: pauses (major ones), incremental-marking steps, GC time and its share,
     the longest pause, and how many of the dropped frames had a GC pause inside the gap.
+
+### 5.8 Text view (`ui/text-view.js`)
+
+On a screen, the open book's part can be read as a page of text over the 3D view, for screen
+readers, the keyboard, zoom and phones. The module is shared with the sites made from this one
+(music): it gets what it uses from `main.js` (the interaction, `getChunk`, `imageSource`, the
+overlay's `announce`).
+
+- **Opening and closing.** While a book is open on a screen (not in a headset):
+  - Ways in: T, the overlay's "Text view" button (shown only while reading), or the help
+    dialog's "Open books as text" (`settings.textView`), which opens each book in it at once.
+  - Opening a book says its title politely (`overlay.announce`, a `role="status"` region):
+    "<title> is open.", plus " Text view: T." while the view is not on. A Wikipedia volume says
+    the article's title.
+  - The view takes focus at its heading (an `h1` with `tabindex="-1"`).
+  - T or Esc closes it (Esc closes the contents first). Focus goes back to the "Text view" button,
+    or to the search box when the book was put back.
+  - Entering VR closes it, and T does nothing while presenting.
+- **The page.** An `<article class="tv" aria-labelledby="tv-title" data-own-keys>` covers the
+  view (fixed, with its own scroll).
+  - The controls leave keys pressed in it alone (`isTyping` honours `[data-own-keys]`), so the
+    arrows, Space and PageUp / PageDown scroll it.
+  - ← / → outside a field turn the 3D book's page from the view's place, and the view follows.
+- **`renderBlocks(doc, container, blocks, { c, skip, onLink, image })`** builds a part's blocks
+  (§3.5) as DOM nodes. Text goes in as text nodes, never as HTML.
+  - `h`: h2–h6, the part's highest level as h2, under the view's h1.
+  - `p`: paragraphs, with their alignment, verse and indent.
+  - `li`: nested `ul.tv-list` by depth, the marker as text.
+  - `tr`: a `<table>` per group `g`; header rows go in `<thead>` with `th scope="col"`.
+  - `pre`, and `hr`.
+  - `img`: `<figure><img alt>`; `em` formulas are sized with the text, and `inv` pictures are
+    inverted at night. Image runs become inline `<img>`s.
+  - Style bits: em, strong, code, sup, sub, small caps, u, small, larger.
+  - Each block's element has `data-b` and the id `tv-<c>-<b>`.
+  - A link (consecutive runs with one destination, image runs included) is an `<a>`: `href` is
+    `#tv-c-b` for `at`, else `#`. Its click is the 3D reader's `followLink`.
+  - `skip`: a block left out, a Wikipedia article's own title heading, which the view's h1 says.
+  - Pictures load through `api.imageSource` and are released with their part.
+- **Titles.** The h1 is the book's title. In a Wikipedia volume it is the article's (its contents
+  entry), with "Volume: <volume's title>" under it and "Article n of N" above (elsewhere
+  "Part n of N").
+- **The toolbar** is a sticky header. In order:
+  - ← Previous part, Close, and Contents;
+  - A− / A+ (`changeFont`);
+  - the theme: paper, sepia or night (`setTheme`), in the reader's `THEMES` colours (a test keeps
+    them the same);
+  - the page label, and a slider (`aria-valuetext` "Page x of y", `jumpToProgress`);
+  - ↩ Back (while there is a trail), Put back, and Next part →.
+
+  In a Wikipedia volume the parts are called articles. The part buttons are repeated at the
+  part's end.
+  - Contents is a panel under the toolbar, over the text, so the reader's place stays. It is
+    filled when first opened, with focus on the entry at or before the part shown. Choosing one
+    is `jumpToToc`.
+  - At ≤ 640 px wide the toolbar drops words, to fit two rows at 320 px: arrows for the parts,
+    "Close", no "Theme" and no page label. The accessible names stay whole.
+  - On a short screen (≤ 420 px tall: a phone held sideways, 400 % zoom) the toolbar slides away
+    while the reader scrolls down. It comes back on a scroll up, or when focus reaches it; the
+    text the browser scrolled towards it is put back.
+- **One place.** The view and the 3D book share the reader's place, a block anchor `{ c, b }`.
+  - Opening: the view opens at `anchorOf` the page shown, or at its own last place while the 3D
+    book still shows it.
+  - A turn, jump, link, Back or contents entry in the 3D book: the view shows that part and
+    scrolls to the block (`follow`, called from `_afterTurn`). A place aimed at (`aim`: a link's
+    or an entry's block, a part's start) wins over the spread's left page, which may end the
+    part before.
+  - The reader's own scrolling: once it rests (250 ms), the block at the view's top becomes the
+    place (`topBlock`, measured below the sticky toolbar). So it does at once before anything that
+    starts from the place: a size, Back, a link, a turn, closing.
+    - The 3D book goes there in place, without a turn (`jumpToAnchor(anchor, { inPlace: true })`),
+      unless the spread shown holds that block already (`_showsBlock`, `reader.blocksOn`).
+    - So the page label, the saved position and the trail follow the text view.
+    - The view's own scrolls are not the reader's: near a part's end, the block aimed at cannot
+      reach the top.
+  - Closing leaves the 3D book at that place.
+  - Smooth scrolling only with full motion (`interaction.reduced`).
+- **Layout.**
+  - A 70ch column on a desktop, the full width on a phone. The text size is
+    `1.125rem × fontScale`.
+  - Links are underlined, and focus outlines take the link colour.
+  - The browser's zoom reflows it, with no sideways scroll at 320 px (checked at 320 × 568 and
+    320 × 200).
+  - What Tab or a jump scrolls to stops below the toolbar (`scroll-margin-top`; a scroll-padding
+    would count the toolbar's own buttons as hidden).
+- **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
+  links, the top block, the round trip from a page to the view and back to the same block, and
+  the themes' colours.

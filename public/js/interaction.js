@@ -133,6 +133,8 @@ export class Interaction {
     this.onShelved = null;
     /** Set by main.js: the shared session (together.js), shown on the kiosk while in one. */
     this.together = null;
+    /** Set by main.js: the text view of the open book on a screen (ui/text-view.js, SPEC §5.8). */
+    this.textView = null;
     this._leaving = false; // going out by the way out (leave)
     this._leaveTimer = 0;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
@@ -1233,7 +1235,8 @@ export class Interaction {
       else if (key === 'Escape') {
         if (this.tocPanel.visible) this.toggleToc(false);
         else this.closeBook();
-      } else if (code === 'KeyT' || code === 'KeyC') this.toggleToc();
+      } else if (code === 'KeyC') this.toggleToc();
+      else if (code === 'KeyT') this.textView?.toggle(); // a screen's text view (not in a headset)
       else if (code === 'KeyF') this.bookToFront();
       else if (code === 'KeyN') this.cycleTheme();
       else if (code === 'KeyP') this.togglePages();
@@ -1356,6 +1359,7 @@ export class Interaction {
     }
     this._showBack();
     this._markLink(null);
+    this.textView?.bookClosing(keepTrail);
     const book = this.book;
     const b3 = this.book3d;
     // Forget the spreads, or the next book finds every page canvas still in use.
@@ -1478,6 +1482,7 @@ export class Interaction {
     this.toolbar.visible = true;
     this.state = 'read';
     this._afterTurn();
+    this.textView?.bookOpened(); // its title said; the text view opened when kept on
   }
 
   /**
@@ -2028,6 +2033,15 @@ export class Interaction {
    * @returns {Promise<boolean>} whether the place is shown
    */
   async _goTo(dest) {
+    this.textView?.aim(dest.at); // the text view shows the place, not a spread's left page
+    try {
+      return await this._goToNow(dest);
+    } finally {
+      this.textView?.aim(null);
+    }
+  }
+
+  async _goToNow(dest) {
     const book = this.book;
     const page = dest.page && dest.fontScale === this.settings.fontScale ? dest.page : null;
     if (dest.libId === book.libId && dest.id === book.id) {
@@ -2098,7 +2112,12 @@ export class Interaction {
 
   async jumpToToc(entry) {
     this.toggleToc(false);
-    await this._jump(await this.reader.refForToc(entry));
+    this.textView?.aim({ c: entry.c, b: entry.b });
+    try {
+      await this._jump(await this.reader.refForToc(entry));
+    } finally {
+      this.textView?.aim(null); // not kept for a later turn when the jump was refused
+    }
   }
 
   async jumpToProgress(v) {
@@ -2124,6 +2143,7 @@ export class Interaction {
     recent.unshift({ libId: book.libId, id: book.id, t: Date.now() });
     save('recent', recent.slice(0, 20));
     this._prepareNeighbours().catch((e) => console.warn('prepare', e));
+    this.textView?.follow(); // the text view keeps in step
   }
 
   async changeFont(step) {
@@ -2138,6 +2158,36 @@ export class Interaction {
     save('settings', this.settings);
     this.reader.setFontScale(next);
     await this._jumpInPlace(await this.reader.refForAnchor(anchor));
+  }
+
+  /** A theme by name (the text view's choice): paper, sepia or night. */
+  async setTheme(name) {
+    if (this.state !== 'read' || this._turnBusy || !THEME_ORDER.includes(name) || name === this.settings.theme) return;
+    this.settings.theme = name;
+    save('settings', this.settings);
+    this.reader.setTheme(name);
+    await this._jumpInPlace(this._currentRef());
+  }
+
+  /** Whether the spread shown holds some of block b of part c (anchor { c, b }). */
+  _showsBlock({ c, b }) {
+    const s = this._cur?.spread;
+    return !!s && [s.left, s.right].some((p) => {
+      const on = isPage(p) && p.c === c ? this.reader.blocksOn(p) : null;
+      return !!on && on.first <= b && b <= on.last;
+    });
+  }
+
+  /**
+   * Opens the book at a block anchor { c, b } (the text view's place, a part's start), unless the
+   * spread shown holds that block already; inPlace: without a turn (the text view covers the
+   * book). Whether it moved.
+   */
+  async jumpToAnchor(anchor, { inPlace = false } = {}) {
+    if (this.state !== 'read' || this._turnBusy || this._showsBlock(anchor)) return false;
+    const ref = await this.reader.refForAnchor(anchor);
+    await (inPlace ? this._jumpInPlace(ref) : this._jump(ref));
+    return true;
   }
 
   async cycleTheme() {
