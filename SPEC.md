@@ -1745,7 +1745,14 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   libraries it also asks the server for articles by title, 150 ms after typing stops, listed
   after up to 6 books; picking an article takes its volume off the shelf and opens it at that
   article, `interaction.openArticle` / `read({ at })`), Enter VR button
-  (only when `immersive-vr` is supported), control help, loading progress, error toasts.
+  (only when `immersive-vr` is supported), control help, loading progress, error toasts. The
+  search box is a combobox (`aria-controls` its listbox, `aria-expanded` while results show,
+  `aria-activedescendant` the highlighted option, which has `aria-selected`; `_showList`), and a
+  polite status says how many results there are ("12 results", "No results") once typing pauses.
+  The card stays within the screen and scrolls inside it; on a short screen (a phone held
+  sideways, height ≤ 500 px) it stops above the buttons at the foot, its library list does not
+  scroll on its own, and the hint goes; between 641 and 780 px wide the search box takes the space
+  beside the card.
 
 ### 5.7 Bootstrap (`main.js`)
 

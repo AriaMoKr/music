@@ -321,6 +321,13 @@
   rotunda idle 71.1 fps (dropped 1.2 %), hall walk 71.7 (0.4 %), all-libraries walk 72 (0 %),
   the same as without it. (A first run, in a long session, showed the hall walk at 60 fps and
   16.6 % dropped; repeated on a fresh page with the vignette still closed, it was 71.7 and 0.4 %.)
+- **Phones and screen readers** (reported 2026-10-23; done the same day). The library card did not
+  scroll on a phone held sideways (667 × 375: 405 px tall on 375), so its last links were cut off;
+  it now scrolls within the screen and, on a short screen, stops above the buttons at the foot,
+  beside a search box that no longer covers it. The search box is a combobox with a polite result
+  count, so a screen reader hears the highlighted result as the arrow keys move it. Checked at
+  667 × 375 (every control in the card reachable and uncovered, axe clean) and 375 × 667, and in
+  the accessibility tree ("Chemistry": "14 results", ArrowDown through each).
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.
