@@ -600,7 +600,7 @@ export class Controls extends EventTarget {
           if (pressed) this._emit('select', { pointer: P.pointer });
           this._emit('button', { hand: 'right', name: 'a', pressed });
         } else if (name === 'b' || name === 'back') this._emit('button', { hand: 'right', name: 'b', pressed });
-        else if (name === 'x') key('t', 'KeyT', pressed); // contents
+        else if (name === 'x') key('c', 'KeyC', pressed); // contents
         else if (name === 'y') key('n', 'KeyN', pressed); // page theme
         else if (name === 'lb' || name === 'left') key('ArrowLeft', 'ArrowLeft', pressed);
         else if (name === 'rb' || name === 'right') key('ArrowRight', 'ArrowRight', pressed);
@@ -842,7 +842,8 @@ export class Controls extends EventTarget {
   }
 }
 
+/** Keys typed into a field, or pressed in something that handles its own (data-own-keys: the text view). */
 function isTyping(e) {
   const t = e.target;
-  return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest?.('[data-own-keys]'));
 }
