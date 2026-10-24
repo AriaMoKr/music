@@ -368,7 +368,11 @@ export class Door {
   }
 
   /** Per frame: the veil drifts, and the doorway brightens when pointed at or stood near. */
-  update(dt, camera) {
+  /**
+   * Per frame: the glow toward the viewer's nearness or pointing, and the portal's shimmer (held
+   * with less motion: `still`, common's reduceMotion).
+   */
+  update(dt, camera, still = false) {
     if (!this.place) return;
     camera.getWorldPosition(_head);
     const p = doorLocal(this.place, _head.x, _head.z, _q);
@@ -377,7 +381,7 @@ export class Door {
     this._glow += (target - this._glow) * (1 - Math.exp(-dt * 7));
     const u = this.portal.material.uniforms;
     u.uGlow.value = this._glow;
-    u.uTime.value += dt;
+    if (!still) u.uTime.value += dt;
   }
 
   /**

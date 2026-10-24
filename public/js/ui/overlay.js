@@ -10,6 +10,7 @@ import { load, save } from '../util/storage.js';
 import { noteError } from '../debug-info.js';
 import { RESET_PARTS, defaultResetParts } from '../reset.js';
 import { wayOut } from '../hallway.js';
+import { MOTIONS, MOTION_LABELS } from '../comfort.js';
 
 const ARTICLE_RESULTS = 8; // per Wikipedia library
 
@@ -147,6 +148,12 @@ export class Overlay {
           </div>
           <label class="ov-update-pref"><input type="checkbox" checked> Tell me when this site has been updated</label>
           <label class="ov-instruments-pref" title="Off: the synthesizer's own tones, with nothing to download"><input type="checkbox" checked> Play MIDI songs with sampled instruments</label>
+          <fieldset class="ov-comfort">
+            <legend>Comfort <span class="ov-comfort-note">(kept for every site behind the Hallway's doors)</span></legend>
+            <label>Motion <select class="ov-comfort-motion">${MOTIONS.map((m) => `<option value="${m}">${esc(MOTION_LABELS[m])}</option>`).join('')}</select></label>
+            <label><input type="checkbox" class="ov-comfort-vignette"> A vignette while moving or turning smoothly in VR</label>
+            <label><input type="checkbox" class="ov-comfort-seated"> Seated: my eyes 45 cm higher in VR</label>
+          </fieldset>
           <footer class="ov-debug">
             <div><button class="ov-debug-btn">Copy debug info</button><button class="ov-shot-btn" title="The 3D view as a PNG, without this page's menus">Save screenshot</button><span class="ov-debug-note">Something wrong? Copy this and paste it into your bug report, with the screenshot.</span></div>
             <div><button class="ov-scene-save">Save scene</button><button class="ov-scene-restore" disabled>Restore scene</button><button class="ov-scene-paste">Paste a scene…</button><span class="ov-scene-note">No saved scene</span></div>
@@ -448,6 +455,20 @@ export class Overlay {
   }
 
   hideUpdate() { this.$('.ov-update').hidden = true; }
+
+  /** The help dialog's comfort choices (common's access.js: motion, vignette, seated), as set. */
+  setAccess(access) {
+    this.$('.ov-comfort-motion').value = access.motion;
+    this.$('.ov-comfort-vignette').checked = !!access.vignette;
+    this.$('.ov-comfort-seated').checked = !!access.seated;
+  }
+
+  /** @param {(change: { motion?: string, vignette?: boolean, seated?: boolean }) => void} fn a choice made there */
+  onAccess(fn) {
+    this.$('.ov-comfort-motion').onchange = (e) => fn({ motion: e.target.value });
+    this.$('.ov-comfort-vignette').onchange = (e) => fn({ vignette: e.target.checked });
+    this.$('.ov-comfort-seated').onchange = (e) => fn({ seated: e.target.checked });
+  }
 
   /** The help dialog's "Tell me when this site has been updated" (settings.updateNotices): onChange(on). */
   setUpdateNotices(on, onChange) {

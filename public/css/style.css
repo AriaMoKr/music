@@ -149,6 +149,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ov-update-close { font-size: 20px; line-height: 1; }
 .ov-update-pref { display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 13px; }
 .ov-instruments-pref { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 13px; }
+/* The accessibility settings (common's access.js), in the help dialog. */
+.ov-comfort { margin: 14px 0 0; padding: 8px 12px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; }
+.ov-comfort legend { padding: 0 4px; color: var(--text); }
+.ov-comfort-note { color: var(--muted); }
+.ov-comfort label { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-top: 4px; }
+.ov-comfort select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font: inherit; }
 .ov-update-btn { padding: 4px 14px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent); color: #1a120a; font-weight: 600; }
 /* width: max-content, or a box at left: 50% shrinks to the half of the page right of its start: on
    a phone each toast wrapped into a tall oval over the search field. */
@@ -185,10 +191,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 /* A ZIM's web address (milestone 3), the example read online, and a local library's × */
 .ov-url { display: flex; gap: 6px; margin-top: 8px; }
 .ov-url-input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 13px; }
-.ov-url-input:focus { outline: none; border-color: var(--accent); }
+/* Focused: the gold border and, as every control, the 2 px outline (input:focus-visible). */
+.ov-url-input:focus { border-color: var(--accent); }
 .ov-url button { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); }
 .ov-url button:hover { border-color: var(--accent); }
-.ov-try-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.ov-try-btn { padding: 0; min-height: 24px; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; } /* a 24 px target (WCAG 2.5.8) */
 .ov-lib-body { flex: 1; min-width: 0; }
 .ov-lib-close { flex: none; width: 24px; height: 24px; padding: 0; border-radius: 6px; border: 1px solid transparent; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
 .ov-lib-close:hover { border-color: var(--line); color: var(--text); }

@@ -1388,7 +1388,13 @@ export class Book3D {
   hall's entrance that leaves ~10 of the 100 bookcases facing the viewer (52 instead of 182 draw
   calls per eye); a check by ray sampling from 92 places never found a hidden one in view. Warm lighting
   (hemisphere + a few point lights; no shadows), wooden floor, walls, tall windows or arches,
-  ceiling. Procedural canvas textures only (no external image files required).
+  ceiling. Procedural canvas textures only (no external image files required). The windows' glass
+  (one merged mesh) and the rotunda's oculus show the late afternoon outside the Hallway's doors:
+  AriaMoKr/common's `sky.js` (`skyTexture`, painted once and shared, 45-68 ms on a Quest 3 behind
+  the first room's loading; `skyMaterial`, the panorama by the direction from the eye, at
+  infinity), turned per room by its `uYaw`: in a rotunda the low sun stands a little to one side
+  of the window most to the left of the spawn point (`rotundaSkyYaw`), a hall is laid out as the
+  garden is (0). The candles light the rooms as before.
 - **Spines:** canvas-rendered into atlases (e.g. 2048² per bookcase): base colour per book
   (palette of cloth/leather colours by hash), gilt bands, title (vertical, auto-fit, wrapping to
   2 lines for wide spines), author short name near the bottom. Must be legible at ~1.5 m in VR.
@@ -1477,7 +1483,10 @@ export class Controls extends EventTarget {
   selecting; right stick left/right → snap turn (`PLAYER.snapTurn`), or with `turn: 'smooth'`
   turning while held sideways (1.6 rad/s at full tilt, the Hallway's); left stick → smooth move
   (`move: 'smooth'`, the default) constrained by `world.constrain`. When locomotion is disabled,
-  sticks only emit events.
+  sticks only emit events. Comfort (common's `access.js`, `controls.setAccess`): a `Vignette` on
+  the camera closes in while the stick walks or turns smoothly in VR (`_speed`, `_turnRate` per
+  frame; teleports and snap turns need none), unless it is turned off; seated, the rig stands
+  `eyeLift` (0.45 m) higher in VR only, set every frame from `presenting`.
 - **Desktop:** drag (any mouse button) to look, turning the way the mouse goes (drag right: look
   right; up: look up); a press that does not move more than a few pixels
   is a click = select at the mouse position. No pointer lock: it fights the DOM overlay and is
@@ -1702,7 +1711,17 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
     `loadNav` / `saveNav`, with vrlbry's `navDefaults(settings)`), kept in its
     `hallway.nav` so it is one choice across the sites on this origin; read at start, on Back
     from the Hallway and when another tab changes it; before the Hallway has stored one,
-    `settings.smoothMove` decides `move`, and it follows the choice).
+    `settings.smoothMove` decides `move`, and it follows the choice), and under them the comfort
+    settings, every site's too (AriaMoKr/common's `access.js`, `hallway.access` = `{ motion:
+    'system' | 'reduce' | 'full', vignette, seated }`; `comfort.js` names them): "Motion: as the
+    system" / "Less motion" / "Full motion" (lit while motion is reduced), "Vignette when moving" /
+    "No vignette", "Standing" / "Seated". The help dialog offers the same (its Comfort group).
+    With less motion (`reduceMotion`: the system's `prefers-reduced-motion` for 'system',
+    followed as it changes, `watchMotion`) the view's and the book's eased moves cut
+    (`interaction._ease`: taking a book out, putting it back, the step back, the reading slide),
+    the fades blink (`_fadeTo`) and the door's shimmer is held (`world.reducedMotion`); the cover
+    and the page turns still move. Read at start, on Back and when another tab changes them;
+    "Reset stored data" leaves them (the Hallway's key).
   - *Rooms*: the places that shelve several libraries (the demo set, *Books that play*: §5.6
     `rooms.js` `PLAYING_PLACE`, every library's books that play, the most sounds first, or
     *By period*: a section per period in time order with its sign, a timeline round the room,
