@@ -88,6 +88,15 @@ describe('the sky in the windows', () => {
     assert.ok(glass && skyUsers.includes(glass) && skyUsers.length === 2, 'the windows\' glass and the oculus');
   });
 
+  it('puts it beside the window most to the right in a room with a gramophone', () => {
+    const angles = [1.3, 2 * Math.PI - 1.3, 2.2, 2 * Math.PI - 2.2];
+    const yaw = rotundaSkyYaw(angles, 1);
+    assert.ok(Math.abs(wrap(sunBearing(yaw)) - (1.3 - 0.12)) < 1e-9, 'beside the right window nearest +90°, its front side');
+    assert.equal(rotundaSkyYaw(angles, -1), rotundaSkyYaw(angles));
+    createRotunda({ R: 6, windowAngles: angles, kiosk: null, gramophone: true });
+    assert.equal(roomMaterials().sky.uniforms.uYaw.value, yaw);
+  });
+
   it('lays the hall out as the garden is', () => {
     createHall({ minX: -5, maxX: 5, minZ: -20, maxZ: 2, kiosk: null });
     assert.equal(roomMaterials().sky.uniforms.uYaw.value, 0);

@@ -23,16 +23,19 @@ const SUN_AZ = Math.atan2(SUN_DIR[0], -SUN_DIR[2]);
  * The sky's yaw for a rotunda (common's skyMaterial): the low sun a little to one side of the
  * window most to the left of someone at the spawn point (bearing nearest -90°: the windows stand
  * either side of the bookcases ahead and the door behind), so its glow shows there rather than
- * glaring straight through. 0 without windows. Pure.
+ * glaring straight through; with `side` 1 the window most to the right (+90°: a room whose books
+ * play, the gramophone's side), its front side. 0 without windows. Pure.
  * @param {number[]} windowAngles radians, 0 = -Z, increasing toward +X (createRotunda)
+ * @param {-1|1} [side] -1 the left, 1 the right
  */
-export function rotundaSkyYaw(windowAngles) {
+export function rotundaSkyYaw(windowAngles, side = -1) {
+  const toward = (side * Math.PI) / 2;
   let best = null;
   for (const a of windowAngles) {
     const bearing = Math.atan2(Math.sin(a), Math.cos(a)); // into (-π, π]
-    if (best === null || Math.abs(bearing + Math.PI / 2) < Math.abs(best + Math.PI / 2)) best = bearing;
+    if (best === null || Math.abs(bearing - toward) < Math.abs(best - toward)) best = bearing;
   }
-  return best === null ? 0 : SUN_AZ - (best + 0.12);
+  return best === null ? 0 : SUN_AZ - (best - side * 0.12);
 }
 
 /** Dark-to-clear gradient for the floor rim along the wall. */
@@ -429,7 +432,8 @@ export function createRotunda({ R, windowAngles = [], kiosk, decor = true, gramo
 
   const rr = R - 0.03;
   addWindows(group, windowAngles.map((a) => ({ width: 1.1, height: 2.4, x: Math.sin(a) * rr, y: 1.15, z: -Math.cos(a) * rr, yaw: -a })));
-  mats.sky.uniforms.uYaw.value = rotundaSkyYaw(windowAngles); // one sky for its windows and the oculus
+  // One sky for its windows and the oculus; with a gramophone, the sun's glow by the window beside it.
+  mats.sky.uniforms.uYaw.value = rotundaSkyYaw(windowAngles, withGramophone ? 1 : -1);
 
   commonLights(group);
   const chandelier = makeChandelier(group, 0, WALL_H - 0.5, 0, 0.7);
