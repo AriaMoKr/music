@@ -267,19 +267,32 @@ async function start() {
   overlay.onAccess((change) => interaction.setAccess({ ...interaction.access, ...change }));
   watchMotion(() => interaction._applyAccess());
   // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
-  // followed in a book, as the toolbar's ↩ Back (back-history.js).
-  const backHistory = new BackHistory({ history, load: performance.timeOrigin, onBack: (depth) => interaction.backTo(depth) });
+  // followed in a book, as the toolbar's ↩ Back, then putting the book away (back-history.js).
+  const backHistory = new BackHistory({
+    history, load: performance.timeOrigin,
+    onBack: (depth) => interaction.backTo(depth),
+    onAway: () => interaction.putAway(),
+  });
   interaction.backHistory = backHistory;
-  addEventListener('popstate', (e) => backHistory.popstate(e.state));
   // The address names the place and room shown (place-url.js), replaced as they change (no history
-  // entry per room), so it can be bookmarked, shared or reloaded.
-  const showPlace = (place, room) => {
-    together.setSpace(spaceOf(place, room)); // where in the library, for the shared session
-    const href = placeHref(location.href, place, room);
-    if (href !== location.href) {
+  // entry per room), so it can be bookmarked, shared or reloaded. Back and Forward can land on an
+  // entry from before the last change (a book's, a link's, the page's): its address is put right.
+  let shown = null;
+  const nameShown = () => {
+    const href = shown && placeHref(location.href, shown.place, shown.room);
+    if (href && href !== location.href) {
       try { history.replaceState(history.state, '', href); } catch { /* an address that cannot change (a sandbox) */ }
     }
   };
+  const showPlace = (place, room) => {
+    together.setSpace(spaceOf(place, room)); // where in the library, for the shared session
+    shown = { place, room };
+    nameShown();
+  };
+  addEventListener('popstate', (e) => {
+    backHistory.popstate(e.state);
+    nameShown();
+  });
   interaction.onShelved = showPlace;
   showPlace(settings.place, firstShelved.length === 1 ? firstShelved[0].room : null);
   const invited = roomFromUrl(location.href);

@@ -344,6 +344,21 @@
   - Not yet: a real screen reader (NVDA, VoiceOver, TalkBack), and a phone in the hand.
   - The saved position is still the 3D page's first block, so a reload opens the view at the top
     of that page, not at the exact block.
+- **The browser's Back puts the book away** (requested 2026-10-24; done the same day; SPEC §5.6,
+  "Links"). A book leaving its shelf now adds a history entry of its own under the links' ones,
+  so Back goes back along the links followed and then puts the book away (it left the page
+  before). Put back, Esc, B and Reset view take the entries out.
+  - Checked in the browser with `history.back()` (the same popstate): a book only taken out; one
+    being opened (cancelled); one read with a link in its volume and one into another volume
+    (back, back, put away); Put back from the page; a book from search while another was open,
+    with less motion.
+  - Not checked: the browser's own button, since the window could not take input that day. Chrome's
+    button skips entries a page added before any user gesture
+    ([history manipulation intervention](https://chromium.googlesource.com/chromium/src/+/127.0.6533.99/docs/history_manipulation_intervention.md));
+    a book always comes out after one.
+  - The address: a room changed while a book is out (a link into another room's volume) changed
+    only the entry then current, so Back showed the earlier room's address. Back and Forward now
+    put the address right on the entry they land on (`main.js`, checked the same way).
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.
