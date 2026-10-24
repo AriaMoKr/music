@@ -43,6 +43,7 @@ const HELP = {
     ['Take a book', 'Click it on the shelf'],
     ['Read', 'Click the book or “Read” · turn pages with ← → / Space / click a page'],
     ['Text size', '+ / − or the A− A+ buttons'],
+    ['Text view', 'T while reading: the part as a page of text (T or Esc: back to the book) · C: the contents'],
     ['One page or two', 'P or the “1 page” / “2 pages” button (one page when the window is taller than wide)'],
     ['Put it back', 'Esc or “Put back”'],
     ['Book out of sight', 'F, or “Bring the book in front of me” below'],
@@ -55,6 +56,7 @@ const HELP = {
     ['Take a book', 'Tap it on the shelf'],
     ['Read', 'Tap “Read” · swipe or tap the page edges to turn'],
     ['One page or two', '“1 page” / “2 pages” under the book (one page while the phone is upright)'],
+    ['Text view', '“Text view” at the foot while reading: the part as a page of text'],
     ['Put it back', 'Tap “Put back”'],
     ['Book out of sight', '“Bring the book in front of me” below'],
   ],
@@ -129,11 +131,14 @@ export class Overlay {
       </section>
       <div class="ov-drop" hidden>Drop ZIM files, or a ZIM's link, to open them</div>
       <div class="ov-search" role="search">
-        <input type="search" placeholder="Find a book, author or article…" aria-label="Find a book or article" autocomplete="off" spellcheck="false">
-        <ul class="ov-results" role="listbox" hidden></ul>
+        <input type="search" placeholder="Find a book, author or article…" aria-label="Find a book or article" autocomplete="off" spellcheck="false"
+          role="combobox" aria-autocomplete="list" aria-controls="ov-results" aria-expanded="false">
+        <ul class="ov-results" id="ov-results" role="listbox" aria-label="Search results" hidden></ul>
+        <div class="ov-search-status ov-sr" role="status" aria-live="polite"></div>
       </div>
       <div class="ov-bottom">
         <button class="ov-help-btn" aria-label="Controls help" title="Controls">?</button>
+        <button class="ov-textview" title="The part you are reading, as a page of text (T)">Text view</button>
         <button class="ov-vr" hidden>Enter VR</button>
       </div>
       <div class="ov-hint"></div>
@@ -148,6 +153,7 @@ export class Overlay {
           </div>
           <label class="ov-update-pref"><input type="checkbox" checked> Tell me when this site has been updated</label>
           <label class="ov-instruments-pref" title="Off: the synthesizer's own tones, with nothing to download"><input type="checkbox" checked> Play MIDI songs with sampled instruments</label>
+          <label class="ov-update-pref ov-textview-pref"><input type="checkbox"> Open books as text (the text view, at once)</label>
           <fieldset class="ov-comfort">
             <legend>Comfort <span class="ov-comfort-note">(kept for every site behind the Hallway's doors)</span></legend>
             <label>Motion <select class="ov-comfort-motion">${MOTIONS.map((m) => `<option value="${m}">${esc(MOTION_LABELS[m])}</option>`).join('')}</select></label>
@@ -175,6 +181,7 @@ export class Overlay {
         <button class="ov-update-close" aria-label="Dismiss" title="Dismiss">×</button>
       </div>
       <div class="ov-toasts" aria-live="polite"></div>
+      <div class="ov-announce ov-sr" role="status" aria-live="polite"></div>
       <section class="ov-status" aria-label="Your ZIM files" hidden>
         <div class="ov-status-head">
           <span class="ov-status-text" role="status"></span>
@@ -332,7 +339,7 @@ export class Overlay {
     input.addEventListener('keydown', (e) => this._searchKey(e));
     input.addEventListener('focus', () => this._search(input.value));
     document.addEventListener('pointerdown', (e) => {
-      if (!this.$('.ov-search').contains(e.target)) this.$('.ov-results').hidden = true;
+      if (!this.$('.ov-search').contains(e.target)) this._showList(false);
     });
     this.setMode(matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop');
   }
@@ -648,7 +655,7 @@ export class Overlay {
       const input = this.$('.ov-search input');
       input.value = ui.search.q || '';
       if (ui.search.open && input.value) this._search(input.value);
-      else this.$('.ov-results').hidden = true;
+      else this._showList(false);
     }
     if (this._kiwix) {
       if (ui.kiwix) {
@@ -717,15 +724,34 @@ export class Overlay {
   /** Fades the card, search and hint away while a book is open (they cover the pages). */
   setReading(on) { this.root.classList.toggle('ov-reading', !!on); }
 
+  /** Says something politely to a screen reader (a book opening), once each time it is said. */
+  announce(text) {
+    const el = this.$('.ov-announce');
+    el.textContent = '';
+    setTimeout(() => { el.textContent = text; }, 50);
+  }
+
+  /** @param {() => void} fn the "Text view" button's (while a book is open on a screen) */
+  onTextView(fn) {
+    this.$('.ov-textview').onclick = fn;
+  }
+
+  /** The help dialog's "Open books as text" (settings.textView): onChange(on). */
+  setTextViewPref(on, onChange) {
+    const box = this.$('.ov-textview-pref input');
+    box.checked = !!on;
+    if (onChange) box.onchange = () => onChange(box.checked);
+  }
+
   _search(q) {
-    const list = this.$('.ov-results');
     const s = q.trim().toLowerCase();
     const token = ++this._searchToken;
     clearTimeout(this._searchTimer);
     this._articles = [];
     if (!s) {
-      list.hidden = true;
+      this._showList(false);
       this._results = [];
+      this._announce('');
       return;
     }
     // Wikipedia articles: from the server (millions of titles), a moment after typing stops.
@@ -747,17 +773,18 @@ export class Overlay {
     this._sel = this._results.length ? 0 : -1;
     list.innerHTML = this._results.length
       ? this._results.map((e, i) => (e.article ? `
-        <li role="option" data-i="${i}" class="${i === this._sel ? 'sel' : ''}">
+        <li role="option" id="ov-result-${i}" aria-selected="${i === this._sel}" data-i="${i}" class="${i === this._sel ? 'sel' : ''}">
           ${e.lib.illustration ? `<img class="ov-r-icon" ${imgSrc(e.lib.illustration)} alt="" width="34" height="34">` : '<span class="ov-nocover"></span>'}
           <div><div class="ov-r-title">${e.article.from ? `${esc(e.article.from)} → ` : ''}${esc(e.article.title)}</div><div class="ov-r-sub">${esc(e.lib.title)} · Volume ${esc(e.article.book.slice(1))}</div></div>
         </li>` : `
-        <li role="option" data-i="${i}" class="${i === this._sel ? 'sel' : ''}">
+        <li role="option" id="ov-result-${i}" aria-selected="${i === this._sel}" data-i="${i}" class="${i === this._sel ? 'sel' : ''}">
           ${e.book.cover ? `<img ${imgSrc(e.book.cover)} alt="" loading="lazy" width="34" height="48">` : '<span class="ov-nocover"></span>'}
           <div><div class="ov-r-title">${esc(e.book.title)}</div><div class="ov-r-sub">${esc(e.book.author || '')}${this._multi() ? ' · ' + esc(e.lib.title) : ''}</div></div>
         </li>`)).join('')
-      : '<li class="ov-empty">No matching books</li>';
+      : '<li class="ov-empty" role="option" aria-disabled="true" aria-selected="false">No matching books</li>';
     fillLocalImages(list);
-    list.hidden = false;
+    this._showList(true);
+    this._announce(this._results.length ? `${this._results.length} ${this._results.length === 1 ? 'result' : 'results'}` : 'No results');
     list.querySelectorAll('li[data-i]').forEach((li) => {
       li.onclick = () => this._choose(+li.dataset.i);
     });
@@ -774,20 +801,56 @@ export class Overlay {
       e.preventDefault();
       if (!this._results.length) return;
       this._sel = (this._sel + (e.key === 'ArrowDown' ? 1 : -1) + this._results.length) % this._results.length;
-      list.querySelectorAll('li[data-i]').forEach((li, i) => li.classList.toggle('sel', i === this._sel));
+      list.querySelectorAll('li[data-i]').forEach((li, i) => {
+        li.classList.toggle('sel', i === this._sel);
+        li.setAttribute('aria-selected', String(i === this._sel));
+      });
       list.querySelector('li.sel')?.scrollIntoView({ block: 'nearest' });
+      this._activeDescendant();
     } else if (e.key === 'Enter') {
       if (this._sel >= 0) this._choose(this._sel);
     } else if (e.key === 'Escape') {
-      list.hidden = true;
+      this._showList(false);
       e.target.blur();
     }
+  }
+
+  /**
+   * Shows or hides the results (the combobox pattern: the input's aria-expanded, and its
+   * aria-activedescendant naming the highlighted result while they show).
+   */
+  _showList(open) {
+    this.$('.ov-results').hidden = !open;
+    this.$('.ov-search input').setAttribute('aria-expanded', String(open));
+    this._activeDescendant();
+  }
+
+  /** The input's aria-activedescendant: the highlighted result, while the results show. */
+  _activeDescendant() {
+    const input = this.$('.ov-search input');
+    const open = !this.$('.ov-results').hidden;
+    if (open && this._sel >= 0 && this._results?.[this._sel]) input.setAttribute('aria-activedescendant', `ov-result-${this._sel}`);
+    else input.removeAttribute('aria-activedescendant');
+  }
+
+  /**
+   * The number of results for a screen reader (a polite status), said once typing pauses rather
+   * than at every letter.
+   */
+  _announce(text) {
+    clearTimeout(this._announceTimer);
+    const status = this.$('.ov-search-status');
+    if (!text) {
+      status.textContent = '';
+      return;
+    }
+    this._announceTimer = setTimeout(() => { status.textContent = text; }, 400);
   }
 
   _choose(i) {
     const e = this._results[i];
     if (!e) return;
-    this.$('.ov-results').hidden = true;
+    this._showList(false);
     const input = this.$('.ov-search input');
     input.blur();
     if (e.article) this._pickArticle?.(e.lib.id, e.article);

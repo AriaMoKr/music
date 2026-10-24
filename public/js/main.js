@@ -1,7 +1,8 @@
 // Bootstrap (SPEC §5.7): renderer, camera rig, XR session, loading, frame loop.
 
 import * as THREE from 'three';
-import { getCatalog, getBooks, getVersion, rescan as requestRescan } from './api.js';
+import { getCatalog, getBooks, getVersion, getChunk, imageSource, rescan as requestRescan } from './api.js';
+import { TextView } from './ui/text-view.js';
 import * as localLibrary from './local/local.js';
 import { World } from './world/world.js';
 import { Controls } from './xr/controls.js';
@@ -179,6 +180,22 @@ async function start() {
       overlay.showToast(`Could not start VR: ${err.message}`, 'error', 6000);
     }
   }
+  // The text view of the open book (ui/text-view.js, SPEC §5.8): on a screen only; entering VR
+  // closes it, so in a headset nothing changes.
+  const textView = new TextView({
+    root: document.getElementById('overlay'), interaction, getChunk, imageSource,
+    announce: (text) => overlay.announce(text),
+    // Back to the button that opened it, or to the search once the book is put back (the button goes).
+    returnFocus: (away) => document.querySelector(away ? '.ov-search input' : '.ov-textview'),
+  });
+  interaction.textView = textView;
+  overlay.onTextView(() => textView.toggle());
+  overlay.setTextViewPref(settings.textView, (on) => {
+    settings.textView = on;
+    save('settings', settings);
+    if (on && interaction.state === 'read') textView.open();
+  });
+  renderer.xr.addEventListener('sessionstart', () => textView.close());
   renderer.xr.addEventListener('sessionstart', () => {
     overlay.hide();
     interaction.onPresentingChange();
