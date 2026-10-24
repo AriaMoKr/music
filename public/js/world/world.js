@@ -79,6 +79,8 @@ export class World {
     this._footprints = [];
     /** The door back (door.js), made on the first build once setDoor has said where it leads. */
     this.door = null;
+    /** With less motion (interaction.js, common's reduceMotion): the door's shimmer is held. */
+    this.reducedMotion = false;
     this._doorSpec = null;
   }
 
@@ -360,7 +362,7 @@ export class World {
   update(dt, camera) {
     this.room?.update(dt);
     this.shelves.update(dt, camera);
-    this.door?.update(dt, camera);
+    this.door?.update(dt, camera, this.reducedMotion);
   }
 
   dispose() {

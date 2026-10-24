@@ -10,6 +10,8 @@ import { firstPad, readPad } from './gamepad.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import { PLAYER } from '../config.js';
+// The comfort vignette and the seated eye height: every site's (AriaMoKr/common access.js).
+import { eyeLift, Vignette } from '../../vendor/common/access.js';
 
 const DEADZONE = 0.15;
 const FLICK_ON = 0.7;
@@ -86,6 +88,12 @@ export class Controls extends EventTarget {
     /** How to move and turn in VR (nav.js, setNav): move 'smooth' | 'teleport', turn 'snap' | 'smooth'. */
     this.move = 'smooth';
     this.turn = 'snap';
+    /** The comfort vignette (common's Vignette): closes in while the stick walks or turns smoothly in VR. */
+    this.vignette = new Vignette(camera, true);
+    /** How far the eye is raised in VR (common's eyeLift: seated). */
+    this.eyeLift = 0;
+    this._speed = 0; // this frame's smooth walking, m/s, and turning, rad/s (the vignette's)
+    this._turnRate = 0;
     this.snapAngle = PLAYER.snapTurn;
     this.pointers = [];
     this.yaw = 0;
@@ -262,6 +270,12 @@ export class Controls extends EventTarget {
     return this._xr;
   }
 
+  /** The accessibility settings (common's access.js): the vignette on or off, the seated eye height. */
+  setAccess(access) {
+    this.vignette.enabled = !!access.vignette;
+    this.eyeLift = eyeLift(access);
+  }
+
   /** Sets how to move and turn in VR (nav.js): move 'smooth' | 'teleport', turn 'snap' | 'smooth'. */
   setNav({ move, turn }) {
     this.move = move === 'teleport' ? 'teleport' : 'smooth';
@@ -288,7 +302,10 @@ export class Controls extends EventTarget {
         // no turning while aiming
       } else if (this.turn === 'smooth') {
         // Held sideways (more than forward, which aims): turning while held.
-        if (Math.abs(x) > DEADZONE && Math.abs(x) > Math.abs(y)) this._rotateAroundViewer(-x * SMOOTH_TURN * dt);
+        if (Math.abs(x) > DEADZONE && Math.abs(x) > Math.abs(y)) {
+          this._rotateAroundViewer(-x * SMOOTH_TURN * dt);
+          this._turnRate = Math.abs(x) * SMOOTH_TURN;
+        }
       } else if (e.flicks.left && !e._turned) {
         e._turned = 'left';
         this.snapTurn(this.snapAngle);
@@ -299,6 +316,7 @@ export class Controls extends EventTarget {
       if (!e.flicks.left && !e.flicks.right) e._turned = null;
     } else if (this.move === 'smooth' && (Math.abs(x) > DEADZONE || Math.abs(y) > DEADZONE)) {
       this._move(-y, x, PLAYER.walkSpeed * dt);
+      this._speed = PLAYER.walkSpeed * Math.min(1, Math.hypot(x, y));
     }
   }
 
@@ -787,10 +805,20 @@ export class Controls extends EventTarget {
   /** Per frame: poll input, apply locomotion, refresh pointer rays and the active pointer list. */
   update(dt) {
     this.pointers.length = 0;
+    this._speed = 0;
+    this._turnRate = 0;
+    // Seated, the eye is raised in VR (and only there: a screen's view has its own height).
+    const lift = this.presenting ? this.eyeLift : 0;
+    if (this.rig.position.y !== lift) {
+      this.rig.position.y = lift;
+      this.rig.updateMatrixWorld(true);
+    }
     if (this.presenting) {
       this._pollXR(dt);
       for (const e of this._xr) if (e.pointer) this.pointers.push(e.pointer);
+      this.vignette.update(dt, this._speed, this._turnRate, true);
     } else {
+      this.vignette.update(dt, 0, 0, false);
       this._desktopUpdate(dt);
       if (this._pad.active) this.pointers.push(this._pad.pointer);
       else if (this._mouse.inside) this.pointers.push(this._mouse.pointer);
