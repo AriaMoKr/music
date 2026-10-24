@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { getCatalog, getBooks, getVersion, getChunk, imageSource, rescan as requestRescan } from './api.js';
 import { TextView } from './ui/text-view.js';
+import { NowPlaying } from './ui/now-playing.js';
 import * as localLibrary from './local/local.js';
 import { World } from './world/world.js';
 import { Controls } from './xr/controls.js';
@@ -189,6 +190,14 @@ async function start() {
     returnFocus: (away) => document.querySelector(away ? '.ov-search input' : '.ov-textview'),
   });
   interaction.textView = textView;
+  // What plays, in the page (ui/now-playing.js): after the text view, so Tab reaches it from there.
+  interaction.nowPlaying = new NowPlaying({
+    root: document.getElementById('overlay'), interaction,
+    announce: (text) => overlay.announce(text),
+    // Stopped from the bar: back to the text view's title, the "Text view" button, or the search.
+    returnFocus: () => (textView.isOpen ? textView.el.querySelector('.tv-title')
+      : document.querySelector(interaction.state === 'read' ? '.ov-textview' : '.ov-search input')),
+  });
   overlay.onTextView(() => textView.toggle());
   overlay.setTextViewPref(settings.textView, (on) => {
     settings.textView = on;

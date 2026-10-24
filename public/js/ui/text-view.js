@@ -8,6 +8,8 @@
 //
 // renderBlocks and topBlock are pure (a document passed in), for the tests; TextView is the page's.
 
+import { SOUND_PATH, soundRuns } from '../core/content/sounds.js';
+
 /** Style bits (§3.5) and the element each is shown with, outermost first. */
 const STYLE_TAGS = [
   [256, 'span', 'tv-larger'],
@@ -27,10 +29,31 @@ const OBJ = '￼';
 const isImageRun = (run) => !!run[2]?.src;
 const linkOf = (run) => {
   const l = run[2];
-  return l && (Array.isArray(l.at) || l.href || l.to) ? l : null;
+  return l && (Array.isArray(l.at) || l.href || l.to || l.media) ? l : null;
 };
-/** Where a link leads (an image run in a link carries a copy of its fields: §3.5). */
-const destination = (l) => JSON.stringify([l.at ?? null, l.href ?? null, l.to ?? null]);
+/** Where a link leads (an image run in a link carries a copy of its fields: §3.5), or the sound it plays. */
+const destination = (l) => JSON.stringify([l.at ?? null, l.href ?? null, l.to ?? null,
+  l.media ? [l.media.src ?? l.media.remote?.start ?? null, l.media.name ?? null] : null]);
+
+/** Whether a link plays a sound (§3.5 `media`, or the server's link to a sound file) rather than going anywhere. */
+export const isSoundLink = (l) => !!l && (!!l.media || (typeof l.href === 'string' && SOUND_PATH.test(l.href.replace(/#.*$/, ''))));
+
+/**
+ * The links (run link objects) of a sound list entry's place in a part's blocks (its b and i-th
+ * sound link: §3.5 sound lists), as the 3D reader marks them (reader.soundRects); empty when the
+ * part has no such link. Pure.
+ * @param {object[]} blocks
+ * @param {{ b: number, i?: number }} at
+ */
+export function soundLinks(blocks, at) {
+  const blk = blocks?.[at?.b];
+  const span = blk && soundRuns(blk, at.i ?? 0);
+  if (!span) return new Set();
+  const runs = blk.r ?? blk.c.flat();
+  const links = new Set();
+  for (let k = span[0]; k < span[1]; k++) links.add(runs[k][2]);
+  return links;
+}
 
 /** Text with its hard breaks ("\n") as <br>s. */
 function appendText(doc, el, text) {
@@ -87,6 +110,7 @@ function appendRuns(doc, el, runs, o) {
           e.preventDefault?.();
           o.onLink?.(target, e);
         });
+        o.linkEl?.(a, target);
         el.append(a);
         aLink = link;
       }
@@ -114,7 +138,8 @@ export function runsText(runs) {
  * @param {Document} doc
  * @param {Element} container
  * @param {object[]} blocks
- * @param {{ c: number, skip?: number, onLink?: (link: object, e: Event) => void, image?: (img: Element, src: string) => void }} o
+ * `linkEl(a, link)` is told of each link made (the sounds' are marked while they play).
+ * @param {{ c: number, skip?: number, onLink?: (link: object, e: Event) => void, linkEl?: (a: Element, link: object) => void, image?: (img: Element, src: string) => void }} o
  * @returns {number} how many blocks were shown
  */
 export function renderBlocks(doc, container, blocks, o) {
@@ -305,6 +330,7 @@ export class TextView {
     this._selfTop = null;
     this._moved = false;
     this._quiet = false; // a jump of the 3D book to the view's place: the view stays as it is
+    this._still = 0; // sounds' links being followed (_playSound): the view stays too
     this._wire();
   }
 
@@ -494,7 +520,7 @@ export class TextView {
     const aim = this._aim;
     this._aim = null;
     if (!this._open || I.state !== 'read') return;
-    if (this._quiet) return this._header(); // the 3D book came to the view's place
+    if (this._quiet || this._still) return this._header(); // the 3D book came to the view's place, or a sound plays
     const shown = I.reader.anchorOf(I._currentRef());
     let anchor = shown;
     // A place aimed at: its block, unless it named an element (f) the 3D page already found.
@@ -569,11 +595,17 @@ export class TextView {
       body.replaceChildren();
       this._release();
       const part = this._partTitle(anchor.c);
+      this._blocks = blocks;
+      this._soundEls = [];
+      this._marked = null;
       renderBlocks(this.doc, body, blocks, {
         c: anchor.c,
         // An article begins with its title as a heading: the view's own title says it already.
         skip: part && blocks[0]?.t === 'h' && runsText(blocks[0].r) === part.replace(/\s+/g, ' ').trim() ? 0 : -1,
-        onLink: (link) => this._sync().then(() => I.followLink(link)), // Back returns here
+        // A sound plays at once, on the tap (the audio context needs it) and from where the view
+        // is; any other link from the shared place, so Back returns here.
+        onLink: (link) => (isSoundLink(link) ? this._playSound(link) : this._sync().then(() => I.followLink(link))),
+        linkEl: (a, link) => { if (isSoundLink(link)) this._soundEls.push({ a, link }); },
         image: (img, src) => this._image(img, src),
       });
       this.$('.tv-title').textContent = part ?? book.title;
@@ -595,6 +627,55 @@ export class TextView {
     // An instant scroll is done at once: its event is known by where it leaves the view.
     this._selfTop = smoothly ? null : this.el.scrollTop;
     this._lastY = this.el.scrollTop;
+    this.markSound({ reveal: false });
+  }
+
+  /**
+   * A sound's link, followed (it plays: interaction.js's followLink, called on the tap itself). The
+   * view stays where it is meanwhile: the 3D book's label coming back after the link is resolved is
+   * no turn of its own.
+   */
+  async _playSound(link) {
+    this._still = (this._still ?? 0) + 1;
+    try {
+      await this.I.followLink(link);
+    } finally {
+      this._still--;
+    }
+  }
+
+  /**
+   * Marks the link of the sound playing (interaction.js's _playing: a sound list entry of this
+   * book, SPEC §3.5) when it is in the part shown, as the 3D page's band marks it: aria-current
+   * and a visible band (tv-playing); other links lose it. With `reveal`, a sound that has just
+   * started is brought into view (Next: its link further down), without taking the focus.
+   */
+  markSound({ reveal = true } = {}) {
+    const I = this.I;
+    const item = I._playing;
+    const book = I.book;
+    const here = this._open && item && book && item.libId === book.libId && item.bookId === book.id
+      && item.sound?.c === this.c ? item.sound : null;
+    const links = here ? soundLinks(this._blocks, here) : null;
+    let first = null;
+    for (const { a, link } of this._soundEls ?? []) {
+      const on = !!links?.has(link);
+      if (on) {
+        a.setAttribute('aria-current', 'true');
+        a.classList.add('tv-playing');
+        first ??= a;
+      } else if (a.hasAttribute('aria-current')) {
+        a.removeAttribute('aria-current');
+        a.classList.remove('tv-playing');
+      }
+    }
+    const changed = item !== this._marked;
+    this._marked = item ?? null;
+    if (first && reveal && changed) {
+      first.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      this._selfTop = this.el.scrollTop; // the view's own scroll, not the reader's
+      this._lastY = this.el.scrollTop;
+    }
   }
 
   /** Where the reader is, Back, and the parts. */
