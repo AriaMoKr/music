@@ -344,6 +344,23 @@
   - Not yet: a real screen reader (NVDA, VoiceOver, TalkBack), and a phone in the hand.
   - The saved position is still the 3D page's first block, so a reload opens the view at the top
     of that page, not at the exact block.
+- **Silent recordings on a laptop** (reported 2026-10-24: an MP3 made no sound where a MIDI song
+  did; fixed the same day, not yet seen on that laptop, whose browser is not known here). Each
+  recording had an `<audio>` of its own, started only once its bytes had come (from Kiwix's
+  mirror on the site), long after the tap; a browser that lets media play only from a tap
+  (Safari; others on a page not yet tapped) refused it and left it waiting for ▶, shown only as
+  "tap ▶" on the toolbar, while MIDI songs played through the audio context resumed on the tap.
+  Now every recording plays in the page's one element, unlocked on the first tap
+  (`audio.mediaElement`, SPEC §5.6), its one audio node kept; a refusal is said in a toast too.
+  - Not reproduced in Chromium here (it lets a page that has been tapped play later): there the
+    site's MP3s played from a book and on the gramophone, measured at their element (−29 dBFS
+    RMS for music061.mp3). Checked with WebKit's rule emulated in the page (play() only within a
+    tap, or on an element once played so): a new element after the fetch refused, the page's
+    element after a real click on "Listen (MP3)" playing; then on the gramophone, a book's after
+    it through the same node, and a MIDI song.
+  - Recordings' loudness varies (16 of them: −16 to −38 dBFS RMS, The Complete Opera Book's
+    music###.mp3 around −35), as MIDI songs' does (5: −16 to −34 over 4 s), so it was not the
+    cause; levelling both would help quiet ones on a laptop's speakers.
 - **Sounds for the keyboard and screen readers** (music; requested 2026-10-23; done the same day;
   SPEC §5.6 "Now playing, in the page", §5.8). The text view's "[Listen]" links play as on the 3D
   page (`followLink`), the one playing marked (`aria-current`, a band); a "Now playing" bar in the

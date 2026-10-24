@@ -1620,8 +1620,16 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   of channel 10; any other sound by an `<audio>` element
   (the server's URL, which streams; a blob of its bytes for a local file or a sound read from
   Kiwix's mirror). The audio context is made or resumed on the tap itself (`audio.init`, before
-  anything is awaited); a browser that refuses to start an `<audio>` without a recent tap leaves
-  it waiting for ▶ ("tap ▶"). A book's sound stops when the book is put back (the gramophone's
+  anything is awaited). Every recording plays in the page's one `<audio>` (`audio.mediaElement`),
+  which `audio.init` unlocks on the first tap by playing a tenth of a second of silence in it
+  (again on the next tap if that was refused; never while a recording is in it): a browser that
+  lets media play only from a tap (Safari; others on a page not yet tapped) then lets it play once
+  the bytes have come, long after the tap. With an element of its own each, started after that
+  wait, a recording stayed silent there while MIDI songs played. Its `MediaElementSourceNode`
+  (an element has one at most, ever) is made the first time it plays on the gramophone and kept,
+  connected anew for each sound: to the panner, else to the speakers. A browser that still refuses
+  leaves it waiting for ▶ ("tap ▶"), and says so (a notice in 3D and a toast in the page, as for
+  a sound that cannot be played). A book's sound stops when the book is put back (the gramophone's
   plays on). **Sampled instruments** (media/samples.js, `settings.midiInstruments`: 'sampled', the
   default, or 'synth'): GeneralUser GS v2.0.3's General MIDI set (S. Christian Collins; its
   LICENSE.txt beside it), made by tools/build-samples.mjs into public/sounds/gm/: for each of the

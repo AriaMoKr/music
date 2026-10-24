@@ -334,6 +334,36 @@ describe('the sound player (media/player.js)', () => {
     assert.equal(two.p.state, 'playing');
   });
 
+  it('plays every recording in one element, given once, its audio node made once and connected anew', async () => {
+    const ctx = fakeContext();
+    const links = [];
+    ctx.destination = { kind: 'speakers' };
+    ctx.createMediaElementSource = (el) => ({
+      kind: 'source', el,
+      connect(to) { links.push(to.kind); return to; },
+      disconnect() { links.push('-'); },
+    });
+    let made = 0;
+    const el = fakeAudio();
+    const p = new SoundPlayer({
+      context: () => ctx,
+      bytes: async () => TUNE,
+      url: async (m) => ({ url: `blob:${m.name}`, release() {} }),
+      createAudio: () => { made++; return el; }, // the page's one element (audio.js mediaElement)
+    });
+    const panner = { kind: 'panner' };
+    await p.play(mp3); // a book's: no node, the element plays itself
+    assert.deepEqual(links, []);
+    p.setRate(0.75);
+    await p.play(mp3, { destination: panner }); // the gramophone's: through its panner
+    assert.equal(el.playbackRate, 0.75, 'the tempo kept, the element reused');
+    assert.equal(el.defaultPlaybackRate, 0.75, 'and kept through its load');
+    await p.play(mp3); // a book's again: the element has a node now, so through it to the speakers
+    assert.deepEqual(links, ['-', 'panner', '-', '-', 'speakers'], 'one node, never a second (createMediaElementSource would throw)');
+    assert.equal(made, 3);
+    assert.equal(p.state, 'playing');
+  });
+
   it('says why a sound cannot be played, and drops a load that another sound replaced', async () => {
     const errors = [];
     const bad = make({ bytes: async () => new TextEncoder().encode('not midi') });
@@ -357,5 +387,84 @@ describe('the sound player (media/player.js)', () => {
     await refused.p.play(mp3);
     assert.equal(refused.p.state, 'idle');
     assert.equal(errors.length, 2);
+  });
+});
+
+describe('the recordings\' element (audio.js mediaElement)', () => {
+  /** A fake <audio>: its src an attribute, play() resolving or refused (`FakeAudio.refuse`). */
+  class FakeAudio {
+    static made = [];
+    static refuse = null;
+    constructor() {
+      this.attrs = {};
+      this.plays = [];
+      this.loads = 0;
+      this.paused = true;
+      FakeAudio.made.push(this);
+    }
+    set src(v) { this.attrs.src = String(v); }
+    get src() { return this.attrs.src ?? ''; }
+    getAttribute(k) { return this.attrs[k] ?? null; }
+    removeAttribute(k) { delete this.attrs[k]; }
+    play() {
+      this.plays.push(this.src);
+      if (FakeAudio.refuse) return Promise.reject(Object.assign(new Error('no'), { name: FakeAudio.refuse }));
+      this.paused = false;
+      return Promise.resolve();
+    }
+    pause() { this.paused = true; }
+    load() { this.loads++; }
+  }
+  const settle = () => new Promise((r) => setImmediate(r));
+  let n = 0;
+  /** audio.js afresh (its element and whether it was unlocked are the module's). */
+  const fresh = async () => (await import(`../public/js/audio.js?fresh=${++n}`)).audio;
+
+  it('is one element for the page, unlocked on the first tap with a moment of silence', async () => {
+    globalThis.Audio = FakeAudio;
+    FakeAudio.made = [];
+    FakeAudio.refuse = null;
+    try {
+      const audio = await fresh();
+      audio.init(); // the tap (no AudioContext in Node: the UI sounds stay off)
+      const el = audio.mediaElement();
+      assert.equal(FakeAudio.made.length, 1);
+      assert.equal(audio.mediaElement(), el, 'one for the page');
+      assert.match(el.plays[0], /^data:audio\/wav;base64,UklGR/, 'silence, played on the tap');
+      await settle();
+      assert.equal(el.getAttribute('src'), null, 'then let go of');
+      assert.equal(el.loads, 1);
+      audio.init();
+      assert.equal(el.plays.length, 1, 'once');
+    } finally {
+      delete globalThis.Audio;
+    }
+  });
+
+  it('leaves a recording that took the element alone, and tries again on the next tap when refused', async () => {
+    globalThis.Audio = FakeAudio;
+    FakeAudio.made = [];
+    try {
+      FakeAudio.refuse = null;
+      const one = await fresh();
+      one.init();
+      const el = one.mediaElement();
+      el.src = 'blob:air.mp3'; // the player, before the silence's play() settled
+      await settle();
+      assert.equal(el.getAttribute('src'), 'blob:air.mp3', 'the recording is not unloaded');
+
+      FakeAudio.refuse = 'NotAllowedError'; // not a tap after all
+      const two = await fresh();
+      two.init();
+      await settle();
+      FakeAudio.refuse = null;
+      two.init();
+      assert.equal(two.mediaElement().plays.length, 2, 'again on the next tap');
+      two.mediaElement().src = 'blob:song.mp3';
+      two.init();
+      assert.equal(two.mediaElement().plays.length, 2, 'never while a recording is in it');
+    } finally {
+      delete globalThis.Audio;
+    }
   });
 });
