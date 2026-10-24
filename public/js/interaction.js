@@ -187,6 +187,8 @@ export class Interaction {
     this.together = null;
     /** Set by main.js: the text view of the open book on a screen (ui/text-view.js, SPEC §5.8). */
     this.textView = null;
+    /** Set by main.js: the page's "Now playing" bar (ui/now-playing.js), told when the sound or the queue changes. */
+    this.nowPlaying = null;
     this._leaving = false; // going out by the way out (leave)
     this._leaveTimer = 0;
     this._version = ''; // "Updated …": when the website last changed (setVersion)
@@ -305,6 +307,7 @@ export class Interaction {
   }
 
   _fillKiosk() {
+    this.nowPlaying?.update(); // the Listen tab's queue may have changed (Next)
     const p = this.kiosk;
     const W = p.w;
     const pad = 36;
@@ -2699,7 +2702,8 @@ export class Interaction {
       if (rects.length) found.push({ side, rects });
     }
     if (token !== this._followToken || this.book !== book || this.state !== 'read') return;
-    if (!found.length && turn) {
+    // With the text view open the book stays where the view is (it marks the link itself).
+    if (!found.length && turn && !this.textView?.isOpen) {
       if (this._turnBusy) return;
       this._markSound(null);
       await this._jump(await this.reader.refForAnchor({ c: item.sound.c, b: item.sound.b })); // then _afterTurn follows
@@ -2713,6 +2717,7 @@ export class Interaction {
    * a pointer's: meshes in front of the pages, as _markLink's. null hides them.
    */
   _markSound(found) {
+    this.textView?.markSound(); // and in the text view, its link (whatever the spread shows)
     const b3 = this.book3d;
     if (!this._soundMarks) {
       if (!found?.length) return;
@@ -2750,6 +2755,7 @@ export class Interaction {
   _showSound() {
     const s = this.sound;
     this.world.gramophone?.setMusic(s.state === 'playing' && this.queue.source === 'gramophone');
+    this.nowPlaying?.update();
     this._showStand();
     if (this._kioskTab === 'listen' && s.state !== 'loading') this._fillKiosk(); // what plays, its buttons
     this._layoutTopRow();

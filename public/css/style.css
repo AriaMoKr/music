@@ -335,3 +335,38 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 /* The overlay's "Text view" button: only while a book is open (on a screen: the overlay is not drawn in VR). */
 .ov-textview { height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); font-weight: 600; backdrop-filter: blur(8px); }
 #overlay:not(.ov-reading) .ov-textview { display: none; }
+
+/* The text view's link of the sound playing (text-view.js markSound): a band with an edge, as the
+   3D page's warm band, in each theme (the link's colour stays readable on it). */
+.tv a.tv-playing { background: #f1d49a; box-shadow: 0 0 0 2px #b07a1c; border-radius: 3px; }
+.tv[data-theme="sepia"] a.tv-playing { background: #e6c78a; box-shadow: 0 0 0 2px #9a6a14; }
+.tv[data-theme="night"] a.tv-playing { background: #4a3b1c; box-shadow: 0 0 0 2px #e0a83a; }
+
+/* The "Now playing" bar (ui/now-playing.js): in the foot row at the left, the help's buttons moved
+   to the right beside it (the card stops above it); on a narrow screen above them; with the text
+   view open, across its foot, the view ending above it (--np-h), so it never covers the text. */
+.ov-np { position: fixed; z-index: 4; left: max(16px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(30rem, calc(100vw - 32px - 310px)); display: flex; align-items: center; gap: 10px; padding: 4px 5px 4px 14px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.ov-np-what { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.ov-np-title { color: var(--accent); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-np-title::before { content: "♪ "; content: "♪ " / ""; } /* not read out */
+.ov-np-sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-np-buttons { display: flex; gap: 6px; flex: none; }
+.ov-np-buttons button { width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font-size: 15px; }
+.ov-np-buttons button:hover:not([aria-disabled="true"]) { border-color: var(--accent); }
+.ov-np-buttons button[aria-disabled="true"] { opacity: .45; cursor: default; }
+.ov-np-buttons .ov-np-wait { border-color: var(--accent); color: var(--accent); } /* a tap starts it */
+#overlay:has(> .ov-np:not([hidden])) .ov-bottom { left: auto; right: max(16px, env(safe-area-inset-right)); transform: none; }
+#overlay:has(> .ov-np:not([hidden])) .ov-card {
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 72px - env(safe-area-inset-bottom)); }
+/* Narrow: the bar over the help's row, the search (at the foot there) moved up above the bar. */
+@media (max-width: 640px) {
+  .ov-np { width: auto; right: max(16px, env(safe-area-inset-right)); bottom: 70px; }
+  #overlay:has(> .ov-np:not([hidden])) .ov-search { bottom: calc(78px + var(--np-h, 48px)); }
+  #overlay:has(> .ov-np:not([hidden])) .ov-card {
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 142px - var(--np-h, 48px)); }
+}
+#overlay:has(> .tv:not([hidden])) > .ov-np { left: 0; right: 0; bottom: 0; width: auto; border-radius: 0; border-width: 1px 0 0; box-shadow: none;
+  padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+#overlay:has(> .ov-np:not([hidden])) > .tv { bottom: var(--np-h, 0px); }

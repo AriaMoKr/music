@@ -344,6 +344,25 @@
   - Not yet: a real screen reader (NVDA, VoiceOver, TalkBack), and a phone in the hand.
   - The saved position is still the 3D page's first block, so a reload opens the view at the top
     of that page, not at the exact block.
+- **Sounds for the keyboard and screen readers** (music; requested 2026-10-23; done the same day;
+  SPEC §5.6 "Now playing, in the page", §5.8). The text view's "[Listen]" links play as on the 3D
+  page (`followLink`), the one playing marked (`aria-current`, a band); a "Now playing" bar in the
+  page has what plays, Play/Pause, Stop and Next, a new sound said politely once.
+  - Checked in the browser, the keyboard only: the search box, the book (How Music Developed),
+    T, Tab to "Listen: C Scale", Enter: it plays, stays in view and marked, the bar shows it and
+    "Playing C Scale, from How Music Developed · …" is said; from the bar (with the book's
+    sounds queued, as the Sounds list's Play all does): Pause, Next twice (the mark following),
+    Stop (focus back to the view's title). axe clean with the view and the bar open in paper,
+    sepia and night, and in the 3D reader with the bar. The bar beside the help's buttons at
+    1280 × 800 and 667 × 375, above them at 375 × 667 and across the view's foot at 320 × 568
+    and 320 × 200, covering nothing (the card's ten controls and the search uncovered).
+  - A link plays its one sound, as on the 3D page (a queue of one), so the bar's Next is
+    unavailable then; a queue comes from the Sounds list or the Listen tab, both 3D. Not yet in
+    the page: the queue, composers and periods, Play all, and the stand's tempo, loop, key and
+    parts. A book's sound plays from the book, not the gramophone (only the Listen tab's do).
+  - Reaching the bar from the middle of a part takes Tab through the rest of it (or a screen
+    reader's landmarks: it is a region); a key for it would help.
+  - Not yet: a real screen reader, and a phone in the hand.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

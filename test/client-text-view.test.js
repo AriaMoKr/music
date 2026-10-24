@@ -15,7 +15,7 @@ globalThis.OffscreenCanvas = class {
   }
 };
 
-const { renderBlocks, runsText, topBlock } = await import('../public/js/ui/text-view.js');
+const { isSoundLink, renderBlocks, runsText, soundLinks, topBlock } = await import('../public/js/ui/text-view.js');
 const { BookReader, THEMES } = await import('../public/js/reader/reader.js');
 
 /** renderBlocks into a fresh container: its markup, and what the links and pictures asked for. */
@@ -115,6 +115,33 @@ describe('the text view: blocks as DOM', () => {
     assert.equal(links[2].children[0].tagName, 'IMG', 'a picture in a link is part of it');
     for (const a of links) assert.equal(a.click().defaultPrevented, true);
     assert.deepEqual(followed.map((l) => [l.at, l.href, l.to]), [[at.at, undefined, undefined], [undefined, href.href, undefined], [undefined, undefined, to.to]], 'each followed as the 3D reader follows it');
+  });
+
+  it('makes a book\'s sounds real links, each its own, and finds the one playing', () => {
+    // The server's link to a sound file (href) and the static build's resolved one (media).
+    const listen = { href: '7_g.mid' };
+    const air = { media: { src: 'files/air.mp3', name: 'air.mp3' } };
+    const song = { media: { src: 'files/song.mp3', name: 'song.mp3' } };
+    const doc = fakeDocument();
+    const box = doc.createElement('div');
+    const made = [];
+    const followed = [];
+    const blocks = [
+      { t: 'p', r: [['The G scale ', 0], ['[', 0], ['Listen', 0, listen], [']', 0]] },
+      { t: 'p', r: [['Air', 2, air], [' and ', 0], ['Song', 0, song], ['Song, again', 1, song]] },
+    ];
+    renderBlocks(doc, box, blocks, { c: 4, onLink: (l) => followed.push(l), linkEl: (a, link) => made.push([a, link]) });
+    const links = box.findAll((e) => e.tagName === 'A');
+    assert.deepEqual(links.map((a) => a.textContent), ['Listen', 'Air', 'SongSong, again'], 'two sounds side by side stay two links; one sound in two styles, one');
+    assert.deepEqual(made.map(([a, l]) => [a.textContent, l]), [['Listen', listen], ['Air', air], ['SongSong, again', song]]);
+    links[1].click();
+    assert.deepEqual(followed, [air]);
+    assert.deepEqual([listen, air, { href: 'A/Chemistry' }, { at: [1, 2] }, null].map(isSoundLink), [true, true, false, false, false]);
+    // A sound list entry's place (b, i: §3.5 sound lists) names the links the 3D page marks.
+    assert.deepEqual([...soundLinks(blocks, { b: 0 })], [listen]);
+    assert.deepEqual([...soundLinks(blocks, { b: 1, i: 1 })], [song]);
+    assert.equal(soundLinks(blocks, { b: 1, i: 2 }).size, 0);
+    assert.equal(soundLinks(null, { b: 0 }).size, 0);
   });
 
   it('says so when a part is empty, and reads runs as text', () => {

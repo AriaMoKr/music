@@ -1192,6 +1192,7 @@ public/
     media/composers.js   who wrote a sound and when: composers, periods, a book's period (pure).
     ui/listen-tab.js     the kiosk's Listen tab: what plays, books, composers, periods, the queue.
     ui/music-stand.js    the music stand beside the book: piano roll or picture, playhead, practice.
+    ui/now-playing.js    the page's "Now playing" bar: what plays, Play/Pause, Stop, Next (the keyboard, screen readers).
     world/gramophone.js  the gramophone of a room whose books play (its horn: where its sound comes from).
     world/score-wall.js  the wall of scores: pictures beside sounds, framed, one atlas.
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
@@ -1691,6 +1692,24 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   century), else what its words say (chant, Greek or Chinese music, folk songs and hymns, scales
   and exercises), else *Other*. A book's period is its sounds' (a named composer weighs 3, other
   words 1). The Music ZIM: 55 composers; Beethoven 236 sounds in 20 books, Wagner 312.
+  **Now playing, in the page** (`ui/now-playing.js`, on a screen; the 3D panels are out of reach
+  of the keyboard and screen readers): while a sound is loaded, a bar (`<section aria-label="Now
+  playing">`, in the overlay after the text view, so Tab reaches it from there) shows the Listen
+  tab's first row: the sound's title (`soundTitle`), its book · author, and its kind, length,
+  where it plays and its place in the queue; then Play/Pause (its name says which), Stop and
+  Next, buttons named for a screen reader (`aria-label`), reached with Tab, with the focus ring.
+  Next while nothing follows, and Play/Pause while a sound loads, are `aria-disabled` (still
+  focusable, so the focus is not lost). A sound that starts is said once, politely
+  (`overlay.announce`: "Playing <title>, from <book>."; "…: press Play to hear it." when the
+  browser waits for a tap), not as it pauses, goes on or plays on; between two sounds (Next, a
+  queue going on) the bar stays, and when it goes (Stop, the last sound's end) focus in it goes
+  back to the text view's title, the "Text view" button or the search. It sits in the foot row at
+  the left, the help's buttons moved to the right and the card stopping above it; on a narrow
+  screen (≤ 640 px) above the help's row, the search moved up above it; with the text view open,
+  across the view's foot, the view ending above it (`--np-h`, set at once when the bar appears,
+  the focus kept in sight), so it never covers the text. `interaction.js` calls its `update()`
+  from `_showSound` and `_fillKiosk` (the queue). The queue, composers and periods, and the
+  stand's tempo, loop, key and parts stay in 3D.
 - **Leaving VR**: an "Exit VR" button in the kiosk header (only while presenting), or holding
   B/Y for 1 s while browsing (a short press still means "back" when a book is out): a head-locked
   ring below the line of sight fills up (shown after 0.15 s, so taps do not flash it); releasing
@@ -2052,7 +2071,18 @@ overlay's `announce`).
   - Style bits: em, strong, code, sup, sub, small caps, u, small, larger.
   - Each block's element has `data-b` and the id `tv-<c>-<b>`.
   - A link (consecutive runs with one destination, image runs included) is an `<a>`: `href` is
-    `#tv-c-b` for `at`, else `#`. Its click is the 3D reader's `followLink`.
+    `#tv-c-b` for `at`, else `#`. Its click is the 3D reader's `followLink`. `linkEl(a, link)` is
+    told of each.
+  - In music, a sound's link (§3.5: `media`, or an `href` to a sound file: `isSoundLink`) is one
+    too, each sound its own (its `media`'s file is part of its destination). Its click plays it
+    through `followLink` on the tap itself (the audio context needs the gesture), from where the
+    view is: the view does not sync first or follow the 3D book meanwhile (`_playSound`), and
+    while it is open the 3D book does not turn to a sound's page (`_followSound`). The link of the
+    sound playing (`interaction._playing`, when in the part shown: `soundLinks(blocks, { b, i })`,
+    as `reader.soundRects` finds it) has `aria-current="true"` and a band with an edge
+    (`.tv-playing`, in each theme's colours, the link's text kept readable on it);
+    `interaction._markSound` tells the view (`markSound`), and a sound that starts after another
+    (Next) is scrolled into view, the focus left where it is.
   - `skip`: a block left out, a Wikipedia article's own title heading, which the view's h1 says.
   - Pictures load through `api.imageSource` and are released with their part.
 - **Titles.** The h1 is the book's title. In a Wikipedia volume it is the article's (its contents
@@ -2102,5 +2132,6 @@ overlay's `announce`).
   - What Tab or a jump scrolls to stops below the toolbar (`scroll-margin-top`; a scroll-padding
     would count the toolbar's own buttons as hidden).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
-  links, the top block, the round trip from a page to the view and back to the same block, and
-  the themes' colours.
+  links (sounds' too, and the one playing found), the top block, the round trip from a page to the
+  view and back to the same block, and the themes' colours; `test/client-now-playing.test.js` what
+  the Now playing bar shows and when a sound counts as another.
