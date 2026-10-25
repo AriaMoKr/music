@@ -43,7 +43,7 @@ const HELP = {
     ['Take a book', 'Click it on the shelf'],
     ['Read', 'Click the book or “Read” · turn pages with ← → / Space / click a page'],
     ['Text size', '+ / − or the A− A+ buttons'],
-    ['Text view', 'T while reading: the part as a page of text (T or Esc: back to the book) · C: the contents'],
+    ['Text view', 'T with a book in hand or open: the part as a page of text (T or Esc: back to the book) · C: the contents'],
     ['One page or two', 'P or the “1 page” / “2 pages” button (one page when the window is taller than wide)'],
     ['Put it back', 'Esc or “Put back”'],
     ['Book out of sight', 'F, or “Bring the book in front of me” below'],
