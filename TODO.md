@@ -321,6 +321,20 @@
   rotunda idle 71.1 fps (dropped 1.2 %), hall walk 71.7 (0.4 %), all-libraries walk 72 (0 %),
   the same as without it. (A first run, in a long session, showed the hall walk at 60 fps and
   16.6 % dropped; repeated on a fresh page with the vignette still closed, it was 71.7 and 0.4 %.)
+  *common v0.5.0 and layersharedsession v0.3.0 (2026-10-25):* the browser's Back is common's
+  `BackHistory` (`prefix: 'vrlbry'`, so the entries in visitors' tabs stay its own; vrlbry's
+  own tests passed against it before they went), and the shared session the layer's controller
+  (`createTogether`), vrlbry's `together.js` keeping its space, its words and `setSpace`.
+  quest-perf's `--cdp` became `--desktop`: a Chrome window of its own (common's
+  `launchChrome`), drawing while covered (Chrome otherwise counts a covered window hidden: the
+  first run waited for frames), closed at the end, also on Ctrl+C now (and the headset's sensor
+  given back). The Pages and indexes workflows run on Node 24. Checked in the browser: Back
+  with a book out and a link followed (the real button); two tabs in one session (in one room of
+  the library each draws the other and counts them here; in different rooms neither is drawn,
+  and each counts the other "elsewhere in the library"); `quest-perf status` and `run --only
+  small-idle --desktop` (59.7 fps), the bad-password count 0 before and after. A profile can
+  outlive `close()` when Chrome's helpers still hold its files (in `C:\msys64\tmp` under MSYS2,
+  which nothing cleans).
 - **Phones and screen readers** (reported 2026-10-23; done the same day). The library card did not
   scroll on a phone held sideways (667 × 375: 405 px tall on 375), so its last links were cut off;
   it now scrolls within the screen and, on a short screen, stops above the buttons at the foot,

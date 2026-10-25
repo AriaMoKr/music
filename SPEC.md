@@ -1658,8 +1658,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   the font size), kept while links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
   to the same spread while the font size is the same. So does the browser's Back (its button, a
-  phone's back gesture, a mouse's back button, Quest Browser's: `back-history.js`), and past the
-  links it puts the book away:
+  phone's back gesture, a mouse's back button, Quest Browser's: AriaMoKr/common's
+  `back-history.js` since v0.5.0, vrlbry's own copy before, with `prefix: 'vrlbry'` so the
+  entries keep the names that copy gave them), and past the links it puts the book away:
   - A book leaving its shelf (`pick`) adds a history entry at the same address (`pushState`, its
     state `{ vrlbryBook: 1, vrlbryTrail: 0, vrlbryLoad: performance.timeOrigin }` beside what was
     there), and each link followed adds one (`vrlbryTrail`: links deep). A book a link swaps in
@@ -1926,19 +1927,25 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   the browser's cache by Back (`pageshow` with `persisted`), `cameBack()` puts the viewer 1.1 m in
   front of the door, facing the room, and fades back in.
 - **Together** (`together.js`, `together-space.js`): the Hallway's shared session (its README,
-  "Going in" and "Together"; AriaMoKr/layersharedsession v0.2.0, peer to peer over WebRTC with
-  Trystero through public Nostr relays, the same app id). A valid `?room=` in the address
-  (`roomFromUrl`: the Hallway's door, or an invitation) joins it as page `DOOR_ID`; the
-  session's modules (~270 kB with Trystero) load only then (`import()`). Each visitor shares where
-  in the library they are (`spaceOf(place, room)`: place, genre, letter and page, which decide the
-  room's layout) as the shared value `<DOOR_ID>.space.<memberId>`, set by `showPlace` (main.js);
-  the others in the same room are drawn by the layer's `avatars.js` (`createAvatars`: a head with a
-  visor, a hand per tracked controller, a ring on the floor, their name), placed every frame from
-  their poses (`place`, with an `isHere` made once, each avatar keeping its key) and the
-  visitor's own pose read by `readPose`, without allocating. Joins, arrivals and departures are toasts (and `notice` in VR). The card's line
-  under its header and the kiosk's (*Shelves & settings*, above "Recently read") say who else is
-  in it ("With you: 1 here, 2 in another place") with a Leave, which leaves and takes `room` out
-  of the address. The way out carries `room` on, and once the visitor has left the session no room
+  "Going in" and "Together"; AriaMoKr/layersharedsession v0.3.0, peer to peer over WebRTC with
+  Trystero through public Nostr relays, the same app id), run by the layer's controller
+  (`../vendor/layersharedsession/together.js`, `createTogether`; vrlbry's `Together` wraps it
+  with what is the library's own). A valid `?room=` in the address (`roomFromUrl`: the
+  Hallway's door, or an invitation) joins it as page `DOOR_ID`; the session's modules (~270 kB
+  with Trystero) load only then (the controller's `import('./session.js')`). Each visitor shares
+  where in the library they are (`spaceOf(place, room)`: place, genre, letter and page, which
+  decide the room's layout) as the shared value `<DOOR_ID>.space.<memberId>`: written on the
+  controller's `session` event, again on the session's `self` event (a member id replaced) and
+  by `setSpace` from `showPlace` (main.js); a `shared` change to such a key redraws. The
+  controller's `isHere(peer, avatar)` is whether the peer stands in the same room (its space key
+  kept on the avatar, made again when the member id changes, so a frame allocates nothing): it
+  decides who is drawn by the layer's avatars (a head with a visor, a hand per tracked
+  controller, a ring on the floor, their name) and whom `company()` counts as `here`; the rest of
+  this page is `nearby`, "elsewhere in the library". Joins, arrivals, departures and waves are
+  toasts (and `notice` in VR), worded by `noticeText`; with less motion a wave doesn't bob the
+  avatar (`reduceMotion`). The card's line under its header and the kiosk's (*Shelves &
+  settings*, above "Recently read") say who else is in it ("With you: 1 here, 1 elsewhere in the
+  library, 2 in another place") with a Leave, which leaves and takes `room` out of the address. The way out carries `room` on, and once the visitor has left the session no room
   at all, though the Hallway's link had one (common's `leaveUrl`, the card's link and `onHallway`);
   going out by `leave()` leaves the session first (`onLeaving`, so the others see it at once),
   `cameBack()` and Back to a cached page join again (`onCameBack`, `pageshow`), and `pagehide`
@@ -2041,7 +2048,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   - `tools/quest-perf.mjs` (Node, adb) forwards the Quest Browser's DevTools socket, runs or reads
     the recorder over CDP, adds the VrApi per-second log, `dumpsys meminfo` / `battery` snapshots
     (one at the end of each scenario) and device info, and writes `perf/quest-<time>.json`.
-    `handover` instead enters VR, takes the way out (`interaction.onHallway`, to `--to` or the page
+    `--desktop` measures on the PC instead, without adb: a Chrome window of its own on
+    `http://localhost:<port>/?perf` (common's `tools/chrome.mjs` `launchChrome({ headless: false,
+    url })`, on a new profile whose Local State says the Windows password is not blank, so no
+    failed logon), its DevTools endpoint where the headset's forwarded one goes, closed at the
+    end; the scenarios run in 2D. `handover` instead enters VR, takes the way out (`interaction.onHallway`, to `--to` or the page
     itself) and reads what a probe (`Page.addScriptToEvaluateOnNewDocument`, on every document in
     the tab) noted on the next page: load, `sessiongranted`, `requestSession` (held back
     `--delay` ms), the session's start, refusal or end (§5.7).
