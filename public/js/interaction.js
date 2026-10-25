@@ -146,7 +146,7 @@ export class Interaction {
     // Where links were followed from, latest last (back()): { libId, id, at, page, fontScale, side }.
     this._trail = [];
     this._trailBase = 0; // places dropped from the trail's start (it keeps 100): links deep at its first
-    /** Set by main.js: the browser's Back along the trail (back-history.js). */
+    /** Set by main.js: the browser's Back along the trail (common's back-history.js). */
     this.backHistory = null;
     this._following = false; // a link being looked up (resolveLink)
     this._linkMarks = null; // the bands over the link under a pointer (_markLink)
@@ -2536,6 +2536,7 @@ export class Interaction {
   _applyAccess() {
     this.reduced = reduceMotion(this.access);
     this.world.reducedMotion = this.reduced;
+    if (this.together) this.together.reduceMotion = this.reduced; // a visitor's wave without the bob
     this.controls.setAccess?.(this.access);
     this.overlay?.setAccess?.(this.access);
     if (this.kiosk) {

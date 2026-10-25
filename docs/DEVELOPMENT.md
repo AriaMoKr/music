@@ -162,6 +162,11 @@ Hallway, the library's way out): it enters VR, takes the way out (back to the pa
 it, three times (`--runs`). `--delay <ms>` holds the granted request back, to see how long a
 grant lasts (about 5 s). The first time, the headset asks to allow VR for the page's address.
 
-`node tools/quest-perf.mjs --help` lists all options;
-`--cdp http://127.0.0.1:9222` runs the same against a desktop browser started with
-`--remote-debugging-port=9222` (with `?xr=emulate&perf` for an emulated headset).
+`node tools/quest-perf.mjs --help` lists all options. `--desktop` runs the same on this PC
+instead of the headset: it opens `http://localhost:<port>/?perf` in a Chrome window of its own,
+runs the scenarios there in 2D and closes the window at the end (`CHROME_PATH` chooses the
+browser). It keeps drawing while other windows cover it, but not while it is minimized or the
+screen is locked: the scenarios then wait. The window comes from common's `tools/chrome.mjs`, on a new profile prepared so that
+Windows sees no failed logon; don't start Chrome by hand with `--remote-debugging-port` on a new
+profile instead, since each such start counts as a failed logon (ten in ten minutes lock the
+account here).

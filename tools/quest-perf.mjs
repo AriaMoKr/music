@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
+import { launchChrome } from 'common/tools/chrome.mjs';
 
 const execFileP = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,8 +41,11 @@ Options:
                    grants only within one origin, so another one shows what a visitor gets there)
   --delay <ms>     handover: hold the next page's granted request back this long (a grant lasts
                    about 5 s from the page's start)
-  --cdp <url>      use this DevTools endpoint instead of the headset (e.g. http://127.0.0.1:9222
-                   for a desktop browser started with --remote-debugging-port); skips adb
+  --desktop        measure on this PC instead of the headset: a Chrome window of its own opens
+                   http://localhost:<port>/?perf (common's launchChrome, on a new profile set up so
+                   Windows sees no failed logon) and is closed at the end; skips adb, and the
+                   scenarios run in 2D. It draws while covered, not while minimized or with the
+                   screen locked. CHROME_PATH chooses the browser.
   -h, --help       this help
 
 The headset must be connected (USB or adb over Wi-Fi) with USB debugging allowed for this PC.
@@ -703,7 +707,7 @@ async function main() {
     options: {
       open: { type: 'boolean' }, port: { type: 'string', default: '8080' }, only: { type: 'string' },
       'enter-vr': { type: 'boolean' }, 'allow-2d': { type: 'boolean' }, out: { type: 'string', default: path.join(ROOT, 'perf') },
-      serial: { type: 'string' }, cdp: { type: 'string' }, 'no-gc': { type: 'boolean' }, 'no-prox': { type: 'boolean' },
+      serial: { type: 'string' }, desktop: { type: 'boolean' }, 'no-gc': { type: 'boolean' }, 'no-prox': { type: 'boolean' },
       runs: { type: 'string', default: '3' }, to: { type: 'string' }, delay: { type: 'string', default: '0' },
       help: { type: 'boolean', short: 'h' },
     },
@@ -714,13 +718,32 @@ async function main() {
     process.exitCode = opts.help ? 0 : 1;
     return;
   }
-  const useAdb = !opts.cdp;
+  const useAdb = !opts.desktop;
+  const pageUrl = `http://localhost:${opts.port}/?perf`;
   const dump = { tool: 'quest-perf', version: 1, command, startedAt: new Date().toISOString(), snapshots: [] };
   let release = async () => {};
   let logger = null;
   let gcTrace = null;
   let cdp = null;
   let proximityHeld = false;
+  let cleaned = false;
+  const cleanup = async () => {
+    if (cleaned) return;
+    cleaned = true;
+    logger?.stop();
+    cdp?.close();
+    await release();
+    if (proximityHeld) {
+      await adb(opts, ...PROXIMITY.sensor).then(() => console.log('The proximity sensor is back in charge.'),
+        (err) => console.warn(`Could not give the proximity sensor back (${err.message}): restart the headset, or run adb ${PROXIMITY.sensor.join(' ')}`));
+    }
+  };
+  // Stopped with Ctrl+C: the desktop's window closed and the headset's sensor given back all the same.
+  const onSigint = () => {
+    console.log('\nStopping…');
+    cleanup().finally(() => process.exit(130));
+  };
+  process.once('SIGINT', onSigint);
   try {
     if (useAdb) {
       await chooseDevice(opts);
@@ -733,12 +756,27 @@ async function main() {
       }
       if (opts.open) {
         await adb(opts, 'reverse', `tcp:${opts.port}`, `tcp:${opts.port}`);
-        await adb(opts, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `http://localhost:${opts.port}/?perf`);
-        console.log(`Opened http://localhost:${opts.port}/?perf in the headset.`);
+        await adb(opts, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', pageUrl);
+        console.log(`Opened ${pageUrl} in the headset.`);
       }
     }
-    const fwd = useAdb ? await forwardDevtools(opts) : { endpoint: opts.cdp.replace(/\/$/, ''), release: async () => {} };
+    let fwd;
+    if (useAdb) fwd = await forwardDevtools(opts);
+    else {
+      // A window of its own: current Chrome opens its DevTools port only on a new profile, and
+      // launchChrome writes that profile's Local State first, so Windows sees no failed logon. It
+      // keeps drawing when other windows cover it (Chrome would count it hidden and stop its frames,
+      // and the scenarios would wait), though not while minimized or with the screen locked.
+      const chrome = await launchChrome({
+        headless: false,
+        url: pageUrl,
+        args: ['--window-size=1280,800', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
+      });
+      console.log(`Opened ${pageUrl} in a Chrome window of its own (${chrome.endpoint}).`);
+      fwd = { endpoint: chrome.endpoint, release: () => chrome.close() };
+    }
     release = fwd.release;
+    const opened = opts.open || !useAdb;
     // Scenario progress from the page; a memory snapshot at the end of each scenario.
     const attach = async (c) => {
       await c.send('Runtime.enable');
@@ -751,7 +789,7 @@ async function main() {
       });
       return c;
     };
-    ({ cdp } = await connectPage(fwd.endpoint, { waitMs: opts.open ? 60000 : 0, prefer: opts.open ? `http://localhost:${opts.port}/?perf` : null }));
+    ({ cdp } = await connectPage(fwd.endpoint, { waitMs: opened ? 60000 : 0, prefer: opened ? pageUrl : null }));
     if (command === 'handover') return await handover(cdp, opts);
     await attach(cdp);
 
@@ -795,7 +833,7 @@ async function main() {
     console.log(describe(state));
 
     if (command === 'run') {
-      if (!state.presenting && !opts['allow-2d']) {
+      if (!state.presenting && useAdb && !opts['allow-2d']) {
         if (opts['enter-vr']) await cdp.eval('window.__vrlbry.enterVR()', { userGesture: true }).catch(() => {});
         if (!(await cdp.eval('window.__vrlbry.renderer.xr.isPresenting'))) {
           console.log('Waiting for VR: put the headset on and press Enter VR (up to 3 minutes)…');
@@ -832,13 +870,8 @@ async function main() {
     const shown = path.relative(process.cwd(), file);
     console.log(`\nSaved ${shown.startsWith('..') ? file : shown} (${Math.round(fs.statSync(file).size / 1024)} KB)`);
   } finally {
-    logger?.stop();
-    cdp?.close();
-    await release();
-    if (proximityHeld) {
-      await adb(opts, ...PROXIMITY.sensor).then(() => console.log('The proximity sensor is back in charge.'),
-        (err) => console.warn(`Could not give the proximity sensor back (${err.message}): restart the headset, or run adb ${PROXIMITY.sensor.join(' ')}`));
-    }
+    process.removeListener('SIGINT', onSigint);
+    await cleanup();
   }
 }
 

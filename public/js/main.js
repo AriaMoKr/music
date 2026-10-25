@@ -24,7 +24,7 @@ import { sessionText, spaceOf } from './together-space.js';
 import { roomFromUrl } from '../vendor/layersharedsession/room.js';
 import { leaveUrl } from '../vendor/common/door.js';
 import { placeFromSearch, placeHref } from './place-url.js';
-import { BackHistory } from './back-history.js';
+import { BackHistory } from '../vendor/common/back-history.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
@@ -225,6 +225,7 @@ async function start() {
   // on every link back).
   const together = new Together({ scene, camera, renderer, hands: () => controls.xrInputs });
   interaction.together = together;
+  together.reduceMotion = interaction.reduced;
   const wayOutUrl = () => leaveUrl(way, together.room);
   const sessionNote = (text) => {
     overlay.showToast(text, 'info', 4000);
@@ -267,11 +268,14 @@ async function start() {
   overlay.onAccess((change) => interaction.setAccess({ ...interaction.access, ...change }));
   watchMotion(() => interaction._applyAccess());
   // The browser's Back (its button, a phone's back gesture, Quest Browser's) along the links
-  // followed in a book, as the toolbar's ↩ Back, then putting the book away (back-history.js).
+  // followed in a book, as the toolbar's ↩ Back, then putting the book away (common's
+  // back-history.js). Its fields keep the names vrlbry's own copy gave them (prefix), so the
+  // entries already in visitors' tabs stay its own.
   const backHistory = new BackHistory({
     history, load: performance.timeOrigin,
     onBack: (depth) => interaction.backTo(depth),
     onAway: () => interaction.putAway(),
+    prefix: 'vrlbry',
   });
   interaction.backHistory = backHistory;
   // The address names the place and room shown (place-url.js), replaced as they change (no history
