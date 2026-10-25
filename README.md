@@ -211,7 +211,7 @@ keyboard (in a headset), finds any book by title or author and takes you to it, 
 Wikipedia article by title and opens its volume there. Your reading position, text size, theme and
 rooms are remembered in the browser.
 
-On a screen, **Text view** (or **T**) shows the part you are reading as an ordinary page of text,
+On a screen, **Text view** (or **T**, also with a book in hand) shows the part you are reading as an ordinary page of text,
 for a screen reader, the keyboard, the browser's zoom or a small phone. It has the contents, the
 text size and theme, the page slider, Back and the parts in its toolbar, and its links work as in
 the book. It keeps your place with the 3D book: close it (**T** or Esc) and the book is open

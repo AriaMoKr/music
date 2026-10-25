@@ -1459,6 +1459,9 @@ export class Interaction {
     } else if (this.state === 'inspect') {
       if (key === 'Enter' || key === ' ') {
         if (this.book.readable) this.read();
+      } else if (code === 'KeyT' && this.textView && this.book.readable) {
+        this.textView.openOnRead(); // read, straight into the text view (a screen's)
+        this.read();
       } else if (key === 'Escape' || key === 'Backspace') this.putBack();
       else if (code === 'KeyF') this.bookToFront();
     } else if (this.state === 'opening' && (key === 'Escape' || key === 'Backspace')) {
@@ -1527,6 +1530,7 @@ export class Interaction {
   async pick(book) {
     if (this.state !== 'browse') return;
     this.state = 'busy';
+    this.backHistory?.bookOut(); // the browser's Back puts it away (back-history.js)
     this._setHover(null);
     this.controls.locomotionEnabled = false;
     const tr = this.world.shelves.getBookTransform(book);
@@ -1562,14 +1566,19 @@ export class Interaction {
     p.visible = true;
     this.state = 'inspect';
     this.overlay?.setBookOut?.(true);
+    // Said when it stays in hand: a caller that opens it at once (an article found, a link, a
+    // recent book) has called read() before this runs.
+    setTimeout(() => { if (this.state === 'inspect' && this.book === book) this.textView?.bookInHand(); }, 0);
   }
 
   /** Returns the book to its shelf (keepTrail: a link leads to another book: back() returns). */
   async putBack({ keepTrail = false } = {}) {
     if (this.state !== 'inspect' && this.state !== 'read') return;
     if (!keepTrail) {
-      // The book closed: the browser's Back no longer goes along its links (back-history.js).
-      if (this._trail.length) this.backHistory?.cleared();
+      this._putAways = (this._putAways || 0) + 1; // putAway: this book is away
+      // The book is put away: the browser's Back no longer closes it or goes along its links
+      // (back-history.js).
+      this.backHistory?.cleared();
       this._trail = [];
       this._trailBase = 0;
     }
@@ -1879,14 +1888,28 @@ export class Interaction {
   }
 
   /**
+   * A book that is out goes back on its shelf (the browser's Back past the book's entry:
+   * back-history.js; Reset view), once what is under way has finished: a book coming out or
+   * going in, a link being followed. One being opened is cancelled. Only the book out now: once
+   * it is away (a cancelled opening puts it back), a book taken out after is left out.
+   */
+  async putAway() {
+    const away = this._putAways;
+    for (let i = 0; i < 400; i++) {
+      if (this.state === 'opening') this._cancelOpening?.();
+      if (this.state !== 'busy' && this.state !== 'opening' && !this._following) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    if (this._putAways === away && (this.state === 'inspect' || this.state === 'read')) await this.putBack();
+  }
+
+  /**
    * Back to the start (Home, the help dialog's Reset view): a book that is out goes back on its
    * shelf, the viewer stands at the entrance looking into the room, level, and the reading
    * distance and size are as they first were.
    */
   async resetView() {
-    if (this.state === 'opening') this._cancelOpening?.();
-    for (let i = 0; i < 200 && (this.state === 'busy' || this.state === 'opening'); i++) await new Promise((r) => setTimeout(r, 25));
-    if (this.state === 'inspect' || this.state === 'read') await this.putBack();
+    await this.putAway();
     if (this.state !== 'browse') return;
     this.settings.readDistance = READ.distance;
     this.settings.readScale = 1;

@@ -1658,14 +1658,23 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   the font size), kept while links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
   to the same spread while the font size is the same. So does the browser's Back (its button, a
-  phone's back gesture, a mouse's back button, Quest Browser's: `back-history.js`): each link
-  followed adds a history entry at the same address (`pushState`, its state `{ vrlbryTrail: <links
-  deep>, vrlbryLoad: performance.timeOrigin }` beside what was there), its popstate goes back to
-  that depth (`interaction.backTo`, after a link or turn in progress; several at once when the
-  browser goes back several), the toolbar's Back goes through the same entries (`history.back()`),
-  and closing the book takes them out (`history.go(-depth)`), so Back then leaves as before.
-  Forward does not follow the links again; entries an earlier load of the page left (a reload) are
-  passed over.
+  phone's back gesture, a mouse's back button, Quest Browser's: `back-history.js`), and past the
+  links it puts the book away:
+  - A book leaving its shelf (`pick`) adds a history entry at the same address (`pushState`, its
+    state `{ vrlbryBook: 1, vrlbryTrail: 0, vrlbryLoad: performance.timeOrigin }` beside what was
+    there), and each link followed adds one (`vrlbryTrail`: links deep). A book a link swaps in
+    keeps the entries there are.
+  - Their popstate goes back to that depth (`interaction.backTo`, after a link or turn in
+    progress; several at once when the browser goes back several). Past the book's own entry it
+    puts the book away (`interaction.putAway`: after what is under way; an opening is cancelled).
+  - The toolbar's Back goes through the links' entries (`history.back()`).
+  - A book put away otherwise (Put back, Esc, B, Reset view) takes its entries out
+    (`history.go(-n)`), so Back then leaves as before. A book taken out before that is done gets
+    its entry once it is.
+  - Forward neither follows the links again nor takes the book out. Entries an earlier load of the
+    page left (a reload) are passed over, and the one it was loaded on becomes the page's own.
+  - Chrome's Back button skips entries a page added before any user gesture; a book comes out
+    after a click, a tap, a key or a trigger.
 - **Sounds** (§3.5 sound lists, §4 `/sounds`; `media/queue.js`, `ui/listen-tab.js`,
   `ui/music-stand.js`): a book that plays has two lists in its contents panel, *Contents* and
   *♪ Sounds (n)*: its sounds under their headings (`soundRows`: a heading row where it changes, a
@@ -1816,8 +1825,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   - The address names the place and room shown (`place-url.js`): `?place=<library id>` (or
     `demo`, `local`, `*`) and a large library's room, `&genre=`, `&letter=`, `&page=` (from 2;
     none for the whole library), set with `history.replaceState` (no history entry per room) after
-    every rebuild (`interaction.onShelved(place, room)`) and at the start; the page's other
-    parameters stay. Opened with them, the page starts there (`placeFromSearch`): a library by
+    every rebuild (`interaction.onShelved(place, room)`) and at the start, and on the entry the
+    browser's Back or Forward lands on (a book's or a link's entry made before the room changed);
+    the page's other parameters stay. Opened with them, the page starts there (`placeFromSearch`): a library by
     its id, else by its name without the edition's date (the newest edition here), a group or a
     browser's library (`~…`) as it is (the latter, the site's own files included, put back once
     they open); one not here is ignored.
@@ -2055,9 +2065,13 @@ overlay's `announce`).
 - **Opening and closing.** While a book is open on a screen (not in a headset):
   - Ways in: T, the overlay's "Text view" button (shown only while reading), or the help
     dialog's "Open books as text" (`settings.textView`), which opens each book in it at once.
-  - Opening a book says its title politely (`overlay.announce`, a `role="status"` region):
-    "<title> is open.", plus " Text view: T." while the view is not on. A Wikipedia volume says
-    the article's title.
+    T with a book in hand (`inspect`) reads it and opens the view (`openOnRead`).
+  - A book taken out and left in hand (picked from the search, or clicked) is said politely
+    (`bookInHand`, `overlay.announce`, a `role="status"` region): "<title>, in your hands. Enter
+    reads it, T as text, Esc puts it back." One opened at once (an article found, a link, a
+    recent book) is not: `pick` says it only if the state is still `inspect` a moment later.
+  - Opening a book says its title politely: "<title> is open.", plus " Text view: T." while the
+    view is not on. A Wikipedia volume says the article's title.
   - The view takes focus at its heading (an `h1` with `tabindex="-1"`).
   - T or Esc closes it (Esc closes the contents first). Focus goes back to the "Text view" button,
     or to the search box when the book was put back.
@@ -2137,7 +2151,9 @@ overlay's `announce`).
   - Links are underlined, and focus outlines take the link colour.
   - The browser's zoom reflows it, with no sideways scroll at 320 px (checked at 320 × 568 and
     320 × 200).
-  - What Tab or a jump scrolls to stops below the toolbar (`scroll-margin-top`; a scroll-padding
+  - What Tab or a jump scrolls to stops below the toolbar (`scroll-margin-top: var(--tv-bar-h)`,
+    set from the toolbar's height before each jump, as its observer saw it hidden while the view
+    was closed, and the toolbar shown for the jump; a scroll-padding
     would count the toolbar's own buttons as hidden).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
   links (sounds' too, and the one playing found), the top block, the round trip from a page to the

@@ -533,6 +533,7 @@ export class TextView {
    * book (keepTrail), whose part it shows once open.
    */
   bookClosing(keepTrail) {
+    this._onRead = false;
     if (!this._open) return;
     if (keepTrail) this.$('.tv-body').replaceChildren(this.doc.createTextNode('Opening…'));
     else this.close({ keepPlace: false });
@@ -553,12 +554,29 @@ export class TextView {
     return I.libraries?.find((l) => l.id === I.book?.libId)?.kind === 'wikipedia';
   }
 
+  /**
+   * A book is in hand (taken out, not opened at once): what it is and what comes next, said
+   * politely. A screen only.
+   */
+  bookInHand() {
+    const I = this.I;
+    if (I.controls.presenting || !I.book) return;
+    const next = I.book.readable ? 'Enter reads it, T as text, Esc puts it back.' : 'It cannot be read here. Esc puts it back.';
+    this.announce?.(`${I.book.title}, in your hands. ${next}`);
+  }
+
+  /** T with a book in hand: it is read, and goes straight into the text view. */
+  openOnRead() {
+    if (!this.I.controls.presenting) this._onRead = true;
+  }
+
   /** A book has opened: its title said politely; the view opened when the visitor keeps it on. */
   bookOpened() {
     const I = this.I;
     const part = this._partTitle(I.reader?.anchorOf(I._currentRef()).c ?? 0);
     const title = part ?? I.book?.title ?? 'The book';
-    const wanted = !!I.settings.textView && !I.controls.presenting;
+    const wanted = (!!I.settings.textView || this._onRead) && !I.controls.presenting;
+    this._onRead = false;
     this.announce?.(`${title} is open.${this._open || wanted || I.controls.presenting ? '' : ' Text view: T.'}`);
     if (wanted && !this._open) this.open();
   }
@@ -619,6 +637,11 @@ export class TextView {
     this._header();
     this._at = { c: anchor.c, b: anchor.b };
     this._moved = false;
+    // The place lands below the toolbar, shown for the jump: its height now, since the observer
+    // last saw it hidden (0) when the view opens and has not run again yet.
+    const bar = this.$('.tv-bar');
+    bar.classList.remove('tv-away');
+    this.el.style.setProperty('--tv-bar-h', `${bar.offsetHeight}px`);
     const target = anchor.b > 0 ? this.el.querySelector(`[data-b="${anchor.b}"]`) : null;
     const smoothly = !!target && smooth && !I.reduced;
     if (smoothly) this._selfScrolled(); // a while: its scroll events until it rests are its own
