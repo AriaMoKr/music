@@ -25,15 +25,30 @@ export function spaceOf(place, room = null) {
 /**
  * Who else is in the session, in words: "Just you so far", or "With you: 2 here, 1 elsewhere in
  * the library, 1 in another place".
- * @param {{ here?: number, library?: number, away?: number }} c here: in this room; library:
- *   elsewhere in vrlbry; away: on another page of the session (the Hallway, outside, …)
+ * @param {{ here?: number, nearby?: number, away?: number }} c the layer's company(): here, in
+ *   this room; nearby, elsewhere in the library; away, on another page of the session (the
+ *   Hallway, outside, …)
  */
-export function companyText({ here = 0, library = 0, away = 0 }) {
+export function companyText({ here = 0, nearby = 0, away = 0 }) {
   const parts = [];
   if (here) parts.push(`${here} here`);
-  if (library) parts.push(`${library} elsewhere in the library`);
+  if (nearby) parts.push(`${nearby} elsewhere in the library`);
   if (away) parts.push(`${away} in another place`);
   return parts.length ? `With you: ${parts.join(', ')}` : 'Just you so far';
+}
+
+/**
+ * The layer's notices in words: someone is in the library (or the session), came into it, left,
+ * or waved.
+ * @param {{ kind: 'join'|'arrive'|'leave'|'wave', peer: { name?: string|null, page?: string|null } }} n
+ */
+export function noticeText({ kind, peer }) {
+  const name = peer?.name || 'Someone';
+  if (kind === 'join') return peer?.page === PAGE_ID ? `${name} is in the library` : `${name} is in the session`;
+  if (kind === 'arrive') return `${name} came into the library`;
+  if (kind === 'leave') return `${name} left the session`;
+  if (kind === 'wave') return `${name} waved`;
+  return '';
 }
 
 /**
