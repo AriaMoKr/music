@@ -204,7 +204,9 @@ over as soon as you use it, and moving the mouse hands control back.
 In the Hallway's Android TV app the TV's remote walks and reads: the arrows walk and turn, OK
 takes the book at the dot in the middle of the view and reads it, ← → turn its pages, Menu opens
 the card (the search, and the book's buttons for its contents, the text view, the theme and the
-text size), and Back takes one step back. Add `?tv=emulate` to the address to try it in a browser.
+text size), and Back takes one step back. In a book read as text, OK on a Listen link plays it;
+the remote's play/pause, stop and next keys control the sound playing, and so do the Now playing
+bar's buttons (Menu, then ↓). Add `?tv=emulate` to the address to try it in a browser.
 
 The catalogue stand next to where you start lets you re-shelve the books by title, author or
 popularity, jump to a letter, pick a book at random ("Surprise me"), reopen recently read books,

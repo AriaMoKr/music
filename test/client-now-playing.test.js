@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { nowPlayingOf, startedText } from '../public/js/ui/now-playing.js';
+import { barButton, MEDIA_KEYS, nowPlayingOf, startedText, withBarStops } from '../public/js/ui/now-playing.js';
 
 const BOOK = { libId: 'm', id: '7', title: 'How Music Developed', author: 'Henderson' };
 const tune = { c: 2, b: 14, t: 'Listen', k: 'midi', h: 'The G scale', media: { src: '/zim/m/C/7_g.mid', name: 'g.mid', mime: 'audio/midi' } };
@@ -67,5 +67,59 @@ describe('the Now playing bar', () => {
   it('says a sound once as it starts, and asks for Play when the browser waits for a tap', () => {
     assert.equal(startedText(nowPlayingOf(ix())), 'Playing The G scale, from How Music Developed · Henderson.');
     assert.equal(startedText(nowPlayingOf(ix({ state: 'blocked' }))), 'The G scale, from How Music Developed · Henderson: press Play to hear it.');
+  });
+});
+
+describe("a TV remote's media keys on the bar", () => {
+  const press = (key, o) => barButton(nowPlayingOf(ix(o)), MEDIA_KEYS[key]);
+
+  it('reads play/pause, play, pause, stop and next, and leaves rewind and fast-forward to turning', () => {
+    assert.deepEqual(Object.keys(MEDIA_KEYS), ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaTrackNext']);
+    assert.equal(MEDIA_KEYS.MediaRewind, undefined, "common's keyOf reads it as ArrowLeft");
+    assert.equal(MEDIA_KEYS.MediaFastForward, undefined);
+  });
+
+  it('presses the button each stands for', () => {
+    assert.equal(press('MediaPlayPause'), 'toggle');
+    assert.equal(press('MediaPlayPause', { state: 'paused' }), 'toggle');
+    assert.equal(press('MediaPause'), 'toggle');
+    assert.equal(press('MediaPlay', { state: 'paused' }), 'toggle');
+    assert.equal(press('MediaPlay', { state: 'blocked' }), 'toggle', 'a key press starts a sound the browser held for a tap');
+    assert.equal(press('MediaStop'), 'stop');
+    assert.equal(press('MediaTrackNext', { items: [tune, air] }), 'next');
+  });
+
+  it('does nothing where the button would not: nothing loaded, Play while playing, Pause while paused, loading, no next', () => {
+    assert.equal(press('MediaPlayPause', { state: 'idle' }), null);
+    assert.equal(press('MediaStop', { state: 'idle' }), null);
+    assert.equal(press('MediaPlay'), null);
+    assert.equal(press('MediaPause', { state: 'paused' }), null);
+    assert.equal(press('MediaPlayPause', { state: 'loading' }), null, 'its button waits for the sound too');
+    assert.equal(press('MediaStop', { state: 'loading' }), 'stop');
+    assert.equal(press('MediaTrackNext'), null, "a link's one sound has no next");
+  });
+});
+
+describe("the bar among a TV remote's card stops", () => {
+  const bar = ['pause', 'stop', 'next'];
+
+  it("comes before the overlay's foot row, which it stands above", () => {
+    const stops = ['card', 'search', 'pause', 'stop', 'next', 'help', 'read'];
+    assert.deepEqual(withBarStops(stops, bar, { before: (s) => s === 'help' || s === 'read' }),
+      ['card', 'search', 'pause', 'stop', 'next', 'help', 'read']);
+    const moved = ['card', 'help', 'read', 'textview', 'pause', 'stop', 'next']; // the page's order
+    assert.deepEqual(withBarStops(moved, bar, { before: (s) => ['help', 'read', 'textview'].includes(s) }),
+      ['card', 'pause', 'stop', 'next', 'help', 'read', 'textview']);
+  });
+
+  it("comes after the text view's toolbar, before its text's links", () => {
+    const stops = ['close', 'contents', 'putback', 'link1', 'link2'];
+    assert.deepEqual(withBarStops(stops, bar, { after: (s) => ['close', 'contents', 'putback'].includes(s) }),
+      ['close', 'contents', 'putback', 'pause', 'stop', 'next', 'link1', 'link2']);
+  });
+
+  it('goes at the end without its neighbours, and adds nothing while hidden', () => {
+    assert.deepEqual(withBarStops(['a', 'b'], bar, { before: () => false }), ['a', 'b', 'pause', 'stop', 'next']);
+    assert.deepEqual(withBarStops(['a', 'b'], [], { after: (s) => s === 'a' }), ['a', 'b']);
   });
 });

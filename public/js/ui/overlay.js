@@ -89,6 +89,7 @@ const HELP = {
     ['The card', 'Menu: this card and the search, and with a book out its buttons (contents, text view, theme, pages, text size) · ↑ ↓ from one to the next, ← → through a choice, OK presses'],
     ['A list on the stand', 'Walk up to the stand, the dot on the list: ↑ ↓ scroll it, OK chooses'],
     ['The text view', '↑ ↓ scroll it, ← → turn the pages · OK: the links on the screen · Menu: its toolbar'],
+    ['Sounds', 'OK on a “Listen” link plays it · the remote’s ⏯ pauses and plays, ⏹ stops, ⏭ plays the next · or Menu, then the Now playing bar’s buttons'],
     ['Back', 'One step back: the contents closed, back along the links, the text view closed, the book put back; in the card, walking again; else back to the Hallway'],
   ],
   vr: [

@@ -2,9 +2,11 @@
 // for the keyboard and screen readers, whom the 3D panels leave out. What plays (the sound's title,
 // its book, a line of kind, length and where it plays) and Play/Pause, Stop and Next, each named
 // and reached with Tab. A sound that starts is said politely once, not as it plays on. The queue,
-// the composers and periods, and the music stand's tempo, loop and parts stay in 3D.
+// the composers and periods, and the music stand's tempo, loop and parts stay in 3D. On a TV its
+// buttons are in the remote's card (Menu), and the remote's media keys press them (ui/music-remote.js).
 //
-// nowPlayingOf is pure (the Interaction or a stand-in), for the tests; NowPlaying is the page's.
+// nowPlayingOf, barButton and withBarStops are pure (the Interaction or a stand-in), for the tests;
+// NowPlaying is the page's.
 
 import { isMidi } from '../core/content/sounds.js';
 import { soundTitle } from '../media/queue.js';
@@ -50,6 +52,48 @@ export function nowPlayingOf(ix) {
 export function startedText(info) {
   const from = info.book ? `, from ${info.book}` : '';
   return info.blocked ? `${info.title}${from}: press Play to hear it.` : `Playing ${info.title}${from}.`;
+}
+
+/**
+ * A TV remote's media keys (by common's keyOf) and what each does to the bar (SPEC §5.9, music).
+ * Rewind and fast-forward are not among them: common reads them as ← and →, for TalkBack.
+ */
+export const MEDIA_KEYS = Object.freeze({
+  MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'stop', MediaTrackNext: 'next',
+});
+
+/**
+ * Which of the bar's buttons an action presses ('toggle', 'stop', 'next'), or null when it does
+ * nothing now: nothing loaded, Play while playing, Pause while not, Play/Pause while loading (its
+ * button waits too), Next with none queued.
+ * @param {ReturnType<typeof nowPlayingOf>} info
+ * @param {'toggle'|'play'|'pause'|'stop'|'next'} action
+ */
+export function barButton(info, action) {
+  if (!info) return null;
+  if (action === 'stop') return 'stop';
+  if (action === 'next') return info.hasNext ? 'next' : null;
+  if (info.loading) return null;
+  if (action === 'toggle' || (action === 'play') === !info.playing) return 'toggle';
+  return null;
+}
+
+/**
+ * A TV remote's card stops with the bar's among them (ui/music-remote.js): taken from where the
+ * page has them and put `before` the first stop that is so (the overlay's foot row, which the bar
+ * stands above on a TV), or `after` the last (the text view's toolbar); else at the end.
+ * @template T
+ * @param {T[]} stops
+ * @param {T[]} bar the bar's buttons, none while it is hidden
+ * @param {{ before?: (stop: T) => boolean, after?: (stop: T) => boolean }} where
+ */
+export function withBarStops(stops, bar, { before, after }) {
+  const rest = stops.filter((s) => !bar.includes(s));
+  let at = rest.length;
+  if (before && rest.some(before)) at = rest.findIndex(before);
+  else if (after && rest.some(after)) at = rest.findLastIndex(after) + 1;
+  rest.splice(at, 0, ...bar);
+  return rest;
 }
 
 const STATIC = `
@@ -155,6 +199,24 @@ export class NowPlaying {
       this._said = info.key;
       this.announce?.(startedText(info));
     }
+  }
+
+  /**
+   * A TV remote's media key (its name by common's keyOf): true when it is the bar's now (a sound is
+   * loaded), its button pressed once, not again as the key repeats.
+   */
+  mediaKey(name, repeat = false) {
+    const action = Object.hasOwn(MEDIA_KEYS, name) ? MEDIA_KEYS[name] : null;
+    const info = action ? nowPlayingOf(this.I) : null;
+    if (!info) return false;
+    const button = repeat ? null : barButton(info, action);
+    if (button) this.$(`.ov-np-${button}`).click();
+    return true;
+  }
+
+  /** Its buttons, for a TV remote's card (ui/music-remote.js); none while it is hidden. */
+  stops() {
+    return this.el.hidden ? [] : [...this.el.querySelectorAll('button')];
   }
 
   _hide() {

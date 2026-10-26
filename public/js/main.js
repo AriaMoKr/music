@@ -27,7 +27,7 @@ import { leaveUrl } from '../vendor/common/door.js';
 import { placeFromSearch, placeHref } from './place-url.js';
 import { BackHistory } from '../vendor/common/back-history.js';
 import { tvMode } from '../vendor/common/tv.js';
-import { LibraryRemote } from './ui/remote.js';
+import { MusicRemote } from './ui/music-remote.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
@@ -202,9 +202,11 @@ async function start() {
   interaction.nowPlaying = new NowPlaying({
     root: document.getElementById('overlay'), interaction,
     announce: (text) => overlay.announce(text),
-    // Stopped from the bar: back to the text view's title, the "Text view" button, or the search.
-    returnFocus: () => (textView.isOpen ? textView.el.querySelector('.tv-title')
-      : document.querySelector(interaction.state === 'read' ? '.ov-textview' : '.ov-search input')),
+    // Stopped from the bar: back to the text view's title, the "Text view" button, or the search;
+    // on a TV walking again (the view: a control that went), as ui/remote.js's.
+    returnFocus: () => (tv ? (textView.isOpen ? textView.el : renderer.domElement)
+      : textView.isOpen ? textView.el.querySelector('.tv-title')
+        : document.querySelector(interaction.state === 'read' ? '.ov-textview' : '.ov-search input')),
   });
   // What the sound player has to say (a recording waiting for ▶, one that cannot be played) reaches
   // the page as a toast, over the text view too: its notice is drawn in 3D only.
@@ -305,9 +307,10 @@ async function start() {
   overlay.onBookKey((key, code) => interaction.pressKey(key, code));
   // A TV's remote (SPEC §5.9): OK the gamepad's A at the middle of the view, the aim dot shown
   // without a pad, up and down scrolling the list the dot is on, Back one step back
-  // (interaction.step), and the app asking the page what Back and Menu do (answerApp).
+  // (interaction.step), and the app asking the page what Back and Menu do (answerApp); music's
+  // Now playing bar in its card and the remote's media keys on the bar (ui/music-remote.js).
   if (tv) {
-    const remote = new LibraryRemote({ canvas: renderer.domElement, overlay, textView, interaction });
+    const remote = new MusicRemote({ canvas: renderer.domElement, overlay, textView, interaction, nowPlaying: interaction.nowPlaying });
     remote.answerApp(tv);
     interaction.tv = true;
     controls.aimMiddle = true;
