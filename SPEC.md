@@ -2087,14 +2087,15 @@ overlay's `announce`).
   - T or Esc closes it (Esc closes the contents first). Focus goes back to the "Text view" button,
     or to the search box when the book was put back.
   - Entering VR closes it, and T does nothing while presenting.
-- **The page.** An `<article class="tv" aria-labelledby="tv-title" data-own-keys>` covers the
+- **The page.** An `<article class="tv-view" aria-labelledby="tv-title" data-own-keys>` covers the
   view (fixed, with its own scroll).
   - The controls leave keys pressed in it alone (`isTyping` honours `[data-own-keys]`), so the
     arrows, Space and PageUp / PageDown scroll it.
   - ← / → outside a field turn the 3D book's page from the view's place, and the view follows.
 - **`renderBlocks(doc, container, blocks, { c, skip, onLink, image })`** builds a part's blocks
   (§3.5) as DOM nodes. Text goes in as text nodes, never as HTML.
-  - `h`: h2–h6, the part's highest level as h2, under the view's h1.
+  - `h`: h2–h6 under the view's h1, the part's highest level as h2, and never a level left out:
+    each at most one below the heading before (a book's h3 then h5 is h3 then h4).
   - `p`: paragraphs, with their alignment, verse and indent.
   - `li`: nested `ul.tv-list` by depth, the marker as text.
   - `tr`: a `<table>` per group `g`; header rows go in `<thead>` with `th scope="col"`.
@@ -2167,6 +2168,98 @@ overlay's `announce`).
     was closed, and the toolbar shown for the jump; a scroll-padding
     would count the toolbar's own buttons as hidden).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
-  links (sounds' too, and the one playing found), the top block, the round trip from a page to the
+  links (sounds' too, and the one playing found), heading levels, the top block, the round trip from a page to the
   view and back to the same block, and the themes' colours; `test/client-now-playing.test.js` what
   the Now playing bar shows and when a sound counts as another.
+
+### 5.9 TV remote (`ui/remote.js`, `back-step.js`)
+
+In the Hallway's Android TV app (AriaMoKr/HallwayApp: a full-screen WebView whose user agent ends
+with ` HallwayTV/<version>`), the library is walked and read with the TV's remote: the arrows, OK,
+Back and Menu. AriaMoKr/common's `tv.js` (v0.6.0; its README, "The TV app") does the remote's
+part every site shares; this section is the library's. `?tv=emulate` shows the TV's page in any
+browser (common's `tvMode`), where `hallwayTV.menu()` and `hallwayTV.back()` stand in for Menu
+and Back. The remote's parts live in the files music shares (interaction.js, ui/overlay.js,
+ui/text-view.js, ui/remote.js); main.js only wires them.
+
+- **TV mode** (`main.js`): `html.tv` (what HallwayApp's `tv-check.mjs` looks for), the overlay's
+  `setTV`, and no VR (no Enter VR, no granted session). The 3D view's pixel ratio is 2 at most,
+  as on any screen and as the Hallway's (`?dpr=` sets another cap).
+- **Walking.** The 3D view holds the focus. The arrows walk and turn (controls.js reads every key
+  through common's `keyOf`, since the remote's OK and keys sent with `adb shell input keyevent`
+  have no `code`). OK is the gamepad's A at the middle of the view (`interaction.useMiddle`):
+  the aim dot is shown without a pad (`controls.aimMiddle`; hidden while the card has the focus,
+  in the text view, and while reading unless the contents are open: `controls.aimShown`). A book
+  in hand is read; an open one turns a page (the middle of a spread is its gutter), unless its
+  contents are open, whose entry at the dot it opens.
+- **Lists on the stand.** ↑ ↓ scroll the list the dot is on (`interaction.scrollUnderDot`, through
+  `controls.scrollKey`), when it has more rows than it shows (`panel.scrolls`) and is within
+  `TV_REACH` (2.2 m) while walking, or is the contents of the book being read (on a TV they lie
+  over the page, where the dot is). A fresh press decides between the list and walking; its
+  repeats follow it. The hint says which (`overlay.setRemote({ list })`).
+- **The card** (Menu: common's `Remote`, made the library's by `LibraryRemote`).
+  - Its root is the open dialog (`overlay.dialog()`: Kiwix's library, the help), else the text
+    view's (`textView.layer()`: its contents, or the whole view) while it is open, else
+    `#overlay`. What holds the focus while walking is the text view while it is open, else the
+    canvas.
+  - Menu goes to where the card was left; while a book is out, to its buttons first
+    (`overlay.remoteStart`); in the text view, to its toolbar (`textView.cardStart`).
+  - Back in the card closes the open dialog (the focus back on its button: `overlay.closeDialog`)
+    or the text view's contents, else walks again (an open search list closes first: on a TV
+    Esc there does not leave the box).
+  - Walking again (`onMode(false)`) closes the dialogs and the text view's contents. The mode
+    also follows the focus moved by the page (the text view opening, a result chosen).
+  - The focus falling to nowhere (a control that hid itself: ↩ Back after the last link, Put
+    back) is walking again (common's), except in an open dialog, where it goes to the dialog's
+    first control (`LibraryRemote.walk`); the help's reset Cancel gives it back to "Reset stored
+    data…".
+  - **The book's buttons** stand in for the letter keys (`.ov-book`, shown in TV mode): in hand
+    Read, Read as text (T), In front of me (F), Put back; open Contents (C, `aria-pressed`),
+    A− / A+, Theme (N), 1 page / 2 pages (P), In front of me, ↩ Back (while there is a trail),
+    Put back, and Text view. Each presses its key (`overlay.onBookKey` →
+    `interaction.pressKey`); the open book's follow its toolbar (`setBookButtons`). Contents
+    chosen there returns to walking, the dot on them.
+  - Enter or Space on a button or link presses it and is not the view's key too (controls.js
+    `pressesControl`).
+  - Nothing opens a file of this device (the Open button, Reopen, the download link); a web
+    address and Kiwix's library stay.
+  - A shared session's invite shows as text to type on a phone or a computer
+    (`overlay.setSession(text, invite)`, `together.inviteLink`).
+- **Back is one step back** (`interaction.step`, chosen by `backStep` in `back-step.js`, pure):
+  the text view's contents closed; back along the links (`goBack`); the text view closed; the
+  3D book's contents closed; the book put away; while typing in the kiosk's search, out of it.
+  A step that has a history entry (BackHistory: the book's, and a link's) is left to the app
+  (`step()` returns false), which goes back a page, so the browser's popstate takes that one
+  step and Back never takes two. A book taken out before any key press or click (a gamepad
+  alone) has no entry Chromium will come back to (its history intervention), so its steps are
+  the page's (`_bookEntry`, from `navigator.userActivation.hasBeenActive`). Outside the library
+  (`step()` false at the start), the app's Back goes back to the Hallway's door.
+- **The text view on a TV** holds the focus itself (`_home()` is the view, not its title): ↑ ↓
+  scroll it by 40 % of its height, ← → turn the 3D book's pages. OK goes to the first link on
+  the screen (`textView.linkHere`), from which ↑ ↓ go from link to link and OK follows one.
+  Closing it gives the focus back to the 3D view.
+- **The ten-foot view** (style.css, `html.tv`): 18 px text, a focus ring of 4 px `#ffd98a` with a
+  dark halo (on the text view's paper too), margins inside a TV's overscan (`--tv-edge-x`,
+  `--tv-edge-y`), a larger aim dot, the card's library list in the card's one scroll. The hint
+  above the foot says what the remote does now (`TV_HINTS`: walking, a list, a book in hand,
+  reading, the contents, the card). While a book is out the card and the search are hidden
+  (`visibility`, so the remote passes them by); while reading, the book's buttons show only
+  while the card has the focus. On a TV the 3D contents lie over the page. The help's comfort
+  row keeps only Motion (the vignette and seated are VR's).
+- **Tests.** `test/client-back-step.test.js` covers the order of Back's steps. Checked in a
+  browser with `?tv=emulate` and real key presses (2026-10-25):
+  - Every control of the card reached and used, and of the help (its reset fieldset, select and
+    checkboxes; Save scene, then Restore) and Kiwix's library; Back closes a dialog onto its
+    button.
+  - The search combobox (↑ ↓ kept by its open list), a result chosen; the kiosk's lists
+    scrolled with ↓ under the dot, OK on its tabs and on a genre.
+  - A book read: OK reads, ← → turn, the contents scrolled with ↓ and an entry opened, the open
+    book's buttons; as text: ↓ scrolls, OK to a link, followed, its ↩ Back; put back from the
+    hand's buttons, the open book's and the text view's toolbar.
+  - Back step by step, the book's step the app's (in a browser, `history.back()` by hand when
+    `hallwayTV.back()` returns false, as the app does).
+  - axe with nothing found walking, with the search list, a book in hand, reading, in the text
+    view (Moby-Dick too, whose headings left a level out before), and with the help or Kiwix's
+    library open.
+
+  The TV itself, its frame rate included, is another session's (TODO).
