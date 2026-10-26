@@ -173,6 +173,11 @@ over as soon as you use it, and moving the mouse hands control back.
 
 ![A gamepad and what each button does, with Xbox and PlayStation names](docs/controls/gamepad.svg)
 
+In the Hallway's Android TV app the TV's remote walks and reads: the arrows walk and turn, OK
+takes the book at the dot in the middle of the view and reads it, ← → turn its pages, Menu opens
+the card (the search, and the book's buttons for its contents, the text view, the theme and the
+text size), and Back takes one step back. Add `?tv=emulate` to the address to try it in a browser.
+
 The catalogue stand next to where you start lets you re-shelve the books by title, author or
 popularity, jump to a letter, pick a book at random ("Surprise me"), reopen recently read books,
 filter a large library by genre and title letter, rescan the folder, and reload the page (handy

@@ -265,13 +265,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 /* The text view (ui/text-view.js, SPEC §5.8): the open book's part as a page of text, over the 3D
    view, in the reader's themes (reader.js THEMES: a test keeps these the same). */
-.tv { --tv-paper: #f6efdf; --tv-ink: #231d16; --tv-link: #24508c; --tv-rule: #b9a78a; --tv-scale: 1;
+.tv-view { --tv-paper: #f6efdf; --tv-ink: #231d16; --tv-link: #24508c; --tv-rule: #b9a78a; --tv-scale: 1;
   position: fixed; inset: 0; z-index: 3; overflow-y: auto; overscroll-behavior: contain;
   background: var(--tv-paper); color: var(--tv-ink); font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; }
-.tv[hidden] { display: none; }
-.tv[data-theme="sepia"] { --tv-paper: #ecdcbc; --tv-ink: #3b2a17; --tv-link: #2c4c7c; --tv-rule: #a68a5f; }
-.tv[data-theme="night"] { --tv-paper: #24221f; --tv-ink: #d9d0c0; --tv-link: #93b4dc; --tv-rule: #5f574b; }
-.tv:focus { outline: none; }
+.tv-view[hidden] { display: none; }
+.tv-view[data-theme="sepia"] { --tv-paper: #ecdcbc; --tv-ink: #3b2a17; --tv-link: #2c4c7c; --tv-rule: #a68a5f; }
+.tv-view[data-theme="night"] { --tv-paper: #24221f; --tv-ink: #d9d0c0; --tv-link: #93b4dc; --tv-rule: #5f574b; }
+.tv-view:focus { outline: none; }
 .tv-bar { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center;
   padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
   background: var(--tv-paper); border-bottom: 1px solid var(--tv-rule); font: 15px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -280,11 +280,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tv-bar label { display: inline-flex; align-items: center; gap: 6px; }
 /* Slid away while reading down a short screen (text-view.js _headroom); sliding only with full motion. */
 .tv-bar.tv-away { transform: translateY(-100%); }
-.tv[data-motion="full"] .tv-bar { transition: transform .2s ease; }
+.tv-view[data-motion="full"] .tv-bar { transition: transform .2s ease; }
 .tv-size { display: inline-flex; gap: 4px; }
 .tv-bar .tv-next { margin-left: auto; } /* the parts at the toolbar's two ends */
-.tv button:disabled { cursor: default; opacity: .5; }
-.tv button:focus-visible, .tv a:focus-visible, .tv select:focus-visible, .tv input:focus-visible, .tv-title:focus-visible {
+.tv-view button:disabled { cursor: default; opacity: .5; }
+.tv-view button:focus-visible, .tv-view a:focus-visible, .tv-view select:focus-visible, .tv-view input:focus-visible, .tv-title:focus-visible {
   outline: 2px solid var(--tv-link); outline-offset: 2px; }
 .tv-where { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 180px; min-width: 0; }
 .tv-label { white-space: nowrap; }
@@ -300,7 +300,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tv-toc-l4, .tv-toc-l5, .tv-toc-l6 { padding-left: 3em; }
 .tv-col { max-width: 70ch; margin: 0 auto; padding: 16px 20px 56px; font-size: calc(1.125rem * var(--tv-scale)); line-height: 1.6; overflow-wrap: break-word; }
 .tv-col * { scroll-margin-top: var(--tv-bar-h, 0px); } /* below the sticky toolbar (text-view.js sets it) */
-.tv a { color: var(--tv-link); text-decoration: underline; text-underline-offset: 2px; }
+.tv-view a { color: var(--tv-link); text-decoration: underline; text-underline-offset: 2px; }
 .tv-title { font-size: 1.6em; line-height: 1.25; margin: .3em 0 .2em; }
 .tv-sub { margin: 0 0 1em; font: 15px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .tv-sub:empty { display: none; }
@@ -315,14 +315,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tv-body figure { margin: 1em 0; text-align: center; }
 .tv-body img { max-width: 100%; height: auto; }
 .tv-body img.tv-inline { vertical-align: middle; }
-.tv[data-theme="night"] .tv-inv { filter: invert(1); }
+.tv-view[data-theme="night"] .tv-inv { filter: invert(1); }
 .tv-body pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .88em; line-height: 1.45; }
 .tv-table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .95em; }
 .tv-table td, .tv-table th { border: 1px solid var(--tv-rule); padding: .25em .5em; vertical-align: top; overflow-wrap: anywhere; text-align: left; }
 .tv-list { list-style: none; margin: 0 0 .8em; padding-left: 1.4em; }
 .tv-list li { margin: .2em 0; }
 .tv-smallcaps { font-variant: small-caps; } .tv-larger { font-size: 1.15em; }
-.tv hr { border: 0; border-top: 1px solid var(--tv-rule); margin: 1.5em 0; }
+.tv-view hr { border: 0; border-top: 1px solid var(--tv-rule); margin: 1.5em 0; }
 @media (max-width: 640px) {
   .tv-col { padding: 12px 14px 48px; }
   .tv-bar { font-size: 14px; }
@@ -334,3 +334,62 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 /* The overlay's "Text view" button: only while a book is open (on a screen: the overlay is not drawn in VR). */
 .ov-textview { height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); font-weight: 600; backdrop-filter: blur(8px); }
 #overlay:not(.ov-reading) .ov-textview { display: none; }
+/* Toasts over the text view (z-index 3), under the dialogs. */
+.ov-toasts { z-index: 4; }
+/* A book's buttons for a TV's card (overlay.js): the letter keys a remote has not got. */
+.ov-book { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.ov-book button { height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); font-weight: 600; white-space: nowrap; backdrop-filter: blur(8px); }
+.ov-book button[aria-pressed="true"] { background: var(--accent); color: #24170a; }
+/* A shared session's invite as text (a TV's: nothing there copies it). */
+.ov-session-invite { color: var(--muted); }
+.ov-invite-link { color: var(--accent); font-weight: 600; overflow-wrap: anywhere; }
+
+/* A TV (SPEC §5.9; common's tv.js, html.tv; its README, "The TV app"): the ten-foot view of the
+   card, the search and the text view. Larger text, a focus ring seen from across the room (a dark
+   halo around it, for the paper of the text view too), margins inside a TV's overscan, the book's
+   buttons at the foot. Nothing opens a file of this device, and there is no VR. */
+html.tv { --tv-edge-x: 32px; --tv-edge-y: 24px; }
+html.tv, html.tv body { font-size: 18px; }
+html.tv :focus:not(canvas, .tv-view) { outline: 4px solid #ffd98a; outline-offset: 3px; box-shadow: 0 0 0 9px rgba(0, 0, 0, .65); }
+html.tv #app canvas:focus { outline: none; }
+html.tv :is(.ov-open-btn, .ov-reopen, .ov-files, .ov-drop, .ov-vr) { display: none !important; }
+html.tv .pad-crosshair { width: 24px; height: 24px; margin: -14px 0 0 -14px; border-width: 3px; box-shadow: 0 0 0 2px rgba(0, 0, 0, .55); }
+html.tv .ov-card { top: var(--tv-edge-y); left: var(--tv-edge-x); width: min(420px, calc(50vw - var(--tv-edge-x) - 12px));
+  max-height: calc(100vh - var(--tv-edge-y) - 128px); max-height: calc(100dvh - var(--tv-edge-y) - 128px); padding: 12px 16px 14px; }
+html.tv .ov-search { top: var(--tv-edge-y); right: var(--tv-edge-x); width: min(420px, calc(50vw - var(--tv-edge-x) - 12px)); }
+html.tv :is(.ov-collapse, .ov-rescan) { width: 36px; height: 36px; }
+html.tv .ov-hallway { height: 36px; max-width: 9em; }
+html.tv .ov-brand { font-size: 22px; }
+html.tv .ov-lib-title { font-size: 19px; }
+html.tv .ov-r-title { font-size: 18px; }
+html.tv :is(.ov-version, .ov-hallway, .ov-lib-desc, .ov-lib-meta, .ov-open-hint, .ov-session, .ov-session button, .ov-r-sub, .ov-url-input,
+  .ov-help h3, .ov-view-note, .ov-debug-note, .ov-scene-note, .ov-reset-note, .ov-reset legend, .ov-comfort, .ov-update-pref, .ov-update-never,
+  .ov-status, .ov-status-line, .ov-status-toggle, .ov-status-stop, .ov-kiwix-note, .ov-kiwix-summary, .ov-kiwix-meta, .ov-kiwix-warn,
+  .ov-kiwix-lang, .ov-kiwix-find, .ov-kiwix-state, .ov-kiwix-index) { font-size: 16px; }
+html.tv .ov-results li.sel { background: rgba(217, 178, 106, .34); outline: 3px solid #ffd98a; outline-offset: -3px; }
+html.tv .ov-results li.sel .ov-r-sub { color: var(--text); } /* the muted line on the stronger highlight */
+html.tv .ov-libs { max-height: none; overflow: visible; } /* one scroll, the card's, which the remote's focus moves */
+html.tv :is(.ov-help-inner, .ov-kiwix-inner) { max-width: min(760px, calc(100vw - 2 * var(--tv-edge-x))); max-height: calc(100vh - 2 * var(--tv-edge-y)); }
+html.tv .ov-kiwix-inner { height: calc(100vh - 2 * var(--tv-edge-y)); }
+/* The foot: the bar (the help, a book's buttons, the text view) centred and wrapping, the hint
+   above it saying what the remote does now (overlay.js TV_HINTS), messages above that. */
+html.tv .ov-bottom, html.tv #overlay.ov-reading .ov-bottom { left: 50%; right: auto; bottom: var(--tv-edge-y); transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 2 * var(--tv-edge-x)); flex-wrap: wrap; justify-content: center; gap: 8px; }
+html.tv #overlay.ov-bookout:not(.ov-reading) .ov-book-hand, html.tv #overlay.ov-reading .ov-book-open { display: flex; }
+html.tv .ov-hint { left: 50%; bottom: calc(var(--tv-edge-y) + 54px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 2 * var(--tv-edge-x));
+  padding: 5px 14px; text-align: center; font-size: 16px; color: var(--text); background: rgba(20, 15, 10, .72); }
+html.tv .ov-toasts { bottom: calc(var(--tv-edge-y) + 100px); }
+html.tv .ov-status { right: var(--tv-edge-x); bottom: calc(var(--tv-edge-y) + 100px); }
+/* A book out: what would cover it goes (hidden, so the remote's up and down pass it by), its
+   buttons stay; reading, they are seen while the card has the focus (Menu), and the hint at the top. */
+html.tv #overlay.ov-bookout :is(.ov-card, .ov-search) { visibility: hidden; opacity: 0; transition: opacity .35s ease, visibility 0s .35s; }
+html.tv #overlay.ov-reading .ov-bottom { opacity: 0; }
+html.tv #overlay.ov-reading:focus-within .ov-bottom, html.tv #overlay.ov-reading .ov-help-btn { opacity: 1; }
+html.tv #overlay.ov-reading .ov-hint { opacity: .85; top: var(--tv-edge-y); bottom: auto; }
+html.tv #overlay.ov-reading:focus-within .ov-hint { top: auto; bottom: calc(var(--tv-edge-y) + 54px); }
+/* The text view: its toolbar and text inside the overscan, larger. */
+html.tv .tv-bar { padding: var(--tv-edge-y) var(--tv-edge-x) 10px; font-size: 18px; }
+html.tv :is(.tv-bar button, .tv-parts button, .tv-bar select) { min-height: 40px; padding: 4px 12px; }
+html.tv .tv-col { padding: 16px var(--tv-edge-x) 64px; }
+html.tv :is(.tv-sub, .tv-parts, .tv-toc) { font-size: 18px; }
+html.tv .tv-partno { font-size: 16px; }

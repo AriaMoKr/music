@@ -25,6 +25,8 @@ import { roomFromUrl } from '../vendor/layersharedsession/room.js';
 import { leaveUrl } from '../vendor/common/door.js';
 import { placeFromSearch, placeHref } from './place-url.js';
 import { BackHistory } from '../vendor/common/back-history.js';
+import { tvMode } from '../vendor/common/tv.js';
+import { LibraryRemote } from './ui/remote.js';
 import { collectionsFor, LOCAL_PLACE } from './rooms.js';
 import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
@@ -44,6 +46,13 @@ const localStore = () => {
 // The way out: to the Hallway, or to the place that linked here naming itself (?back=, hallway.js).
 const way = wayOut(location.search);
 const overlay = new Overlay({ root: document.getElementById('overlay'), wayOut: way });
+// A TV (the Hallway's Android TV app, or ?tv=emulate: common's tv.js, SPEC §5.9): walked with its
+// remote (ui/remote.js), the card for the ten-foot view (style.css, html.tv), no VR.
+const tv = tvMode();
+document.documentElement.classList.toggle('tv', tv);
+overlay.setTV(tv);
+/** The 3D view's pixel ratio on a TV (?dpr= sets another): what holds 60 fps there (SPEC §5.9). */
+const TV_PIXEL_RATIO = 2;
 // Registered before anything can fail: the error screen offers the report too.
 overlay.onDebugInfo(async () => {
   const text = JSON.stringify(debugReport(window.__vrlbry, { overlay }), null, 2);
@@ -92,7 +101,7 @@ async function start() {
     overlay.setError('This browser cannot show 3D graphics (WebGL is unavailable).');
     throw err;
   }
-  renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get('dpr')) || 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get('dpr')) || (tv ? TV_PIXEL_RATIO : 2)));
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.xr.enabled = true;
@@ -183,10 +192,11 @@ async function start() {
   // The text view of the open book (ui/text-view.js, SPEC §5.8): on a screen only; entering VR
   // closes it, so in a headset nothing changes.
   const textView = new TextView({
-    root: document.getElementById('overlay'), interaction, getChunk, imageSource,
+    root: document.getElementById('overlay'), interaction, getChunk, imageSource, tv,
     announce: (text) => overlay.announce(text),
-    // Back to the button that opened it, or to the search once the book is put back (the button goes).
-    returnFocus: (away) => document.querySelector(away ? '.ov-search input' : '.ov-textview'),
+    // Back to the button that opened it, or to the search once the book is put back (the button
+    // goes); on a TV to the 3D view, walking again.
+    returnFocus: (away) => (tv ? renderer.domElement : document.querySelector(away ? '.ov-search input' : '.ov-textview')),
   });
   interaction.textView = textView;
   overlay.onTextView(() => textView.toggle());
@@ -232,7 +242,8 @@ async function start() {
     if (renderer.xr.isPresenting) interaction.notice(text, '', 3);
   };
   together.onChange = () => {
-    overlay.setSession(sessionText({ room: together.room, active: together.active, company: together.active ? together.company() : {} }));
+    // On a TV its invite as text, to type on a phone or a computer (nothing to copy it with there).
+    overlay.setSession(sessionText({ room: together.room, active: together.active, company: together.active ? together.company() : {} }), tv ? together.inviteLink : '');
     overlay.setWayOutHref(wayOutUrl());
     interaction.sessionChanged();
   };
@@ -278,6 +289,20 @@ async function start() {
     prefix: 'vrlbry',
   });
   interaction.backHistory = backHistory;
+  // The book's buttons in the card (a TV's, for the letter keys a remote has not got).
+  overlay.onBookKey((key, code) => interaction.pressKey(key, code));
+  // A TV's remote (SPEC §5.9): OK the gamepad's A at the middle of the view, the aim dot shown
+  // without a pad, up and down scrolling the list the dot is on, Back one step back
+  // (interaction.step), and the app asking the page what Back and Menu do (answerApp).
+  if (tv) {
+    const remote = new LibraryRemote({ canvas: renderer.domElement, overlay, textView, interaction });
+    remote.answerApp(tv);
+    interaction.tv = true;
+    controls.aimMiddle = true;
+    controls.scrollKey = (dir) => interaction.scrollUnderDot(dir);
+    controls.onPadBack = () => remote.padBack();
+    renderer.domElement.setAttribute('aria-describedby', 'ov-hint'); // what the remote does now
+  }
   // The address names the place and room shown (place-url.js), replaced as they change (no history
   // entry per room), so it can be bookmarked, shared or reloaded. Back and Forward can land on an
   // entry from before the last change (a book's, a link's, the page's): its address is put right.
@@ -813,7 +838,7 @@ async function start() {
   }, 10000);
   // A local library's index finished (a Wikipedia file opened here): its books are there now.
   localLibrary.onChange(refreshCatalog);
-  if (navigator.xr?.isSessionSupported) {
+  if (!tv && navigator.xr?.isSessionSupported) {
     navigator.xr.isSessionSupported('immersive-vr').then((ok) => overlay.setVRSupported(ok)).catch(() => overlay.setVRSupported(false));
   }
 
@@ -849,8 +874,10 @@ async function start() {
   // library was loading), taken as the Enter VR button would, so the visitor stays in VR. A grant
   // lasts ~5 s from the page's start (SPEC §5.7), so the startup above must stay well within that.
   const takeGranted = () => { if (!session && !renderer.xr.isPresenting) enterVR(); };
-  if (window.vrlbryXrGranted) takeGranted();
-  navigator.xr?.addEventListener?.('sessiongranted', takeGranted);
+  if (!tv) {
+    if (window.vrlbryXrGranted) takeGranted();
+    navigator.xr?.addEventListener?.('sessiongranted', takeGranted);
+  }
 
   window.__vrlbry = {
     renderer, scene, camera, rig, world, controls, interaction, overlay, xrDevice, settings, enterVR, together,

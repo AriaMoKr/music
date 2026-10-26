@@ -174,7 +174,7 @@ describe('the text view: its themes', () => {
       return css.slice(i, css.indexOf('}', i));
     };
     const vars = (text) => Object.fromEntries([...text.matchAll(/--tv-(paper|ink|link): (#[0-9a-f]{6})/g)].map((m) => [m[1], m[2]]));
-    const themes = { paper: vars(block('.tv')), sepia: vars(block('.tv[data-theme="sepia"]')), night: vars(block('.tv[data-theme="night"]')) };
+    const themes = { paper: vars(block('.tv-view')), sepia: vars(block('.tv-view[data-theme="sepia"]')), night: vars(block('.tv-view[data-theme="night"]')) };
     for (const name of Object.keys(THEMES)) {
       assert.deepEqual(themes[name], { paper: THEMES[name].paper, ink: THEMES[name].ink, link: THEMES[name].link }, name);
     }

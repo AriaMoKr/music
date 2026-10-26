@@ -4,7 +4,9 @@
 // DOM nodes and text, never as HTML. The 3D book stays the reading position: opening the view
 // scrolls it to the open page's first block, turning pages keeps it in step, and closing it
 // leaves the book open at the block at the top of the view. Its header is the reader's toolbar:
-// contents, text size, theme, where the reader is, Back, Put back.
+// contents, text size, theme, where the reader is, Back, Put back. On a TV (SPEC §5.9) the view
+// itself holds the remote's focus while reading: ↑ ↓ scroll it, ← → turn the 3D book's pages, and
+// its toolbar and links are the card that Menu and OK go into (ui/remote.js).
 //
 // renderBlocks and topBlock are pure (a document passed in), for the tests; TextView is the page's.
 
@@ -276,13 +278,14 @@ export class TextView {
    * @param {(text: string) => void} o.announce a polite status (overlay.announce)
    * @param {(away: boolean) => HTMLElement|null} [o.returnFocus] where focus goes when the view
    *   closes (away: the book is being put back)
+   * @param {boolean} [o.tv] a TV's remote (common's tvMode): the view holds the focus, not its title
    */
-  constructor({ root, interaction, getChunk, imageSource, announce, returnFocus }) {
-    Object.assign(this, { I: interaction, getChunk, imageSource, announce, returnFocus });
+  constructor({ root, interaction, getChunk, imageSource, announce, returnFocus, tv = false }) {
+    Object.assign(this, { I: interaction, getChunk, imageSource, announce, returnFocus, tv });
     const doc = root.ownerDocument;
     this.doc = doc;
     const el = doc.createElement('article');
-    el.className = 'tv';
+    el.className = 'tv-view';
     el.hidden = true;
     el.tabIndex = -1; // a click on its text keeps the keys here (the controls leave them alone: data-own-keys)
     el.setAttribute('aria-labelledby', 'tv-title');
@@ -356,7 +359,8 @@ export class TextView {
     const bar = this.$('.tv-bar');
     // Reached with Tab, a slid-away toolbar comes back. The browser has scrolled the text towards
     // its button already (before the scroll's event): the text goes back, the reader's place stays.
-    bar.addEventListener('focusin', () => {
+    bar.addEventListener('focusin', (e) => {
+      this._barFocus = e.target; // where Menu comes back to on a TV (cardStart)
       bar.classList.remove('tv-away');
       if (this._lastY != null && this.el.scrollTop !== this._lastY) {
         this.el.scrollTop = this._lastY;
@@ -380,6 +384,11 @@ export class TextView {
         e.preventDefault();
         const dir = e.key === 'ArrowRight' ? 1 : -1;
         this._sync().then(() => I.turn(dir));
+      } else if (this.tv && e.target === this.el && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        // A TV's remote while reading: the text scrolls (the WebView would move the focus instead).
+        e.preventDefault();
+        const step = Math.round((this.el.clientHeight - this._barH()) * 0.4) * (e.key === 'ArrowDown' ? 1 : -1);
+        this.el.scrollBy({ top: step, behavior: e.repeat || I.reduced ? 'auto' : 'smooth' });
       }
     });
   }
@@ -457,7 +466,49 @@ export class TextView {
     this._style();
     const same = this.bookKey === `${I.book.libId}\n${I.book.id}` && this._at && I._showsBlock(this._at);
     await this._show(same ? this._at : I.reader.anchorOf(I._currentRef()), { smooth: false });
-    this.$('.tv-title').focus({ preventScroll: true });
+    this._home().focus({ preventScroll: true });
+  }
+
+  /**
+   * Where the focus goes in the view: its title, for the keyboard and a screen reader to carry on
+   * from; on a TV the view itself, which holds the remote's focus while reading (ui/remote.js).
+   */
+  _home() {
+    return this.tv ? this.el : this.$('.tv-title');
+  }
+
+  /** Whether its contents are open. */
+  get tocOpen() {
+    return this._open && !this.$('.tv-toc').hidden;
+  }
+
+  /** Closes its contents (Back on a TV). */
+  closeToc() {
+    this._toggleToc(false);
+  }
+
+  /** What a TV remote's card is while the view is open: its contents when open, else the whole view. */
+  layer() {
+    return this.tocOpen ? this.$('.tv-toc') : this.el;
+  }
+
+  /** Menu on a TV: the toolbar's control used last, else its first that can be used. */
+  cardStart() {
+    const bar = this.$('.tv-bar');
+    const usable = (e) => e && bar.contains(e) && !e.disabled && !e.hidden && e.getClientRects().length > 0;
+    return usable(this._barFocus) ? this._barFocus : [...bar.querySelectorAll('button, select, input')].find(usable) ?? null;
+  }
+
+  /** OK on a TV: the first link on the screen, below the toolbar, to go on from link to link; or none. */
+  linkHere() {
+    const top = this.el.getBoundingClientRect().top + this._barH();
+    const bottom = this.el.getBoundingClientRect().bottom;
+    for (const a of this.$('.tv-body').querySelectorAll('a[href]')) {
+      const r = a.getBoundingClientRect();
+      if (r.bottom > top && r.top < bottom && r.height > 0) return a;
+      if (r.top >= bottom) break;
+    }
+    return null;
   }
 
   /**
@@ -600,7 +651,7 @@ export class TextView {
       if (key !== this.bookKey) this._tocFilled = false;
       this.bookKey = key;
       smooth = false;
-      if (refocus) this.$('.tv-title').focus({ preventScroll: true });
+      if (refocus) this._home().focus({ preventScroll: true });
     }
     this._header();
     this._at = { c: anchor.c, b: anchor.b };
@@ -656,7 +707,7 @@ export class TextView {
     } finally {
       this._aim = null;
     }
-    this.$('.tv-title').focus({ preventScroll: true });
+    this._home().focus({ preventScroll: true });
   }
 
   /** The contents (the book's, or a Wikipedia volume's articles: a list that scrolls). */
@@ -675,7 +726,7 @@ export class TextView {
         a.addEventListener('click', (e) => {
           e.preventDefault();
           this._toggleToc(false);
-          this.I.jumpToToc(entry).then(() => this.$('.tv-title').focus({ preventScroll: true }));
+          this.I.jumpToToc(entry).then(() => this._home().focus({ preventScroll: true }));
         });
         li.append(a);
         list.append(li);
