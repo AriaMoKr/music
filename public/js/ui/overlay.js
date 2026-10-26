@@ -1,5 +1,7 @@
 // DOM overlay for non-VR use (SPEC §5.6): library card, search, Enter VR, help, loading, toasts.
-// Hidden while an immersive session is running.
+// Hidden while an immersive session is running. On a TV (SPEC §5.9) it is the remote's card: the
+// book's buttons stand in for the letter keys, nothing opens a file from the device, and a shared
+// session's invite is shown as text.
 
 import { imageSource } from '../api.js';
 import { EXAMPLE_ZIM, MORE_ZIMS_URL, isLocalUrl } from '../local/local.js';
@@ -36,6 +38,16 @@ function fillLocalImages(root) {
   }
 }
 
+/** A TV's hint, by what the remote does now (_renderHint). */
+const TV_HINTS = {
+  walk: '↑ ↓ walk · ← → turn · OK takes the book at the dot · Menu: the card',
+  list: '↑ ↓ scroll the list · OK chooses · ← → turn away',
+  hand: 'OK reads it · Back puts it back · Menu: more',
+  read: '← → turn the pages · Menu: contents, text size and more · Back: one step back',
+  toc: '↑ ↓ scroll the contents · OK goes there · Back closes them',
+  card: '↑ ↓ from button to button · ← → change a choice · OK presses · Back: walk again',
+};
+
 const HELP = {
   desktop: [
     ['Look around', 'Drag with the mouse'],
@@ -69,6 +81,15 @@ const HELP = {
     ['Book distance', 'Triggers'],
     ['Put it back', 'B'],
     ['Book out of sight', 'Press the right stick'],
+  ],
+  tv: [
+    ['Walk', '↑ ↓ · turn with ← →'],
+    ['Take a book', 'Turn until the dot is on it, then OK'],
+    ['Read', 'OK · turn the pages with ← →'],
+    ['The card', 'Menu: this card and the search, and with a book out its buttons (contents, text view, theme, pages, text size) · ↑ ↓ from one to the next, ← → through a choice, OK presses'],
+    ['A list on the stand', 'Walk up to the stand, the dot on the list: ↑ ↓ scroll it, OK chooses'],
+    ['The text view', '↑ ↓ scroll it, ← → turn the pages · OK: the links on the screen · Menu: its toolbar'],
+    ['Back', 'One step back: the contents closed, back along the links, the text view closed, the book put back; in the card, walking again; else back to the Hallway'],
   ],
   vr: [
     ['Point & select', 'Aim the ray, pull the trigger (or pinch with hand tracking)'],
@@ -109,7 +130,8 @@ export class Overlay {
       </div>
       <section class="ov-card" aria-label="Library">
         <header><span class="ov-brand">music</span><span class="ov-version"></span><span class="ov-tools"><a class="ov-hallway" href="${esc(way.url)}" title="${esc(way.title)}">${esc(way.label)}</a><button class="ov-rescan" aria-label="Rescan the ZIM folder" title="Rescan the ZIM folder">⟳</button><button class="ov-collapse" aria-label="Collapse" title="Collapse">–</button></span></header>
-        <div class="ov-session" role="status" hidden><span class="ov-session-text"></span><button class="ov-session-leave" title="Leave the shared session">Leave</button></div>
+        <div class="ov-session" role="status" hidden><span class="ov-session-text"></span><button class="ov-session-leave" title="Leave the shared session">Leave</button>
+          <div class="ov-session-invite" hidden>To join from a phone or a computer, open <span class="ov-invite-link"></span></div></div>
         <div class="ov-libs"></div>
         <div class="ov-open">
           <button class="ov-kiwix-btn" hidden title="The ZIMs this library reads well, from library.kiwix.org">Browse Kiwix's library…</button>
@@ -124,9 +146,9 @@ export class Overlay {
             <button class="ov-reopen-btn">Reopen</button><button class="ov-reopen-forget" title="Forget these files">Forget</button></div>
           <div class="ov-open-hint">No ZIM file yet? Read
             <button class="ov-try-btn" type="button" title="Read it from Kiwix's mirror, a little at a time">${esc(EXAMPLE_ZIM.title)}</button>
-            from Kiwix, or <a href="${esc(EXAMPLE_ZIM.url)}" target="_blank" rel="noopener">download it</a>
+            from Kiwix<span class="ov-files">, or <a href="${esc(EXAMPLE_ZIM.url)}" target="_blank" rel="noopener">download it</a>
             (${esc(EXAMPLE_ZIM.size)}) and open it here.
-            <a href="${esc(MORE_ZIMS_URL)}" target="_blank" rel="noopener">More Gutenberg ZIMs</a>: paste one's address above.</div>
+            <a href="${esc(MORE_ZIMS_URL)}" target="_blank" rel="noopener">More Gutenberg ZIMs</a>: paste one's address above</span>.</div>
         </div>
       </section>
       <div class="ov-drop" hidden>Drop ZIM files, or a ZIM's link, to open them</div>
@@ -138,10 +160,16 @@ export class Overlay {
       </div>
       <div class="ov-bottom">
         <button class="ov-help-btn" aria-label="Controls help" title="Controls">?</button>
+        <span class="ov-book ov-book-hand" role="group" aria-label="The book in hand">
+          <button data-key="Enter">Read</button><button data-key="t" data-code="KeyT">Read as text</button><button data-key="f" data-code="KeyF">In front of me</button><button data-key="Escape">Put back</button>
+        </span>
+        <span class="ov-book ov-book-open" role="group" aria-label="The open book">
+          <button class="ov-b-toc" data-key="c" data-code="KeyC" aria-pressed="false">Contents</button><button data-key="-" data-code="Minus" aria-label="Smaller text">A−</button><button data-key="+" data-code="Equal" aria-label="Larger text">A+</button><button data-key="n" data-code="KeyN">Theme</button><button class="ov-b-pages" data-key="p" data-code="KeyP">1 page</button><button data-key="f" data-code="KeyF">In front of me</button><button class="ov-b-back" data-key="Backspace" hidden>↩ Back</button><button data-key="Escape">Put back</button>
+        </span>
         <button class="ov-textview" title="The part you are reading, as a page of text (T)">Text view</button>
         <button class="ov-vr" hidden>Enter VR</button>
       </div>
-      <div class="ov-hint"></div>
+      <div class="ov-hint" id="ov-hint"></div>
       <div class="ov-help" role="dialog" aria-label="Controls" hidden>
         <div class="ov-help-inner">
           <header><h2>How to use the library</h2><button class="ov-help-close" aria-label="Close">×</button></header>
@@ -192,6 +220,8 @@ export class Overlay {
         <ul class="ov-status-rows" hidden></ul>
       </section>`;
     this.$ = (sel) => root.querySelector(sel);
+    // The book's buttons (a TV's card): each presses its key (interaction.pressKey).
+    for (const b of root.querySelectorAll('.ov-book button')) b.onclick = () => this._bookKey?.(b.dataset.key, b.dataset.code ?? b.dataset.key);
     this.$('.ov-collapse').onclick = () => this.setCardCollapsed(!this.$('.ov-card').classList.contains('collapsed'));
     // A minimized library card stays minimized when the page is reloaded.
     if (load('card', 'open') === 'collapsed') this.setCardCollapsed(true);
@@ -313,7 +343,10 @@ export class Overlay {
       this.$('.ov-reset-go').disabled = false;
     };
     this.$('.ov-reset-btn').onclick = () => showReset(this.$('.ov-reset').hidden);
-    this.$('.ov-reset-cancel').onclick = () => showReset(false);
+    this.$('.ov-reset-cancel').onclick = () => {
+      showReset(false);
+      this.$('.ov-reset-btn').focus(); // not lost with the button that hid itself
+    };
     this.$('.ov-reset').onchange = () => { this.$('.ov-reset-go').disabled = !resetBoxes().some((b) => b.checked); };
     this.$('.ov-reset-go').onclick = () => {
       const parts = Object.fromEntries(resetBoxes().map((b) => [b.value, b.checked]));
@@ -383,7 +416,73 @@ export class Overlay {
   onView(handlers) { this._view = handlers; }
 
   /** A book is out (in hand or open): the help dialog offers to bring it in front of the eyes. */
-  setBookOut(on) { this.$('.ov-view-book').hidden = !on; }
+  setBookOut(on) {
+    this.$('.ov-view-book').hidden = !on;
+    this.root.classList.toggle('ov-bookout', !!on);
+    this._renderHint();
+  }
+
+  /** fn(key, code): a book's button in the card (a TV's), which does what that key does. */
+  onBookKey(fn) { this._bookKey = fn; }
+
+  /**
+   * The open book's buttons as they are on its 3D toolbar: { back } (links followed), { pages }
+   * (the other view's name), { toc } (the contents shown).
+   */
+  setBookButtons({ back, pages, toc } = {}) {
+    if (back !== undefined) this.$('.ov-b-back').hidden = !back;
+    if (pages !== undefined) this.$('.ov-b-pages').textContent = pages;
+    if (toc !== undefined) this.$('.ov-b-toc').setAttribute('aria-pressed', String(!!toc));
+  }
+
+  /**
+   * A TV (common's tvMode: SPEC §5.9): the hint and the help say what the remote does, and what a
+   * file of this device would be opened with goes (style.css, html.tv).
+   */
+  setTV(on) {
+    this.tv = !!on;
+    this._renderHint();
+    this._renderHelp();
+  }
+
+  /** What a TV's remote does now, for its hint: { card } (the card has the focus), { list } (↑ ↓ scroll the list at the dot). */
+  setRemote({ card, list } = {}) {
+    if (card !== undefined) this._tvCard = card;
+    if (list !== undefined) this._tvList = list;
+    this._renderHint();
+  }
+
+  /** The page's dialog that is open (Kiwix's library, the help), the card a TV's remote moves in; else null. */
+  dialog() {
+    if (this._kiwix?.visible) return this._kiwix.el;
+    const help = this.$('.ov-help');
+    return help.hidden ? null : help;
+  }
+
+  /** Closes the page's open dialog: the button that opens it, to go back to; null when none was open. */
+  closeDialog() {
+    if (this._kiwix?.visible) {
+      this._kiwix.hide();
+      return this.$('.ov-kiwix-btn');
+    }
+    if (!this.$('.ov-help').hidden) {
+      this.showHelp(false);
+      return this.$('.ov-help-btn');
+    }
+    return null;
+  }
+
+  /** Closes the page's dialogs (a TV's remote walking again). */
+  closeDialogs() {
+    while (this.closeDialog() !== null);
+  }
+
+  /** Where a TV remote's Menu goes first: the book's first button while one is out, else the search. */
+  remoteStart() {
+    const cls = this.root.classList;
+    if (cls.contains('ov-bookout')) return this.$(cls.contains('ov-reading') ? '.ov-book-open button' : '.ov-book-hand button');
+    return this.$('.ov-search input');
+  }
 
   /** Handlers of the help dialog's scene buttons: { save(), restore(), restoreText(text) }. */
   onScene(handlers) { this._scene = handlers; }
@@ -598,13 +697,20 @@ export class Overlay {
   }
 
   _renderHint() {
+    if (this.tv) {
+      const cls = this.root.classList;
+      const reading = cls.contains('ov-reading');
+      const kind = this._tvCard ? 'card' : reading ? (this._tvList ? 'toc' : 'read') : cls.contains('ov-bookout') ? 'hand' : this._tvList ? 'list' : 'walk';
+      this.$('.ov-hint').textContent = TV_HINTS[kind];
+      return;
+    }
     this.$('.ov-hint').textContent = this._pad ? 'Right stick to look · left stick to walk · A takes a book'
       : this.mode === 'touch' ? 'Drag to look · two fingers to walk · tap a book'
         : 'Drag to look · WASD to walk · click a book';
   }
 
   _renderHelp() {
-    const sections = [[this.mode === 'touch' ? 'Touch' : 'Mouse & keyboard', HELP[this.mode]]];
+    const sections = this.tv ? [['TV remote', HELP.tv]] : [[this.mode === 'touch' ? 'Touch' : 'Mouse & keyboard', HELP[this.mode]]];
     if (this._padSeen) sections.push(['Gamepad', HELP.gamepad]);
     if (this._vr) sections.push(['VR headset', HELP.vr]);
     this.$('.ov-help-body').innerHTML = sections.map(([title, rows]) => `
@@ -670,10 +776,15 @@ export class Overlay {
    * under way, with kind 'busy' (a spinner) and progress(fraction) (a bar, from its first call).
    * @returns {{ update: (msg: string) => void, progress: (fraction: number) => void, close: () => void }}
    */
-  /** The shared session (together.js): its line under the card's header, or '' to hide it. */
-  setSession(text) {
+  /**
+   * The shared session (together.js): its line under the card's header, or '' to hide it; on a TV
+   * with its invite link as text to type on another device (no copying there).
+   */
+  setSession(text, invite = '') {
     this.$('.ov-session').hidden = !text;
     this.$('.ov-session-text').textContent = text || '';
+    this.$('.ov-session-invite').hidden = !(text && invite);
+    this.$('.ov-invite-link').textContent = invite.replace(/^https?:\/\//, '');
   }
 
   /** @param {() => void} fn the session line's Leave */
@@ -722,7 +833,10 @@ export class Overlay {
   show() { this.root.classList.remove('ov-hidden'); }
 
   /** Fades the card, search and hint away while a book is open (they cover the pages). */
-  setReading(on) { this.root.classList.toggle('ov-reading', !!on); }
+  setReading(on) {
+    this.root.classList.toggle('ov-reading', !!on);
+    this._renderHint();
+  }
 
   /** Says something politely to a screen reader (a book opening), once each time it is said. */
   announce(text) {
@@ -811,7 +925,7 @@ export class Overlay {
       if (this._sel >= 0) this._choose(this._sel);
     } else if (e.key === 'Escape') {
       this._showList(false);
-      e.target.blur();
+      if (!this.tv) e.target.blur(); // a TV's Back closes the list only (common's Remote)
     }
   }
 

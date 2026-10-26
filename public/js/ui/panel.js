@@ -325,9 +325,19 @@ export class Panel {
   /** Scrolls a list element by `rows` (positive = down). */
   scrollList(id, rows) {
     const el = this.get(id);
-    if (!el) return;
-    el.scroll = (el.scroll || 0) + rows;
+    if (el) this.scrollBy(el, rows);
+  }
+
+  /** Scrolls a list element (this panel's) by `rows`, within its ends (as it is drawn). */
+  scrollBy(el, rows) {
+    const max = Math.max(0, (el.items || []).length - Math.floor(el.h / (el.rowH || 64)));
+    el.scroll = Math.max(0, Math.min(max, (el.scroll || 0) + rows));
     this.markDirty();
+  }
+
+  /** Whether an element is a list with more rows than it shows. */
+  scrolls(el) {
+    return el.type === 'list' && (el.items || []).length > Math.floor(el.h / (el.rowH || 64));
   }
 
   _toPx(uv) {

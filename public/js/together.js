@@ -68,6 +68,11 @@ export class Together {
     return this.layer.room;
   }
 
+  /** The address that brings others into the session (shown as text on a TV); '' out of one. */
+  get inviteLink() {
+    return this.layer.inviteLink;
+  }
+
   /** Less motion: a visitor's wave is only its notice, without the bob. */
   set reduceMotion(on) {
     this.layer.reduceMotion = on;

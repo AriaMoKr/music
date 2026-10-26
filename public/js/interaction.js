@@ -29,6 +29,7 @@ import { saveNav } from './nav.js';
 import { comfortButtons, nextMotion } from './comfort.js';
 import { ACCESS_DEFAULTS, normalizeAccess, reduceMotion, saveAccess } from '../vendor/common/access.js';
 import { sessionText } from './together-space.js';
+import { backStep } from './back-step.js';
 import { KINDS as KIWIX_KINDS, indexLabel, sizeText } from './local/kiwix.js';
 import { letterOf, SORT_MODES, inTitleOrder, thumbIndex } from './util/books.js';
 import { PAGE_PX, READ } from './config.js';
@@ -47,6 +48,7 @@ const OPENING_LINE = 'Preparing its pages'; // the inspect panel's line while a 
 const CANCELLED = Symbol('cancelled'); // read(): Put back pressed while the book was opening
 const OPENING_BAR_MS = 200; // the opening progress bar's repaints, at most one per this long
 const LINK_MARKS = 4; // lines of a link that the hover band covers
+const TV_REACH = 2.2; // m: a TV remote's up and down scroll a stand's list the dot is on from this near, else walk
 
 const _plane = new THREE.Plane();
 const _from = new THREE.Vector3();
@@ -244,6 +246,16 @@ export class Interaction {
     this._listenPic = null; // { src, image } of the picture of the sound playing
     this._soundIndexes = new Map(); // libId -> the library's sound index once ready ({ books: Map })
     this._panner = null; // where the gramophone's sound comes from (a PannerNode at its horn)
+    this._bookEntry = false; // the book's history entries are ones the app's Back comes to (step)
+    // A TV's remote (SPEC §5.9; main.js, ui/remote.js): OK is useMiddle, Back is step, and ↑ ↓
+    // scroll the list the dot is on (scrollUnderDot). tv set by main.js; inCard by ui/remote.js (the
+    // page's card has the focus, so the dot goes).
+    this.tv = false;
+    this.inCard = false;
+    this._dotPanel = null; // the panel, and its list that scrolls, under the dot (when near enough)
+    this._dotList = null;
+    /** Set by ui/remote.js: fn(on) as the dot comes onto such a list, or leaves it (the hint). */
+    this.onDotList = null;
 
     this.tooltip = new Label({ width: 0.56, height: 0.13 });
     this.tooltip.visible = false;
@@ -1480,6 +1492,62 @@ export class Interaction {
   }
 
   // ===========================================================================================
+  // A TV's remote (SPEC §5.9: common's tv.js Remote, ui/remote.js)
+
+  /**
+   * Back while walking, the Remote's step: one step back (back-step.js), as B and Escape take one;
+   * false for none here, or for one through the book's history entries, which the app's own Back
+   * goes back through (then the browser's: back-history.js), so Back takes one step, not two.
+   */
+  step() {
+    const tv = this.textView;
+    const what = backStep({
+      state: this.state, textView: !!tv?.isOpen, textToc: !!tv?.tocOpen, toc: this.tocPanel.visible,
+      trail: this._trail.length, typing: !!this._search.focus, level: this.backHistory?.level ?? 0, entry: this._bookEntry,
+    });
+    if (what === 'text-toc') tv.closeToc();
+    else if (what === 'text') tv.close();
+    else if (what === 'typing') this._focusSearch(false);
+    else if (what === 'toc') this.toggleToc(false);
+    else if (what === 'link') this.goBack();
+    else if (what === 'away') this.putAway();
+    else return false;
+    return true;
+  }
+
+  /**
+   * OK while walking (the Remote's use): the gamepad's A at the middle of the view (a book on a
+   * shelf, the stand, the door). A book in hand is read, as Enter does; an open one turns a page,
+   * as the middle of a spread is its gutter (its contents, over the page on a TV, take the A).
+   */
+  useMiddle() {
+    audio.init();
+    if (this.state === 'inspect') {
+      if (this.book.readable) this.read();
+    } else if (this.state === 'read' && !this.tocPanel.visible) {
+      this.turn(1);
+    } else {
+      this._select(this.controls.aimPointer);
+    }
+  }
+
+  /**
+   * ↑ ↓ on a TV while walking (controls.scrollKey): the list the dot is on scrolls a row, when it
+   * has more rows than it shows and the stand is near (or it is the contents of the book being
+   * read); false to walk.
+   */
+  scrollUnderDot(dir) {
+    if (!this._dotList || this.state === 'busy') return false;
+    this._dotPanel.scrollBy(this._dotList, dir);
+    return true;
+  }
+
+  /** A key's button in the page's card (overlay.js, a TV's: the letter keys, Enter, Esc). */
+  pressKey(key, code = key) {
+    this._key({ key, code });
+  }
+
+  // ===========================================================================================
   // Viewer frame helpers
 
   /** Eye position and horizontal forward/right vectors of the viewer. */
@@ -1530,7 +1598,10 @@ export class Interaction {
   async pick(book) {
     if (this.state !== 'browse') return;
     this.state = 'busy';
-    this.backHistory?.bookOut(); // the browser's Back puts it away (back-history.js)
+    // The browser's Back puts it away (back-history.js). Chromium passes over that entry when the
+    // page has had no key press or click yet (a gamepad alone): then a TV's Back is a step (step).
+    if (!this.backHistory?.level) this._bookEntry = navigator.userActivation?.hasBeenActive ?? true;
+    this.backHistory?.bookOut();
     this._setHover(null);
     this.controls.locomotionEnabled = false;
     const tr = this.world.shelves.getBookTransform(book);
@@ -1579,6 +1650,7 @@ export class Interaction {
       // The book is put away: the browser's Back no longer closes it or goes along its links
       // (back-history.js).
       this.backHistory?.cleared();
+      this._bookEntry = false;
       this._trail = [];
       this._trailBase = 0;
     }
@@ -1953,7 +2025,8 @@ export class Interaction {
     this._showStand();
     const toc = this.tocPanel.mesh;
     const beside = (this._single ? -pw / 2 : -pw) - 0.24; // left of the page(s), turned towards the reader
-    if (beside - TOC_W / 2 >= -0.98 * half) {
+    // On a TV over the page, where the dot is: the remote's ↑ ↓ scroll it and OK picks (useMiddle).
+    if (!this.tv && beside - TOC_W / 2 >= -0.98 * half) {
       toc.position.set(beside, 0, 0.08);
       toc.rotation.set(0, 0.45, 0);
       toc.scale.setScalar(1);
@@ -2353,6 +2426,7 @@ export class Interaction {
     const sound = this.sound.state !== 'idle';
     const next = sound && this.queue.hasNext;
     p.set('back', { hidden: !back });
+    this.overlay?.setBookButtons?.({ back });
     const x = back ? pad + 146 : pad + 10;
     const right = p.w - pad - 220 - (sound ? SOUND_ROW_W : 0) - (next ? SOUND_NEXT_W : 0); // the label (210) and a gap
     p.set('slider', { x, w: right - x });
@@ -2949,6 +3023,7 @@ export class Interaction {
   /** The toolbar's button names the other view. */
   _showPagesButton() {
     this.toolbar.set('pages', { label: this._single ? '2 pages' : '1 page' });
+    this.overlay?.setBookButtons?.({ pages: this._single ? '2 pages' : '1 page' });
   }
 
   /**
@@ -3028,6 +3103,7 @@ export class Interaction {
     if (show) this._fillToc();
     this.tocPanel.visible = show && this.state === 'read';
     this.toolbar.set('toc', { active: this.tocPanel.visible });
+    this.overlay?.setBookButtons?.({ toc: this.tocPanel.visible });
   }
 
   /** Closes the book and puts it back on the shelf. */
@@ -3546,6 +3622,8 @@ export class Interaction {
     let hoverBook = null;
     let hoverLink = null;
     let hoverDoor = false;
+    let dotPanel = null;
+    let dotList = null;
     for (const pointer of this.controls.pointers) {
       const hit = this.state === 'busy' || pointer.teleporting ? null : this._hitTest(pointer);
       pointer.setHitDistance(hit ? hit.distance : null);
@@ -3554,6 +3632,12 @@ export class Interaction {
       let interactive = false;
       if (hit?.kind === 'panel') {
         interactive = hit.panel.pointerMove(hit.uv);
+        // A TV's dot on a list that scrolls: the remote's ↑ ↓ are its (scrollUnderDot).
+        const el = this.tv && pointer.id === 'gamepad' ? hit.panel.hover : null;
+        if (el && hit.panel.scrolls(el) && (this.state !== 'browse' || hit.distance <= TV_REACH)) {
+          dotPanel = hit.panel;
+          dotList = el;
+        }
       } else if (hit?.kind === 'book') {
         hoverBook = hit.book;
         interactive = true;
@@ -3570,6 +3654,13 @@ export class Interaction {
       this._hover.set(pointer.id, hit?.kind === 'panel' ? hit.panel : null);
     }
     this._markLink(hoverLink);
+    if (dotList !== this._dotList) {
+      this._dotPanel = dotPanel;
+      this._dotList = dotList;
+      this.onDotList?.(!!dotList);
+    }
+    // A TV's dot: while walking the room or holding a book, and on the contents of one being read.
+    if (this.tv) this.controls.aimShown = !this.inCard && !this.textView?.isOpen && (this.state !== 'read' || this.tocPanel.visible);
     const door = this.world.door;
     if (door) {
       door.hover = hoverDoor;

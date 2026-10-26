@@ -416,6 +416,20 @@
   - Reaching the bar from the middle of a part takes Tab through the rest of it (or a screen
     reader's landmarks: it is a region); a key for it would help.
   - Not yet: a real screen reader, and a phone in the hand.
+- **The TV remote** (requested 2026-10-24; SPEC §5.9). The library in the Hallway's Android TV app
+  (AriaMoKr/HallwayApp), walked and read with the remote: common v0.6.0's `tv.js` and the
+  library's `ui/remote.js`. Checked in a browser with `?tv=emulate` and real key presses
+  (2026-10-25; SPEC §5.9, Tests). On the TV itself (a Sony BRAVIA, adb 192.168.50.133:5555, the
+  debug build of HallwayApp) another session checks it, its frame rate included; what it finds
+  comes back as a later request. What to look at there:
+  - Through the hallway's door: the same checks, which of Back's steps are the app's and which
+    the page's, and Back out of the library to its door in the hallway.
+  - Whether OK on the search box opens the TV's keyboard, and that Menu's focus there does not.
+  - The frame rate with HallwayApp's `tv-check.mjs --url`, standing among the shelves and reading
+    (a CDP script, or perf scenarios: tv-check times only what stands as it stands); the pixel
+    ratio is 2 at most, as the Hallway's.
+  - Reading in 3D the spread is small on a TV (the reading pose of a desktop screen); the text
+    view is the readable way for now.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

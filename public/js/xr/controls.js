@@ -1,6 +1,7 @@
 // Input (SPEC §5.4): XR controllers and hands, mouse + keyboard, touch — unified into pointers
 // (world-space raycasters) and events, plus locomotion (teleport arc, snap or smooth turn, smooth
-// move; how, by the Hallway's choice: nav.js, setNav).
+// move; how, by the Hallway's choice: nav.js, setNav). A TV's remote (SPEC §5.9) is the keyboard's
+// arrows and Enter: keys are named by common's keyOf, as its OK has no code.
 //
 // Desktop uses drag-to-look rather than pointer lock (a deliberate deviation from the spec): it
 // keeps the DOM overlay usable and works in embedded browsers where pointer lock is refused.
@@ -12,6 +13,7 @@ import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import { PLAYER } from '../config.js';
 // The comfort vignette and the seated eye height: every site's (AriaMoKr/common access.js).
 import { eyeLift, Vignette } from '../../vendor/common/access.js';
+import { keyOf } from '../../vendor/common/tv.js';
 
 const DEADZONE = 0.15;
 const FLICK_ON = 0.7;
@@ -116,6 +118,15 @@ export class Controls extends EventTarget {
     // True while a 3D text field takes the keyboard (the kiosk's search, set by interaction.js):
     // characters, Backspace, Enter and Escape are then text, not walking or turning.
     this.textEntry = false;
+    // A TV's remote (main.js, ui/remote.js): the middle of the view is a pointer, as a gamepad's,
+    // with its dot (aimShown: not while the page's card has the focus), and ↑ ↓ may be a list's
+    // (scrollKey(dir) → true when it took the key: interaction.js scrollUnderDot).
+    this.aimMiddle = false;
+    this.aimShown = true;
+    this.scrollKey = null;
+    this._listKey = null; // the arrow a list took with its press, and takes until let go
+    /** A gamepad's B: set on a TV (the remote's Back, padBack), else a 'button' b event. */
+    this.onPadBack = null;
     this._pad = this._makePad();
     this._bindDom();
     this._teleport = this._makeTeleportVisual();
@@ -592,14 +603,16 @@ export class Controls extends EventTarget {
     const P = this._pad;
     const s = P.state;
     if (!s) return;
-    P.pointer.raycaster.setFromCamera(SCREEN_CENTRE, this.camera);
     const key = (k, code, pressed) => this._emit('key', { key: k, code, pressed });
     const each = (names, pressed) => {
       for (const name of names) {
         if (name === 'a') {
           if (pressed) this._emit('select', { pointer: P.pointer });
           this._emit('button', { hand: 'right', name: 'a', pressed });
-        } else if (name === 'b' || name === 'back') this._emit('button', { hand: 'right', name: 'b', pressed });
+        } else if (name === 'b' || name === 'back') {
+          if (!this.onPadBack) this._emit('button', { hand: 'right', name: 'b', pressed });
+          else if (pressed) this.onPadBack();
+        }
         else if (name === 'x') key('c', 'KeyC', pressed); // contents
         else if (name === 'y') key('n', 'KeyN', pressed); // page theme
         else if (name === 'lb' || name === 'left') key('ArrowLeft', 'ArrowLeft', pressed);
@@ -679,17 +692,31 @@ export class Controls extends EventTarget {
       this._emit('wheel', { deltaY: e.deltaY });
     }, { passive: false });
     window.addEventListener('keydown', (e) => {
-      if (isTyping(e)) return;
+      // A key the page has used already (the TV remote's OK: common's Remote, use()).
+      if (isTyping(e) || pressesControl(e) || e.defaultPrevented) return;
+      const code = keyOf(e);
       const text = this.textEntry && !e.ctrlKey && !e.metaKey && !e.altKey
         && (e.key.length === 1 || ['Backspace', 'Enter', 'Escape'].includes(e.key));
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].includes(e.key) || (text && e.key === 'Backspace')) e.preventDefault();
+      // ↑ ↓ for the list the dot is on (a TV): its press decides, and its repeats follow it.
+      if (this.scrollKey && !text && (code === 'ArrowUp' || code === 'ArrowDown')) {
+        const dir = code === 'ArrowDown' ? 1 : -1;
+        if (!e.repeat) this._listKey = this.scrollKey(dir) ? code : null;
+        else if (this._listKey === code) this.scrollKey(dir);
+        if (this._listKey === code) {
+          e.preventDefault();
+          return;
+        }
+      }
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].includes(code) || (text && e.key === 'Backspace')) e.preventDefault();
       // Typed keys repeat while held, like in any text field.
-      if (!e.repeat || text) this._emit('key', { code: e.code, key: e.key, pressed: true, shift: e.shiftKey, text });
-      if (!text) this._keys.add(e.code);
+      if (!e.repeat || text) this._emit('key', { code, key: e.key, pressed: true, shift: e.shiftKey, text });
+      if (!text) this._keys.add(code);
     });
     window.addEventListener('keyup', (e) => {
-      this._keys.delete(e.code);
-      if (!isTyping(e)) this._emit('key', { code: e.code, key: e.key, pressed: false });
+      const code = keyOf(e);
+      this._keys.delete(code);
+      if (this._listKey === code) this._listKey = null;
+      if (!isTyping(e)) this._emit('key', { code, key: e.key, pressed: false });
     });
     window.addEventListener('blur', () => this._keys.clear());
   }
@@ -799,6 +826,7 @@ export class Controls extends EventTarget {
     }
     this.rig.updateMatrixWorld(true);
     this._updateScreenRay(this._mouse.pointer);
+    if (this._pad.active || this.aimMiddle) this._pad.pointer.raycaster.setFromCamera(SCREEN_CENTRE, this.camera);
     this._padEvents(dt);
   }
 
@@ -820,9 +848,22 @@ export class Controls extends EventTarget {
     } else {
       this.vignette.update(dt, 0, 0, false);
       this._desktopUpdate(dt);
-      if (this._pad.active) this.pointers.push(this._pad.pointer);
-      else if (this._mouse.inside) this.pointers.push(this._mouse.pointer);
+      const P = this._pad;
+      if (P.active || this.aimMiddle) this.pointers.push(P.pointer);
+      if (!P.active && this._mouse.inside) this.pointers.push(this._mouse.pointer);
+      const dot = P.active || (this.aimMiddle && this.aimShown);
+      if (P.crosshair.hidden === dot) P.crosshair.hidden = !dot;
     }
+  }
+
+  /**
+   * The pointer at the middle of the view (a gamepad's, and a TV remote's OK), its ray from the
+   * camera as it is now: for a key pressed between frames.
+   */
+  get aimPointer() {
+    this.camera.updateWorldMatrix(true, false);
+    this._pad.pointer.raycaster.setFromCamera(SCREEN_CENTRE, this.camera);
+    return this._pad.pointer;
   }
 
   /** Called when an XR session ends: restore the desktop camera pose facing the same way. */
@@ -846,4 +887,9 @@ export class Controls extends EventTarget {
 function isTyping(e) {
   const t = e.target;
   return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest?.('[data-own-keys]'));
+}
+
+/** Enter or Space on a button or link of the page (a TV's OK in the card): it presses that, not the view's key. */
+function pressesControl(e) {
+  return (e.key === 'Enter' || e.key === ' ') && !!e.target?.closest?.('button, a[href], summary, [role="button"]');
 }

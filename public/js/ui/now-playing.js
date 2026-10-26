@@ -112,7 +112,7 @@ export class NowPlaying {
     if (this.root.style.getPropertyValue('--np-h') === h && !appearing) return;
     this.root.style.setProperty('--np-h', h);
     const active = this.el.ownerDocument.activeElement;
-    if (active?.closest?.('.tv')) active.scrollIntoView({ block: 'nearest' });
+    if (active?.closest?.('.tv-view')) active.scrollIntoView({ block: 'nearest' });
   }
 
   /** Shows what plays now, or hides the bar (its focus given back) when nothing does. */
