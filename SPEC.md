@@ -1193,6 +1193,7 @@ public/
     ui/listen-tab.js     the kiosk's Listen tab: what plays, books, composers, periods, the queue.
     ui/music-stand.js    the music stand beside the book: piano roll or picture, playhead, practice.
     ui/now-playing.js    the page's "Now playing" bar: what plays, Play/Pause, Stop, Next (the keyboard, screen readers).
+    ui/music-remote.js   music's TV remote: the library's (ui/remote.js) with the Now playing bar in its card and the media keys (§5.9).
     world/gramophone.js  the gramophone of a room whose books play (its horn: where its sound comes from).
     world/score-wall.js  the wall of scores: pictures beside sounds, framed, one atlas.
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
@@ -1727,7 +1728,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   across the view's foot, the view ending above it (`--np-h`, set at once when the bar appears,
   the focus kept in sight), so it never covers the text. `interaction.js` calls its `update()`
   from `_showSound` and `_fillKiosk` (the queue). The queue, composers and periods, and the
-  stand's tempo, loop, key and parts stay in 3D.
+  stand's tempo, loop, key and parts stay in 3D. On a TV (§5.9, "Sounds on a TV") its buttons are
+  in the remote's card, the remote's media keys press them, and Stop gives the focus back to the
+  view (walking).
 - **Leaving VR**: an "Exit VR" button in the kiosk header (only while presenting), or holding
   B/Y for 1 s while browsing (a short press still means "back" when a book is out): a head-locked
   ring below the line of sight fills up (shown after 0.15 s, so taps do not flash it); releasing
@@ -2246,8 +2249,34 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
   (`visibility`, so the remote passes them by); while reading, the book's buttons show only
   while the card has the focus. On a TV the 3D contents lie over the page. The help's comfort
   row keeps only Motion (the vignette and seated are VR's).
-- **Tests.** `test/client-back-step.test.js` covers the order of Back's steps. Checked in a
-  browser with `?tv=emulate` and real key presses (2026-10-25):
+- **Sounds on a TV** (music: `ui/music-remote.js`, `MusicRemote`, a `LibraryRemote` with the
+  Now playing bar, §5.6; `ui/remote.js` stays as vrlbry has it).
+  - The text view's Listen links are links like the others: OK on the view goes to the first on
+    the screen, ↑ ↓ from link to link, and OK plays one (`followLink`), marked as it plays.
+  - The bar's Pause, Stop and Next are stops of the card (Menu). In the overlay's card they come
+    before the foot row's buttons, which the bar stands above (`withBarStops`, `before`); in the
+    text view's, after its toolbar's and before the text's links (`after`): the bar is outside
+    the view's layer, so its buttons count as the card's too (`inCard`), and Back from them walks
+    again rather than taking a step. Not while a dialog or the text view's contents are the card.
+    Stop from the bar walks again (the focus to the view), as a control that hides itself does.
+  - The remote's media keys (`MEDIA_KEYS`, read through common's `keyOf`, the TV's with no
+    `code`) press the bar's buttons wherever the focus is, once per press (not as the key
+    repeats): `MediaPlayPause` its Play/Pause, `MediaPlay` and `MediaPause` only when that is
+    what it would do, `MediaStop` Stop, `MediaTrackNext` Next (`barButton`); one the bar would
+    not take now (Play while playing, Next with none queued) does nothing. With nothing loaded the
+    keys are left to the page and the app (not prevented). `MediaRewind` and
+    `MediaFastForward` are not the bar's: common reads them as ← and →, which turn (for TalkBack).
+    Only on a TV: a desktop browser may hand hardware media keys to its own media session.
+  - The ten-foot bar (style.css, after vrlbry's `html.tv` rules): inside the overscan, 42 px
+    buttons. Walking or with a book in 3D it stands centred above the foot row, the hint,
+    messages and the card's foot moved up by its height (`--np-h`); reading in 3D, in the foot
+    row's place until the card has the focus; in the text view across its foot.
+  - The 3D view stays at eye height on a TV (no pitch), so the dot passes over the gramophone
+    (1.4 m): its queue comes from the kiosk's Listen tab there. A Listen link plays its one
+    sound (§5.6), so Next is for a queue.
+- **Tests.** `test/client-back-step.test.js` covers the order of Back's steps;
+  `test/client-now-playing.test.js` the media keys' buttons and the bar's place among the card's
+  stops (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
   - Every control of the card reached and used, and of the help (its reset fieldset, select and
     checkboxes; Save scene, then Restore) and Kiwix's library; Back closes a dialog onto its
     button.
@@ -2261,5 +2290,16 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
   - axe with nothing found walking, with the search list, a book in hand, reading, in the text
     view (Moby-Dick too, whose headings left a level out before), and with the help or Kiwix's
     library open.
+
+  - music (2026-10-25): Beethoven's Fifth (Gutenberg 156) read as text, OK to its links, ↓ to
+    the second movement, OK: it plays, marked, said once; Menu, ↓ through the toolbar to the
+    bar: Pause, Play, then ↓ past Next to the text's links, Back from Stop (walking, the view and
+    the sound kept), Stop (the focus to the view, the mark gone). The media keys pressed for real
+    (`MediaPlayPause` twice, `MediaPause` twice, `MediaPlay`, `MediaStop`) and sent with an empty
+    `code` as the TV does; on the gramophone's 407-sound queue, the bar's Next from the card
+    (from the search: ↓ to the bar, then the help) and `MediaTrackNext` twice, then `MediaStop`;
+    `MediaFastForward` still turns; a media key with nothing loaded is not taken. A book open in
+    3D: the bar in the foot row's place, above it once Menu shows the book's buttons, ↑ from
+    Contents through the help to Next, Stop walking again.
 
   The TV itself, its frame rate included, is another session's (TODO).

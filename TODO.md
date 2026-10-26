@@ -430,6 +430,23 @@
     ratio is 2 at most, as the Hallway's.
   - Reading in 3D the spread is small on a TV (the reading pose of a desktop screen); the text
     view is the readable way for now.
+- **Sounds on a TV** (music; requested 2026-10-25; done in a browser the same day; SPEC §5.9
+  "Sounds on a TV"). The Now playing bar is in the remote's card (Menu), the remote's media keys
+  press its buttons (`ui/music-remote.js`), the text view's Listen links play with OK, and the
+  pixel ratio is 2 at most (vrlbry's). Checked with `?tv=emulate` and real key presses (SPEC
+  §5.9, Tests). On the TV itself another session checks it, with what comes back as a later
+  request:
+  - The media keys reach the page: Android may route them to a media session rather than the
+    focused view, and whether the WebView pauses a recording's `<audio>` itself as well (a
+    second toggle would undo ours).
+  - A score playing at the TV's volume; the frame rate with the gramophone playing.
+  - Found here: on a TV the view stays at eye height, so the dot passes over the gramophone
+    (1.4 m tall, the eye at 1.6 m) and OK cannot start or pause it; its queue comes from the
+    kiosk's Listen tab. A taller pick volume, or OK at its foot, would let the remote take it.
+  - A Listen link plays its one sound (as on the 3D page), so Next and `MediaTrackNext` are for
+    a queue (the Listen tab, the score wall's single sounds not included); the 3D contents'
+    Sounds list (Play all) is not under the dot on a TV.
+  - axe was not run on the TV states with the bar this time (it could not be loaded here).
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

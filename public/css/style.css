@@ -432,3 +432,22 @@ html.tv :is(.tv-bar button, .tv-parts button, .tv-bar select) { min-height: 40px
 html.tv .tv-col { padding: 16px var(--tv-edge-x) 64px; }
 html.tv :is(.tv-sub, .tv-parts, .tv-toc) { font-size: 18px; }
 html.tv .tv-partno { font-size: 16px; }
+
+/* The Now playing bar on a TV (music; SPEC §5.9 "Sounds on a TV"): inside the overscan, its
+   buttons as large as the card's. Walking or with a book in 3D it stands above the foot row's
+   buttons, centred, the hint, messages and the card's foot moved up by its height (--np-h); reading
+   in 3D, in the foot row's place until the card has the focus; in the text view across its foot,
+   as on any screen. The remote reaches it with Menu (ui/music-remote.js). */
+html.tv .ov-np { left: 50%; right: auto; bottom: calc(var(--tv-edge-y) + 54px); transform: translateX(-50%);
+  width: min(600px, calc(100vw - 2 * var(--tv-edge-x))); padding: 5px 6px 5px 16px; }
+html.tv .ov-np-sub { font-size: 16px; }
+html.tv .ov-np-buttons { gap: 8px; }
+html.tv .ov-np-buttons button { width: 42px; height: 42px; font-size: 17px; }
+html.tv #overlay:has(> .ov-np:not([hidden])) .ov-bottom { left: 50%; right: auto; transform: translateX(-50%); }
+html.tv #overlay.ov-reading:not(:focus-within) > .ov-np { bottom: var(--tv-edge-y); } /* in the foot row's place while it is hidden */
+html.tv #overlay:has(> .ov-np:not([hidden])) .ov-card { max-height: calc(100dvh - var(--tv-edge-y) - 136px - var(--np-h, 52px)); }
+html.tv #overlay:not(.ov-reading):has(> .ov-np:not([hidden])) .ov-hint,
+html.tv #overlay.ov-reading:focus-within:has(> .ov-np:not([hidden])) .ov-hint { bottom: calc(var(--tv-edge-y) + 62px + var(--np-h, 52px)); }
+html.tv #overlay:has(> .ov-np:not([hidden])) :is(.ov-toasts, .ov-status) { bottom: calc(var(--tv-edge-y) + 108px + var(--np-h, 52px)); }
+html.tv #overlay:has(> .tv-view:not([hidden])) > .ov-np { left: 0; right: 0; bottom: 0; width: auto; transform: none;
+  padding: 6px var(--tv-edge-x) var(--tv-edge-y); }
