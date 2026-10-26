@@ -51,8 +51,6 @@ const overlay = new Overlay({ root: document.getElementById('overlay'), wayOut: 
 const tv = tvMode();
 document.documentElement.classList.toggle('tv', tv);
 overlay.setTV(tv);
-/** The 3D view's pixel ratio on a TV (?dpr= sets another): what holds 60 fps there (SPEC §5.9). */
-const TV_PIXEL_RATIO = 2;
 // Registered before anything can fail: the error screen offers the report too.
 overlay.onDebugInfo(async () => {
   const text = JSON.stringify(debugReport(window.__vrlbry, { overlay }), null, 2);
@@ -101,7 +99,7 @@ async function start() {
     overlay.setError('This browser cannot show 3D graphics (WebGL is unavailable).');
     throw err;
   }
-  renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get('dpr')) || (tv ? TV_PIXEL_RATIO : 2)));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get('dpr')) || 2)); // 2 at most, a TV's too (as the Hallway's)
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.xr.enabled = true;

@@ -1893,7 +1893,8 @@ overlay's `announce`).
   - ← / → outside a field turn the 3D book's page from the view's place, and the view follows.
 - **`renderBlocks(doc, container, blocks, { c, skip, onLink, image })`** builds a part's blocks
   (§3.5) as DOM nodes. Text goes in as text nodes, never as HTML.
-  - `h`: h2–h6, the part's highest level as h2, under the view's h1.
+  - `h`: h2–h6 under the view's h1, the part's highest level as h2, and never a level left out:
+    each at most one below the heading before (a book's h3 then h5 is h3 then h4).
   - `p`: paragraphs, with their alignment, verse and indent.
   - `li`: nested `ul.tv-list` by depth, the marker as text.
   - `tr`: a `<table>` per group `g`; header rows go in `<thead>` with `th scope="col"`.
@@ -1955,8 +1956,8 @@ overlay's `announce`).
     was closed, and the toolbar shown for the jump; a scroll-padding
     would count the toolbar's own buttons as hidden).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
-  links, the top block, the round trip from a page to the view and back to the same block, and
-  the themes' colours.
+  links, heading levels, the top block, the round trip from a page to the view and back to the
+  same block, and the themes' colours.
 
 ### 5.9 TV remote (`ui/remote.js`, `back-step.js`)
 
@@ -1969,8 +1970,8 @@ and Back. The remote's parts live in the files music shares (interaction.js, ui/
 ui/text-view.js, ui/remote.js); main.js only wires them.
 
 - **TV mode** (`main.js`): `html.tv` (what HallwayApp's `tv-check.mjs` looks for), the overlay's
-  `setTV`, no VR (no Enter VR, no granted session), and the 3D view's pixel ratio at
-  `TV_PIXEL_RATIO` (`?dpr=` sets another).
+  `setTV`, and no VR (no Enter VR, no granted session). The 3D view's pixel ratio is 2 at most,
+  as on any screen and as the Hallway's (`?dpr=` sets another cap).
 - **Walking.** The 3D view holds the focus. The arrows walk and turn (controls.js reads every key
   through common's `keyOf`, since the remote's OK and keys sent with `adb shell input keyevent`
   have no `code`). OK is the gamepad's A at the middle of the view (`interaction.useMiddle`):
@@ -1995,6 +1996,10 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     Esc there does not leave the box).
   - Walking again (`onMode(false)`) closes the dialogs and the text view's contents. The mode
     also follows the focus moved by the page (the text view opening, a result chosen).
+  - The focus falling to nowhere (a control that hid itself: ↩ Back after the last link, Put
+    back) is walking again (common's), except in an open dialog, where it goes to the dialog's
+    first control (`LibraryRemote.walk`); the help's reset Cancel gives it back to "Reset stored
+    data…".
   - **The book's buttons** stand in for the letter keys (`.ov-book`, shown in TV mode): in hand
     Read, Read as text (T), In front of me (F), Put back; open Contents (C, `aria-pressed`),
     A− / A+, Theme (N), 1 page / 2 pages (P), In front of me, ↩ Back (while there is a trail),
@@ -2026,9 +2031,22 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
   above the foot says what the remote does now (`TV_HINTS`: walking, a list, a book in hand,
   reading, the contents, the card). While a book is out the card and the search are hidden
   (`visibility`, so the remote passes them by); while reading, the book's buttons show only
-  while the card has the focus. On a TV the 3D contents lie over the page.
+  while the card has the focus. On a TV the 3D contents lie over the page. The help's comfort
+  row keeps only Motion (the vignette and seated are VR's).
 - **Tests.** `test/client-back-step.test.js` covers the order of Back's steps. Checked in a
-  browser with `?tv=emulate` and real key presses (2026-10-25): Menu, the search combobox (↑ ↓
-  kept by its open list), a result chosen, OK reads, ← → turn, the contents scrolled with ↓,
-  Back step by step to the app's, the text view (↓ scrolls, OK to a link, Back out), and axe
-  with nothing found walking, with the search list, a book in hand and reading.
+  browser with `?tv=emulate` and real key presses (2026-10-25):
+  - Every control of the card reached and used, and of the help (its reset fieldset, select and
+    checkboxes; Save scene, then Restore) and Kiwix's library; Back closes a dialog onto its
+    button.
+  - The search combobox (↑ ↓ kept by its open list), a result chosen; the kiosk's lists
+    scrolled with ↓ under the dot, OK on its tabs and on a genre.
+  - A book read: OK reads, ← → turn, the contents scrolled with ↓ and an entry opened, the open
+    book's buttons; as text: ↓ scrolls, OK to a link, followed, its ↩ Back; put back from the
+    hand's buttons, the open book's and the text view's toolbar.
+  - Back step by step, the book's step the app's (in a browser, `history.back()` by hand when
+    `hallwayTV.back()` returns false, as the app does).
+  - axe with nothing found walking, with the search list, a book in hand, reading, in the text
+    view (Moby-Dick too, whose headings left a level out before), and with the help or Kiwix's
+    library open.
+
+  The TV itself, its frame rate included, is another session's (TODO).

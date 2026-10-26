@@ -353,6 +353,7 @@ html.tv, html.tv body { font-size: 18px; }
 html.tv :focus:not(canvas, .tv-view) { outline: 4px solid #ffd98a; outline-offset: 3px; box-shadow: 0 0 0 9px rgba(0, 0, 0, .65); }
 html.tv #app canvas:focus { outline: none; }
 html.tv :is(.ov-open-btn, .ov-reopen, .ov-files, .ov-drop, .ov-vr) { display: none !important; }
+html.tv .ov-comfort label:has(.ov-comfort-vignette, .ov-comfort-seated) { display: none; } /* VR's own */
 html.tv .pad-crosshair { width: 24px; height: 24px; margin: -14px 0 0 -14px; border-width: 3px; box-shadow: 0 0 0 2px rgba(0, 0, 0, .55); }
 html.tv .ov-card { top: var(--tv-edge-y); left: var(--tv-edge-x); width: min(420px, calc(50vw - var(--tv-edge-x) - 12px));
   max-height: calc(100vh - var(--tv-edge-y) - 128px); max-height: calc(100dvh - var(--tv-edge-y) - 128px); padding: 12px 16px 14px; }

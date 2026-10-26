@@ -63,6 +63,19 @@ export class LibraryRemote extends Remote {
     this._canvas = el;
   }
 
+  /** Walking; but the focus fallen to nowhere in an open dialog (a control that hid itself) stays in it. */
+  walk() {
+    const a = document.activeElement;
+    if (this.overlay?.dialog() && (!a || a === document.body)) {
+      const to = this._stops()[0];
+      if (to) {
+        to.focus();
+        return;
+      }
+    }
+    super.walk();
+  }
+
   /** Back in the card: a dialog or the text view's contents closed (back to what opened it), else as common's. */
   back() {
     if (this.inCard && !keepsKey(document.activeElement, 'Escape')) {

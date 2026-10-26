@@ -39,7 +39,7 @@ describe('the text view: blocks as DOM', () => {
     ]);
     assert.equal(html, [
       '<h2 data-b="0" id="tv-0-0"><span>Chapter I</span></h2>',
-      '<h6 data-b="1" id="tv-0-1" class="tv-ac"><span>Deep</span></h6>',
+      '<h3 data-b="1" id="tv-0-1" class="tv-ac"><span>Deep</span></h3>',
       '<p data-b="2" id="tv-0-2"><span>A plain paragraph.</span></p>',
       '<p data-b="3" id="tv-0-3" class="tv-ac"><span>Centred</span></p>',
       '<p data-b="4" id="tv-0-4" class="tv-verse" style="margin-inline-start: 3em"><span>Roses are red,<br>violets are blue.</span></p>',
@@ -55,6 +55,10 @@ describe('the text view: blocks as DOM', () => {
     assert.equal(box.children[0].getAttribute('data-b'), '1', 'the blocks keep their numbers');
     assert.equal(render([{ t: 'h', l: 3, r: [['Chapter I', 0]] }, { t: 'h', l: 4, r: [['Part', 0]] }]).html,
       '<h2 data-b="0" id="tv-0-0"><span>Chapter I</span></h2><h3 data-b="1" id="tv-0-1"><span>Part</span></h3>', 'a part starting at level 3');
+    // A level the book leaves out is closed up (Moby Dick: h3, then h5), and the rest follow.
+    const levels = (ls) => render(ls.map((l) => ({ t: 'h', l, r: [['H', 0]] }))).html.match(/<h\d/g).join(' ');
+    assert.equal(levels([2, 3, 5, 3, 6, 2]), '<h2 <h3 <h4 <h3 <h4 <h2', 'never a level left out');
+    assert.equal(levels([4, 2, 3]), '<h2 <h2 <h3', 'a part opening deeper than its highest level');
     const empty = doc.createElement('div');
     assert.equal(renderBlocks(doc, empty, [article[0]], { c: 0, skip: 0 }), 0);
     assert.equal(inner(empty), '<p>(Nothing to read in this part.)</p>');

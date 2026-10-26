@@ -108,11 +108,12 @@ export function runsText(runs) {
 
 /**
  * A chunk's blocks (§3.5) as DOM nodes appended to `container`: `h` as headings below the view's
- * own (the part's highest level as h2, down to h6), `p` as paragraphs (alignment, verse and
- * indent kept), `li` as lists by depth with their markers, `tr` as tables (rows grouped by `g`,
- * header rows as `th`), `pre`, `img` (its alt, and the picture through `image`), `hr`. Every
- * block's element carries `data-b` (its index) and the id `tv-<c>-<b>`, which links within the
- * book point to. `skip`: a block left out (an article's title, which the view's own title says).
+ * own (the part's highest level as h2, down to h6, never a level left out), `p` as paragraphs
+ * (alignment, verse and indent kept), `li` as lists by depth with their markers, `tr` as tables
+ * (rows grouped by `g`, header rows as `th`), `pre`, `img` (its alt, and the picture through
+ * `image`), `hr`. Every block's element carries `data-b` (its index) and the id `tv-<c>-<b>`,
+ * which links within the book point to. `skip`: a block left out (an article's title, which the
+ * view's own title says).
  * @param {Document} doc
  * @param {Element} container
  * @param {object[]} blocks
@@ -122,8 +123,10 @@ export function runsText(runs) {
 export function renderBlocks(doc, container, blocks, o) {
   const c = o.c | 0;
   const skip = o.skip ?? -1;
-  // Headings go in order under the view's h1 whatever level the part starts at (a chapter's l 2).
+  // Headings go in order under the view's h1 whatever level the part starts at (a chapter's l 2),
+  // each at most one below the one before (a book's h3 then h5 would leave a level out).
   let top = 6;
+  let above = 1;
   (blocks || []).forEach((block, b) => { if (block?.t === 'h' && b !== skip) top = Math.min(top, Math.max(1, block.l | 0)); });
   const mark = (el, b) => {
     el.setAttribute('data-b', String(b));
@@ -141,7 +144,9 @@ export function renderBlocks(doc, container, blocks, o) {
     if (t !== 'li') endList();
     if (t !== 'tr') endTable();
     if (t === 'h') {
-      const el = mark(doc.createElement(`h${Math.min(6, Math.max(2, (block.l | 0) - top + 2))}`), b);
+      const level = Math.min(6, above + 1, Math.max(2, (block.l | 0) - top + 2));
+      above = level;
+      const el = mark(doc.createElement(`h${level}`), b);
       if (block.a === 'c' || block.a === 'r') el.setAttribute('class', `tv-a${block.a}`);
       appendRuns(doc, el, block.r, o);
       container.append(el);

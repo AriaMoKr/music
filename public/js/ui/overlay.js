@@ -340,7 +340,10 @@ export class Overlay {
       this.$('.ov-reset-go').disabled = false;
     };
     this.$('.ov-reset-btn').onclick = () => showReset(this.$('.ov-reset').hidden);
-    this.$('.ov-reset-cancel').onclick = () => showReset(false);
+    this.$('.ov-reset-cancel').onclick = () => {
+      showReset(false);
+      this.$('.ov-reset-btn').focus(); // not lost with the button that hid itself
+    };
     this.$('.ov-reset').onchange = () => { this.$('.ov-reset-go').disabled = !resetBoxes().some((b) => b.checked); };
     this.$('.ov-reset-go').onclick = () => {
       const parts = Object.fromEntries(resetBoxes().map((b) => [b.value, b.checked]));
