@@ -2179,7 +2179,7 @@ overlay's `announce`).
 
 In the Hallway's Android TV app (AriaMoKr/HallwayApp: a full-screen WebView whose user agent ends
 with ` HallwayTV/<version>`), the library is walked and read with the TV's remote: the arrows, OK,
-Back and Menu. AriaMoKr/common's `tv.js` (v0.6.0; its README, "The TV app") does the remote's
+Back and Menu. AriaMoKr/common's `tv.js` (v0.6.1; its README, "The TV app") does the remote's
 part every site shares; this section is the library's. `?tv=emulate` shows the TV's page in any
 browser (common's `tvMode`), where `hallwayTV.menu()` and `hallwayTV.back()` stand in for Menu
 and Back. The remote's parts live in the files music shares (interaction.js, ui/overlay.js,
@@ -2205,13 +2205,31 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     view's (`textView.layer()`: its contents, or the whole view) while it is open, else
     `#overlay`. What holds the focus while walking is the text view while it is open, else the
     canvas.
-  - Menu goes to where the card was left; while a book is out, to its buttons first
-    (`overlay.remoteStart`); in the text view, to its toolbar (`textView.cardStart`).
+  - Menu goes to where the card was left, else to common's `first()` (`overlay.remoteStart`):
+    the book's buttons while one is out (also when the card was left elsewhere), else the
+    Controls help, never a text box (common's own first stop would be "← Hallway"); in the text
+    view, to its toolbar (`textView.cardStart`).
   - Back in the card closes the open dialog (the focus back on its button: `overlay.closeDialog`)
     or the text view's contents, else walks again (an open search list closes first: on a TV
-    Esc there does not leave the box).
-  - Walking again (`onMode(false)`) closes the dialogs and the text view's contents. The mode
-    also follows the focus moved by the page (the text view opening, a result chosen).
+    Esc there does not leave the box; a result with the focus goes back to the box).
+  - Walking again (`onMode(false)`) closes the dialogs, the search's results and the text view's
+    contents. The mode also follows the focus moved by the page (the text view opening, a result
+    chosen).
+  - **Text boxes and the TV's keyboard.** A text box the remote steps onto keeps the keyboard
+    down (`inputmode="none"`) until OK on it (common v0.6.1), and so does one the page moves the
+    focus onto from another control: Kiwix's filter as its dialog opens, the search's box back
+    from its results (`LibraryRemote._hold`, from a `focusin` with a `relatedTarget`). A click on
+    such a box (TalkBack's OK, which keeps the remote's) brings the keyboard up.
+  - **The search on a TV.** On the box OK is the keyboard's, and the TV's keyboard takes OK while
+    it is up, so the results take the real focus: ↓ from the box goes to the first
+    (`tabindex="-1"` options, `overlay._resultKey`), ↑ ↓ from one to the next (staying at the
+    last), ↑ from the first back to the box, OK opens the one with the focus, Back closes them
+    onto the box. `LibraryRemote` leaves a combobox's focused option its ↑ ↓ OK and Escape (and
+    turns TalkBack's channel keys into its arrows). ↑ from the box, or ↓ with no result to go
+    to, closes the list and goes on as from any control. The highlight follows the focus, so no
+    result looks chosen while the box has it. A focused result keeps the focus when the article
+    results arrive and the list is made again; closing the list drops the article search still
+    to come (on a desktop too, where it reopened the list after Escape).
   - The focus falling to nowhere (a control that hid itself: ↩ Back after the last link, Put
     back) is walking again (common's), except in an open dialog, where it goes to the dialog's
     first control (`LibraryRemote.walk`); the help's reset Cancel gives it back to "Reset stored
@@ -2240,7 +2258,11 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
 - **The text view on a TV** holds the focus itself (`_home()` is the view, not its title): ↑ ↓
   scroll it by 40 % of its height, ← → turn the 3D book's pages. OK goes to the first link on
   the screen (`textView.linkHere`), from which ↑ ↓ go from link to link and OK follows one.
-  Closing it gives the focus back to the 3D view.
+  In the card, ↓ from the toolbar's last control goes to the first stop on the screen (a link,
+  or the part's end), not the part's first, which the view would jump back to, and the focus
+  stays when none is on the screen; ↑ from the text to a stop above the screen goes to the
+  toolbar instead (`LibraryRemote._textStep`, `textView.inBar` / `onScreen`). Closing it gives
+  the focus back to the 3D view.
 - **The ten-foot view** (style.css, `html.tv`): 18 px text, a focus ring of 4 px `#ffd98a` with a
   dark halo (on the text view's paper too), margins inside a TV's overscan (`--tv-edge-x`,
   `--tv-edge-y`), a larger aim dot, the card's library list in the card's one scroll. The hint
@@ -2248,7 +2270,10 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
   reading, the contents, the card). While a book is out the card and the search are hidden
   (`visibility`, so the remote passes them by); while reading, the book's buttons show only
   while the card has the focus. On a TV the 3D contents lie over the page. The help's comfort
-  row keeps only Motion (the vignette and seated are VR's).
+  row keeps only Motion (the vignette and seated are VR's). The walking hint's second line is
+  the hallway's (and outside's) for TalkBack, which keeps the arrows: "With TalkBack: channel up
+  and down walk, rewind and fast-forward turn" (`white-space: pre-line`); the help has a row for
+  it, and one for the search.
 - **Sounds on a TV** (music: `ui/music-remote.js`, `MusicRemote`, a `LibraryRemote` with the
   Now playing bar, §5.6; `ui/remote.js` stays as vrlbry has it).
   - The text view's Listen links are links like the others: OK on the view goes to the first on
@@ -2301,5 +2326,22 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     `MediaFastForward` still turns; a media key with nothing loaded is not taken. A book open in
     3D: the bar in the foot row's place, above it once Menu shows the book's buttons, ↑ from
     Contents through the help to Next, Stop walking again.
+
+  And again (2026-10-26, common v0.6.1):
+  - Menu lands on the Controls help, with a book out on its first button; the search's box and
+    the ZIM address box are held (`inputmode="none"`) when ↑ steps onto them and get their own
+    back on leaving; OK on the box brings the keyboard (its inputmode back); Kiwix's filter is
+    held as its dialog opens; a click on a held box gives the keyboard.
+  - ↓ from the search's box goes through the results with the real focus, ↑ from the first back
+    to the box (held again), Back closes them onto the box, OK opens the focused one; the list
+    made again keeps the focus; passing over the box leaves no list open; TalkBack's channel
+    keys (dispatched as the WebView sends them) go through the results.
+  - In a text view scrolled down, ↓ past the toolbar lands on the first link on the screen, the
+    view still; ↑ from it back to the toolbar, still; ↓ from link to link as before; with no
+    link on the screen the focus stays on the toolbar.
+  - The walking hint's TalkBack line, the help's rows; the desktop's search as before (its
+    highlight, Escape, the list staying closed); axe with nothing found walking, on the Controls
+    help, in the search's box and on a result, a book in hand, the text view on a link, and with
+    the help or Kiwix's library open.
 
   The TV itself, its frame rate included, is another session's (TODO).
