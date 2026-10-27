@@ -381,17 +381,20 @@
     only the entry then current, so Back showed the earlier room's address. Back and Forward now
     put the address right on the entry they land on (`main.js`, checked the same way).
 - **The TV remote** (requested 2026-10-24; SPEC §5.9). The library in the Hallway's Android TV app
-  (AriaMoKr/HallwayApp), walked and read with the remote: common v0.6.0's `tv.js` and the
+  (AriaMoKr/HallwayApp), walked and read with the remote: common v0.6.1's `tv.js` and the
   library's `ui/remote.js`. Checked in a browser with `?tv=emulate` and real key presses
-  (2026-10-25; SPEC §5.9, Tests). On the TV itself (a Sony BRAVIA, adb 192.168.50.133:5555, the
-  debug build of HallwayApp) another session checks it, its frame rate included; what it finds
-  comes back as a later request. What to look at there:
-  - Through the hallway's door: the same checks, which of Back's steps are the app's and which
-    the page's, and Back out of the library to its door in the hallway.
-  - Whether OK on the search box opens the TV's keyboard, and that Menu's focus there does not.
-  - The frame rate with HallwayApp's `tv-check.mjs --url`, standing among the shelves and reading
-    (a CDP script, or perf scenarios: tv-check times only what stands as it stands); the pixel
-    ratio is 2 at most, as the Hallway's.
+  (2026-10-25, 2026-10-26; SPEC §5.9, Tests). On the TV itself (a Sony BRAVIA, over adb, the
+  debug build of HallwayApp), the TV's session went through it with the remote (HallwayApp's
+  README, "Behind the doors"; reported 2026-10-26): taking and reading a book, its buttons in
+  the card, the stand's lists, the text view and Back one step at a time work; TalkBack reads
+  the view and the card, and its channel and media keys walk. 60 fps with a book open, 57.5
+  among the full shelves and 53.5 at the way in (the pixel ratio 2 at most, as the Hallway's).
+  - Its four awkward things, done 2026-10-26 in a browser, for that session to check on the TV:
+    Menu's first stop is no longer the search box (the Controls help, or the book's buttons),
+    and the TV's keyboard stays down on a text box until OK (common v0.6.1, and the boxes the
+    page focuses); ↓ takes the focus into the search's results, so OK opens one; ↓ past the
+    text view's toolbar goes to a link on the screen, not the part's first; the walking hint
+    has the TalkBack line.
   - Reading in 3D the spread is small on a TV (the reading pose of a desktop screen); the text
     view is the readable way for now.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56

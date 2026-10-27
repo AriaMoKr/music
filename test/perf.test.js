@@ -153,14 +153,15 @@ Total RSS by OOM adjustment:
   });
 
   it('lists adb devices from Windows output (CRLF), with their state', () => {
-    const out = 'List of devices attached\r\n2G0YC1ZG3P071X\tdevice\r\n192.168.50.176:5555\tdevice\r\nABC\tunauthorized\r\n\r\n';
+    // A made-up serial, and an address from the documentation range (RFC 5737), no one's own.
+    const out = 'List of devices attached\r\nHEADSET0000001\tdevice\r\n192.0.2.10:5555\tdevice\r\nABC\tunauthorized\r\n\r\n';
     assert.deepEqual(parseAdbDevices(out), [
-      { serial: '2G0YC1ZG3P071X', state: 'device' }, { serial: '192.168.50.176:5555', state: 'device' }, { serial: 'ABC', state: 'unauthorized' },
+      { serial: 'HEADSET0000001', state: 'device' }, { serial: '192.0.2.10:5555', state: 'device' }, { serial: 'ABC', state: 'unauthorized' },
     ]);
     assert.deepEqual(parseAdbDevices('List of devices attached\n\n'), []);
-    assert.equal(isNetworkSerial('192.168.50.176:5555'), true);
-    assert.equal(isNetworkSerial('adb-2G0YC1ZG3P071X-abc._adb-tls-connect._tcp'), true);
-    assert.equal(isNetworkSerial('2G0YC1ZG3P071X'), false);
+    assert.equal(isNetworkSerial('192.0.2.10:5555'), true);
+    assert.equal(isNetworkSerial('adb-HEADSET0000001-abc._adb-tls-connect._tcp'), true);
+    assert.equal(isNetworkSerial('HEADSET0000001'), false);
   });
 
   it('turns a V8 trace into main-thread GC pauses in page time, and relates them to dropped frames', () => {

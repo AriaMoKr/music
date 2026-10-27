@@ -38,7 +38,7 @@ function fillLocalImages(root) {
 
 /** A TV's hint, by what the remote does now (_renderHint). */
 const TV_HINTS = {
-  walk: '↑ ↓ walk · ← → turn · OK takes the book at the dot · Menu: the card',
+  walk: '↑ ↓ walk · ← → turn · OK takes the book at the dot · Menu: the card\nWith TalkBack: channel up and down walk, rewind and fast-forward turn',
   list: '↑ ↓ scroll the list · OK chooses · ← → turn away',
   hand: 'OK reads it · Back puts it back · Menu: more',
   read: '← → turn the pages · Menu: contents, text size and more · Back: one step back',
@@ -84,10 +84,12 @@ const HELP = {
     ['Walk', '↑ ↓ · turn with ← →'],
     ['Take a book', 'Turn until the dot is on it, then OK'],
     ['Read', 'OK · turn the pages with ← →'],
-    ['The card', 'Menu: this card and the search, and with a book out its buttons (contents, text view, theme, pages, text size) · ↑ ↓ from one to the next, ← → through a choice, OK presses'],
+    ['The card', 'Menu: this card, on this button first, and with a book out its buttons (contents, text view, theme, pages, text size) · ↑ ↓ from one to the next, ← → through a choice, OK presses'],
+    ['Search', '↑ from this button to the box, OK to type with the keyboard · ↓ through the results, OK opens one · Back: the box again'],
     ['A list on the stand', 'Walk up to the stand, the dot on the list: ↑ ↓ scroll it, OK chooses'],
     ['The text view', '↑ ↓ scroll it, ← → turn the pages · OK: the links on the screen · Menu: its toolbar'],
     ['Back', 'One step back: the contents closed, back along the links, the text view closed, the book put back; in the card, walking again; else back to the Hallway'],
+    ['With TalkBack', 'Channel up and down walk, rewind and fast-forward turn'],
   ],
   vr: [
     ['Point & select', 'Aim the ray, pull the trigger (or pinch with hand tracking)'],
@@ -367,7 +369,8 @@ export class Overlay {
     const input = this.$('.ov-search input');
     input.addEventListener('input', () => this._search(input.value));
     input.addEventListener('keydown', (e) => this._searchKey(e));
-    input.addEventListener('focus', () => this._search(input.value));
+    input.addEventListener('focus', () => { if (!this._backToBox) this._search(input.value); });
+    this.$('.ov-results').addEventListener('keydown', (e) => this._resultKey(e));
     document.addEventListener('pointerdown', (e) => {
       if (!this.$('.ov-search').contains(e.target)) this._showList(false);
     });
@@ -469,16 +472,20 @@ export class Overlay {
     return null;
   }
 
-  /** Closes the page's dialogs (a TV's remote walking again). */
+  /** Closes the page's dialogs, and the search's results (a TV's remote walking again). */
   closeDialogs() {
     while (this.closeDialog() !== null);
+    if (!this.$('.ov-results').hidden) this._showList(false);
   }
 
-  /** Where a TV remote's Menu goes first: the book's first button while one is out, else the search. */
+  /**
+   * Where a TV remote's Menu goes with nothing to come back to (common's first()): the book's first
+   * button while one is out, else the Controls help, never a text box (its keyboard would come up).
+   */
   remoteStart() {
     const cls = this.root.classList;
     if (cls.contains('ov-bookout')) return this.$(cls.contains('ov-reading') ? '.ov-book-open button' : '.ov-book-hand button');
-    return this.$('.ov-search input');
+    return this.$('.ov-help-btn');
   }
 
   /** Handlers of the help dialog's scene buttons: { save(), restore(), restoreText(text) }. */
@@ -874,14 +881,17 @@ export class Overlay {
     const list = this.$('.ov-results');
     const books = this._articles.length ? this._books.slice(0, 6) : this._books;
     this._results = [...books, ...this._articles];
-    this._sel = this._results.length ? 0 : -1;
+    // On a TV a result can hold the focus (↓ from the box), and keeps it when the articles arrive.
+    const focused = this.tv && list.contains(document.activeElement) ? Number(document.activeElement.dataset.i ?? -1) : -1;
+    this._sel = this._results.length ? Math.min(Math.max(focused, 0), this._results.length - 1) : -1;
+    const tab = this.tv ? ' tabindex="-1"' : '';
     list.innerHTML = this._results.length
       ? this._results.map((e, i) => (e.article ? `
-        <li role="option" id="ov-result-${i}" aria-selected="${i === this._sel}" data-i="${i}" class="${i === this._sel ? 'sel' : ''}">
+        <li role="option" id="ov-result-${i}" aria-selected="${i === this._sel}" data-i="${i}" class="${i === this._sel ? 'sel' : ''}"${tab}>
           ${e.lib.illustration ? `<img class="ov-r-icon" ${imgSrc(e.lib.illustration)} alt="" width="34" height="34">` : '<span class="ov-nocover"></span>'}
           <div><div class="ov-r-title">${e.article.from ? `${esc(e.article.from)} → ` : ''}${esc(e.article.title)}</div><div class="ov-r-sub">${esc(e.lib.title)} · Volume ${esc(e.article.book.slice(1))}</div></div>
         </li>` : `
-        <li role="option" id="ov-result-${i}" aria-selected="${i === this._sel}" data-i="${i}" class="${i === this._sel ? 'sel' : ''}">
+        <li role="option" id="ov-result-${i}" aria-selected="${i === this._sel}" data-i="${i}" class="${i === this._sel ? 'sel' : ''}"${tab}>
           ${e.book.cover ? `<img ${imgSrc(e.book.cover)} alt="" loading="lazy" width="34" height="48">` : '<span class="ov-nocover"></span>'}
           <div><div class="ov-r-title">${esc(e.book.title)}</div><div class="ov-r-sub">${esc(e.book.author || '')}${this._multi() ? ' · ' + esc(e.lib.title) : ''}</div></div>
         </li>`)).join('')
@@ -892,6 +902,10 @@ export class Overlay {
     list.querySelectorAll('li[data-i]').forEach((li) => {
       li.onclick = () => this._choose(+li.dataset.i);
     });
+    if (focused >= 0) {
+      if (this._sel >= 0) this._focusResult(this._sel);
+      else this._toBox();
+    }
   }
 
   /** Whether more than one library has books (results then name their library). */
@@ -904,11 +918,13 @@ export class Overlay {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (!this._results.length) return;
+      if (this.tv) {
+        // On a TV the results take the focus, so OK presses one (on the box OK is the keyboard's).
+        if (e.key === 'ArrowDown' && !list.hidden) this._focusResult(0);
+        return;
+      }
       this._sel = (this._sel + (e.key === 'ArrowDown' ? 1 : -1) + this._results.length) % this._results.length;
-      list.querySelectorAll('li[data-i]').forEach((li, i) => {
-        li.classList.toggle('sel', i === this._sel);
-        li.setAttribute('aria-selected', String(i === this._sel));
-      });
+      this._markSel();
       list.querySelector('li.sel')?.scrollIntoView({ block: 'nearest' });
       this._activeDescendant();
     } else if (e.key === 'Enter') {
@@ -920,10 +936,66 @@ export class Overlay {
   }
 
   /**
+   * A key on a result that holds the focus (a TV): ↑ ↓ from one to the next (staying at the last),
+   * ↑ from the first back to the box, OK opens it, Escape (Back) closes them, back on the box.
+   * @param {KeyboardEvent} e
+   */
+  _resultKey(e) {
+    const li = /** @type {HTMLElement} */ (e.target).closest?.('li[data-i]');
+    if (!li) return;
+    const i = Number(li.dataset.i);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const to = i + (e.key === 'ArrowDown' ? 1 : -1);
+      if (to < 0) this._toBox();
+      else this._focusResult(Math.min(to, this._results.length - 1));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      this._choose(i);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      this._showList(false);
+      this._toBox();
+    }
+  }
+
+  /** The focus on result i (a TV), highlighted as the one OK opens. */
+  _focusResult(i) {
+    this._sel = i;
+    this._markSel();
+    this.$(`#ov-result-${i}`)?.focus();
+  }
+
+  /** The focus back on the search's box from its results, the list left as it is (the keyboard's search key opens the first). */
+  _toBox() {
+    if (this._sel > 0) {
+      this._sel = 0;
+      this._markSel();
+    }
+    this._backToBox = true;
+    this.$('.ov-search input').focus();
+    this._backToBox = false;
+    this._activeDescendant();
+  }
+
+  /** The highlighted result (`_sel`) marked: its class and aria-selected. */
+  _markSel() {
+    this.$('.ov-results').querySelectorAll('li[data-i]').forEach((li, i) => {
+      li.classList.toggle('sel', i === this._sel);
+      li.setAttribute('aria-selected', String(i === this._sel));
+    });
+  }
+
+  /**
    * Shows or hides the results (the combobox pattern: the input's aria-expanded, and its
    * aria-activedescendant naming the highlighted result while they show).
    */
   _showList(open) {
+    if (!open) {
+      // Closed: the article results still to come stay away (they arrive 150 ms after a search).
+      this._searchToken++;
+      clearTimeout(this._searchTimer);
+    }
     this.$('.ov-results').hidden = !open;
     this.$('.ov-search input').setAttribute('aria-expanded', String(open));
     this._activeDescendant();

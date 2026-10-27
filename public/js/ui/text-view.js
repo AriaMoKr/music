@@ -506,14 +506,24 @@ export class TextView {
 
   /** OK on a TV: the first link on the screen, below the toolbar, to go on from link to link; or none. */
   linkHere() {
-    const top = this.el.getBoundingClientRect().top + this._barH();
     const bottom = this.el.getBoundingClientRect().bottom;
     for (const a of this.$('.tv-body').querySelectorAll('a[href]')) {
-      const r = a.getBoundingClientRect();
-      if (r.bottom > top && r.top < bottom && r.height > 0) return a;
-      if (r.top >= bottom) break;
+      if (this.onScreen(a)) return a;
+      if (a.getBoundingClientRect().top >= bottom) break;
     }
     return null;
+  }
+
+  /** Whether a control is in its toolbar (a TV remote's ↑ ↓ between it and the text: ui/remote.js). */
+  inBar(el) {
+    return this.$('.tv-bar').contains(el);
+  }
+
+  /** Whether an element's top is on the screen, below the toolbar: the focus can go there without a scroll. */
+  onScreen(el) {
+    const view = this.el.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return r.height > 0 && r.top >= view.top + this._barH() - 1 && r.top < view.bottom;
   }
 
   /**
