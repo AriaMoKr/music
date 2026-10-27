@@ -8,16 +8,39 @@
 /** Most items a queue holds (a book's 407 sounds fit; the whole Music ZIM's 5,215 do not). */
 export const QUEUE_MAX = 2000;
 
+/** Shuffles `a` in place (Fisher–Yates), `random` giving numbers in [0, 1). */
+function shuffleInPlace(a, random) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export class SoundQueue {
-  constructor() {
-    /** @type {Array<{ libId: string, bookId: string, sound: object }>} */
+  /** @param {{ random?: () => number }} [o] what a shuffle draws from (Math.random; a test's own) */
+  constructor({ random = Math.random } = {}) {
+    /** @type {Array<{ libId: string, bookId: string, sound: object }>} The items in the order they play. */
     this.items = [];
     /** The item playing (or to play), -1 when none. */
     this.index = -1;
+    /**
+     * Counts the moves to an item (set, go, next, prev): another sound for the Now playing bar,
+     * where the index would change with a shuffle too.
+     */
+    this.moves = 0;
     /** Who filled it: 'book' (the reader: stops when the book is put back) or 'gramophone'. */
     this.source = null;
     /** Starts again at the first item after the last. */
     this.repeat = false;
+    /**
+     * Plays the items in a random order (setShuffle): the one playing first, the others dealt after
+     * it, dealt again each time round when repeating; Play all (set's `start` null) from any.
+     */
+    this.shuffle = false;
+    /** While shuffled, the items in their own order (turning the shuffle off puts them back), else null. */
+    this._order = null;
+    this.random = random;
     /**
      * Goes on to the next item when one ends (Play all, the gramophone); false plays one at a time,
      * the next only when asked for (⏭): a link's sound, or a row of the Sounds list, among its book's.
@@ -42,13 +65,48 @@ export class SoundQueue {
     return this.index > 0;
   }
 
-  /** Replaces the queue with `items` (at most QUEUE_MAX), from item `start`: the current item, or null. */
+  /**
+   * Replaces the queue with `items` (at most QUEUE_MAX), from item `start` (null: the first, or
+   * any when shuffled; shuffled, the others follow it in a random order): the current item, or null.
+   */
   set(items, { start = 0, source = 'book', advance = true } = {}) {
     this.items = items.slice(0, QUEUE_MAX);
-    this.index = this.items.length ? Math.max(0, Math.min(this.items.length - 1, start)) : -1;
-    this.source = this.items.length ? source : null;
+    this._order = null;
+    const n = this.items.length;
+    this.index = n ? Math.max(0, Math.min(n - 1, start ?? 0)) : -1;
+    this.source = n ? source : null;
     this.advance = advance;
+    if (this.shuffle && n) this._deal(start == null ? null : this.current);
+    this.moves++;
     return this.current;
+  }
+
+  /**
+   * Shuffles the items (the one playing first, the others dealt after it in a random order), or
+   * puts them back in their own order, from the one playing.
+   */
+  setShuffle(on) {
+    if (on === this.shuffle) return;
+    this.shuffle = on;
+    if (on) {
+      if (this.items.length) this._deal(this.current);
+    } else if (this._order) {
+      const current = this.current;
+      this.items = this._order;
+      this._order = null;
+      this.index = Math.max(0, this.items.indexOf(current));
+    }
+  }
+
+  /** Deals the items in a random order, `first` (an item, or null: any) first, keeping their own in _order. */
+  _deal(first) {
+    if (!this._order) this._order = this.items;
+    const rest = this._order.slice();
+    const at = first ? rest.indexOf(first) : -1;
+    if (at >= 0) rest.splice(at, 1);
+    shuffleInPlace(rest, this.random);
+    this.items = at >= 0 ? [first, ...rest] : rest;
+    this.index = this.items.length ? 0 : -1;
   }
 
   /** The item that follows when the current one ends: the next, or null (one at a time: none). */
@@ -56,13 +114,23 @@ export class SoundQueue {
     return this.advance ? this.next() : null;
   }
 
-  /** Adds items at the end (the current one stays); returns how many were added. */
+  /**
+   * Adds items at the end (the current one stays; shuffled, in among those still to come at
+   * random); returns how many were added.
+   */
   add(items, { source = 'gramophone' } = {}) {
-    const room = Math.max(0, QUEUE_MAX - this.items.length);
-    const added = items.slice(0, room);
-    this.items.push(...added);
-    if (added.length && this.index < 0) this.index = this.items.length - added.length;
-    if (added.length) this.source = source;
+    const added = items.slice(0, Math.max(0, QUEUE_MAX - this.items.length));
+    if (!added.length) return 0;
+    const empty = !this.items.length;
+    if (this._order) {
+      this._order.push(...added);
+      for (const it of added) this.items.splice(this.index + 1 + Math.floor(this.random() * (this.items.length - this.index)), 0, it);
+    } else {
+      this.items.push(...added);
+    }
+    if (this.index < 0) this.index = this.items.length - added.length;
+    if (empty && this.shuffle) this._deal(null);
+    this.source = source;
     return added.length;
   }
 
@@ -70,14 +138,27 @@ export class SoundQueue {
   go(i) {
     if (!Number.isInteger(i) || i < 0 || i >= this.items.length) return null;
     this.index = i;
+    this.moves++;
     return this.current;
   }
 
-  /** The next item (the first again when repeating), or null at the end (the queue stays). */
+  /**
+   * The next item (the first again when repeating, the items dealt again when shuffled), or null
+   * at the end (the queue stays).
+   */
   next() {
     if (this.index < 0) return null;
     if (this.index + 1 < this.items.length) return this.go(this.index + 1);
-    return this.repeat && this.items.length ? this.go(0) : null;
+    if (!this.repeat || !this.items.length) return null;
+    if (!this.shuffle || this.items.length < 2) return this.go(0);
+    const last = this.current;
+    this._deal(null);
+    if (this.items[0] === last) { // not the one just played again at once
+      const j = 1 + Math.floor(this.random() * (this.items.length - 1));
+      [this.items[0], this.items[j]] = [this.items[j], this.items[0]];
+    }
+    this.moves++;
+    return this.current;
   }
 
   prev() {
@@ -87,14 +168,18 @@ export class SoundQueue {
   /** Takes item i out (the one after takes the place of a current one taken out). */
   remove(i) {
     if (i < 0 || i >= this.items.length) return;
-    this.items.splice(i, 1);
+    const [it] = this.items.splice(i, 1);
+    const j = this._order ? this._order.indexOf(it) : -1;
+    if (j >= 0) this._order.splice(j, 1);
     if (i < this.index) this.index--;
     if (this.index >= this.items.length) this.index = this.items.length - 1;
     if (!this.items.length) this.clear();
   }
 
+  /** Empties the queue (repeat and shuffle stay as they are). */
   clear() {
     this.items = [];
+    this._order = null;
     this.index = -1;
     this.source = null;
     this.advance = true;

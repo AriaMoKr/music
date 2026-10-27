@@ -411,8 +411,8 @@
     and 320 × 200, covering nothing (the card's ten controls and the search uncovered).
   - A link plays its sound alone among its book's, as on the 3D page, so the bar's Next plays
     the book's next one (since 2026-10-26; a sound played to its end is followed by nothing). Not
-    yet in the page: the queue, composers and periods, Play all, and the stand's tempo, loop, key
-    and parts. A book's sound plays from the book, not the gramophone (only the Listen tab's do).
+    yet in the page: the queue, composers and periods, Play all, repeat and shuffle, and the
+    stand's tempo, loop, key and parts. A book's sound plays from the book, not the gramophone (only the Listen tab's do).
   - Reaching the bar from the middle of a part takes Tab through the rest of it (or a screen
     reader's landmarks: it is a region); a key for it would help.
   - Not yet: a real screen reader, and a phone in the hand.
@@ -554,6 +554,10 @@
   while one walks and reads, its sound from its horn (positional), its record turning, the room's
   lights dimmed meanwhile; the kiosk's Listen tab (books, composers, periods, the queue); a wall
   of score pictures that play when pointed at, from where they hang.
+  - *Since (2026-10-26):* ⇄ Shuffle beside ↻ Repeat on the Listen tab (SPEC §5.6 "Sounds": the
+    queue dealt, the one playing first, dealt again each time round). Checked in a browser with
+    real clicks on the kiosk: on and off, ⏭ in the shuffled order, Play all from any sound, round
+    again with Repeat; not in VR, and the README's Listen tab picture is from before it.
   - *Not checked:* on the Quest, in VR: the HRTF panner and a `MediaElementSource` on its audio
     thread, the wall's one atlas upload (2048 × 1024, ~8 MB) and the kiosk redrawn when what
     plays changes; the placement of the music stand beside the book in a headset (checked on a

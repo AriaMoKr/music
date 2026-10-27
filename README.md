@@ -26,7 +26,8 @@ What music adds to the library it grew from:
 - **The gramophone.** It stands in every room whose books play and plays on while you walk and
   read: its sound comes from its horn, and the lights dim while it plays. Choose what it plays on
   the catalogue stand's **♪ Listen** tab: a book, a composer or a period, all of the sounds or
-  only the MIDI songs or only the MP3 recordings.
+  only the MIDI songs or only the MP3 recordings, over and over (**Repeat**) or in any order
+  (**Shuffle**).
 - **The music stand.** Beside the open book, it shows the MIDI song playing as a piano roll (a
   recording, its picture) and lets you slow it down or speed it up without changing its pitch,
   loop a passage, change its key, and mute a part or give it another instrument.

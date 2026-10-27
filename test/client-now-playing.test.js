@@ -55,6 +55,14 @@ describe('the Now playing bar', () => {
     const a = nowPlayingOf(ix({ items: [tune, air] }));
     assert.equal(nowPlayingOf(ix({ items: [tune, air], state: 'paused', duration: 0 })).key, a.key);
     assert.notEqual(nowPlayingOf(ix({ items: [tune, air], index: 1 })).key, a.key);
+    // Shuffled, the same sound moves in the queue: the queue's moves say whether another started.
+    const at = (items, index, moves) => {
+      const o = ix({ items, index });
+      o.queue.moves = moves;
+      return nowPlayingOf(o).key;
+    };
+    assert.equal(at([air, tune], 1, 4), at([tune, air], 0, 4), 'shuffled: the same sound, said once');
+    assert.notEqual(at([tune, air], 0, 5), at([tune, air], 0, 4), 'played again from its start');
   });
 
   it('names a sound played without a list entry by its file, from the open book', () => {
