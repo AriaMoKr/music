@@ -100,6 +100,98 @@ describe('the queue and the names of sounds (media/queue.js)', () => {
     assert.equal(q.advance, true);
   });
 
+  /** Numbers in [0, 1) from a seed (mulberry32): a shuffle the test can repeat. */
+  const seeded = (seed) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const names = (q) => q.items.map((it) => it.sound.t);
+  const sorted = (a) => [...a].sort();
+  const six = () => [1, 2, 3, 4, 5, 6].map(item);
+
+  it('shuffles: the one playing first, the others dealt after it, back in their order from the one playing', () => {
+    const q = new SoundQueue({ random: seeded(7) });
+    q.set(six(), { start: 3 });
+    assert.deepEqual(names(q), ['s1', 's2', 's3', 's4', 's5', 's6'], 'not shuffled: in their order');
+    const moves = q.moves;
+    q.setShuffle(true);
+    assert.equal(q.current.sound.t, 's4', 'the one playing goes on');
+    assert.equal(q.index, 0, 'first: the others follow it');
+    assert.equal(q.hasPrev, false);
+    assert.deepEqual(sorted(names(q)), ['s1', 's2', 's3', 's4', 's5', 's6'], 'every item, once');
+    assert.notDeepEqual(names(q).slice(1), ['s1', 's2', 's3', 's5', 's6'], 'in a random order');
+    assert.equal(q.moves, moves, 'no other sound: the Now playing bar does not say it again');
+    q.next();
+    const playing = q.current.sound.t;
+    q.setShuffle(false);
+    assert.deepEqual(names(q), ['s1', 's2', 's3', 's4', 's5', 's6'], 'back in their order');
+    assert.equal(q.current.sound.t, playing, 'from the one playing');
+    assert.equal(q.index, Number(playing.slice(1)) - 1);
+  });
+
+  it('shuffled, starts at the item asked for, or at any for Play all, and keeps the mode across queues', () => {
+    const q = new SoundQueue({ random: seeded(11) });
+    q.setShuffle(true);
+    assert.equal(q.set(six(), { start: 2 }).sound.t, 's3', 'a tapped sound plays first');
+    assert.deepEqual(sorted(names(q)), ['s1', 's2', 's3', 's4', 's5', 's6']);
+    const firsts = new Set();
+    for (let i = 0; i < 20; i++) firsts.add(q.set(six(), { start: null }).sound.t);
+    assert.ok(firsts.size > 1, 'Play all from any');
+    const plain = new SoundQueue();
+    assert.equal(plain.set(six(), { start: null }).sound.t, 's1', 'not shuffled: from the first');
+    q.repeat = true;
+    q.clear();
+    assert.deepEqual([q.shuffle, q.repeat], [true, true], 'emptying the queue leaves the modes');
+  });
+
+  it('shuffled, puts added items among those to come and takes removed ones out of its own order too', () => {
+    const q = new SoundQueue({ random: seeded(3) });
+    q.setShuffle(true);
+    q.set(six(), { start: 0 });
+    q.next();
+    const before = names(q).slice(0, q.index + 1);
+    assert.equal(q.add([item(7), item(8)]), 2);
+    assert.deepEqual(names(q).slice(0, q.index + 1), before, 'what has played stays where it is');
+    assert.ok(names(q).indexOf('s7') > q.index && names(q).indexOf('s8') > q.index, 'they play later');
+    q.remove(names(q).indexOf('s5'));
+    q.setShuffle(false);
+    assert.deepEqual(names(q), ['s1', 's2', 's3', 's4', 's6', 's7', 's8'], 'in their own order: added at the end, s5 gone');
+    const empty = new SoundQueue({ random: seeded(5) });
+    empty.setShuffle(true);
+    empty.add(six());
+    assert.deepEqual(sorted(names(empty)), ['s1', 's2', 's3', 's4', 's5', 's6'], 'added to an empty queue: dealt');
+    assert.equal(empty.index, 0);
+  });
+
+  it('shuffled and repeating, deals again each time round, never the one just played first', () => {
+    const q = new SoundQueue({ random: seeded(19) });
+    q.repeat = true;
+    q.setShuffle(true);
+    q.set(six(), { start: 0 });
+    const rounds = [];
+    for (let r = 0; r < 30; r++) {
+      while (q.index < q.length - 1) q.next();
+      const last = q.current;
+      assert.equal(q.hasNext, true);
+      q.next();
+      assert.equal(q.index, 0, 'round again');
+      assert.notEqual(q.current, last, 'not the same sound twice in a row');
+      assert.deepEqual(sorted(names(q)), ['s1', 's2', 's3', 's4', 's5', 's6']);
+      rounds.push(names(q).join());
+    }
+    assert.ok(new Set(rounds).size > 1, 'dealt again, not the same order each time');
+    q.repeat = false;
+    while (q.index < q.length - 1) q.next();
+    assert.equal(q.next(), null, 'without repeat it ends');
+    const one = new SoundQueue();
+    one.repeat = true;
+    one.setShuffle(true);
+    one.set([item(1)]);
+    assert.equal(one.next().sound.t, 's1', 'one sound repeats as it is');
+  });
+
   it('names a sound by its link\'s words, else a short paragraph, else its heading, else its file', () => {
     assert.equal(isGenericLabel('[Listen]'), true);
     assert.equal(isGenericLabel('Listen (MP3)'), true);

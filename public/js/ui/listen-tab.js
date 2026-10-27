@@ -209,12 +209,12 @@ function attributedView(ix, p, y, pad, bottom) {
   });
   y += 62;
   const queued = items.map(({ libId, bookId, sound }) => ({ libId, bookId, sound }));
-  p.add({ id: 'lst-all', type: 'button', x: pad, y, w: 230, h: 52, label: '▶ Play all', size: 23, onClick: () => ix.playSounds(queued, 0, 'gramophone') });
+  p.add({ id: 'lst-all', type: 'button', x: pad, y, w: 230, h: 52, label: '▶ Play all', size: 23, onClick: () => ix.playSounds(queued, null, 'gramophone') });
   p.add({
     id: 'lst-add', type: 'button', x: pad + 244, y, w: 250, h: 52, label: '+ Add to queue', size: 23,
     onClick: () => {
       const n = ix.queue.source === 'gramophone' ? ix.queue.add(queued) : 0;
-      if (!n) ix.playSounds(queued, 0, 'gramophone');
+      if (!n) ix.playSounds(queued, null, 'gramophone');
       else ix.notice('Added to the queue', `${n} sound${n === 1 ? '' : 's'}`, 2.5);
       ix._fillKiosk();
     },
@@ -295,12 +295,14 @@ function nowPlaying(ix, p, y, pad) {
   buttons.forEach(([id, label, fn, disabled], i) => {
     p.add({ id, type: 'button', x: x + i * 84, y: by, w: 74, h: 50, label, size: 24, disabled, active: id === 'lst-toggle' && s.state === 'blocked', onClick: fn });
   });
+  // The queue's modes: round again after the last, and in a random order.
   p.add({
     id: 'lst-repeat', type: 'button', x: x + 4 * 84 + 10, y: by, w: 150, h: 50, label: '↻ Repeat', size: 21, active: ix.queue.repeat,
-    onClick: () => {
-      ix.queue.repeat = !ix.queue.repeat;
-      ix._fillKiosk();
-    },
+    onClick: () => ix.setQueueMode({ repeat: !ix.queue.repeat }),
+  });
+  p.add({
+    id: 'lst-shuffle', type: 'button', x: x + 4 * 84 + 170, y: by, w: 150, h: 50, label: '⇄ Shuffle', size: 21, active: ix.queue.shuffle,
+    onClick: () => ix.setQueueMode({ shuffle: !ix.queue.shuffle }),
   });
   return y + H + 16;
 }
@@ -370,12 +372,12 @@ function bookView(ix, p, y, pad, bottom) {
     return;
   }
   const items = sounds.map((sound) => ({ libId: L.book.libId, bookId: L.book.id, sound }));
-  p.add({ id: 'lst-all', type: 'button', x: pad, y, w: 230, h: 52, label: '▶ Play all', size: 23, onClick: () => ix.playSounds(items, 0, 'gramophone') });
+  p.add({ id: 'lst-all', type: 'button', x: pad, y, w: 230, h: 52, label: '▶ Play all', size: 23, onClick: () => ix.playSounds(items, null, 'gramophone') });
   p.add({
     id: 'lst-add', type: 'button', x: pad + 244, y, w: 250, h: 52, label: '+ Add to queue', size: 23,
     onClick: () => {
       const n = ix.queue.source === 'gramophone' ? ix.queue.add(items) : 0;
-      if (!n) ix.playSounds(items, 0, 'gramophone');
+      if (!n) ix.playSounds(items, null, 'gramophone');
       else ix.notice('Added to the queue', `${n} sound${n === 1 ? '' : 's'} of ${book?.title ?? 'the book'}`, 2.5);
       ix._fillKiosk();
     },

@@ -2646,7 +2646,7 @@ export class Interaction {
     }
     if (!sounds?.length) return;
     this._listen = { ...this._listen, view: 'book', book: { libId: book.libId, id: book.id }, bookScroll: null };
-    this.playSounds(sounds.map((sound) => ({ libId: book.libId, bookId: book.id, sound })), 0, 'gramophone');
+    this.playSounds(sounds.map((sound) => ({ libId: book.libId, bookId: book.id, sound })), null, 'gramophone');
     this._fillKiosk();
   }
 
@@ -2814,8 +2814,9 @@ export class Interaction {
 
   /**
    * Plays sounds one after another (SPEC §5.6 "Sounds"): items { libId, bookId, sound } from item
-   * `start`; with `advance` false one at a time, the next on ⏭ (media/queue.js). A book's
-   * (`source` 'book': its Sounds list, its links) stop when it is put back; the gramophone's play on.
+   * `start` (null: the first, or any when shuffled: Play all); with `advance` false one at a time,
+   * the next on ⏭ (media/queue.js). A book's (`source` 'book': its Sounds list, its links) stop
+   * when it is put back; the gramophone's play on.
    */
   playSounds(items, start = 0, source = 'book', { advance = true } = {}) {
     audio.init(); // on the tap itself: the audio context needs the gesture
@@ -2868,6 +2869,18 @@ export class Interaction {
       };
       img.src = url;
     });
+  }
+
+  /**
+   * ↻ Repeat and ⇄ Shuffle (the Listen tab): the queue's modes, kept for the page's life. The order
+   * and the next sound they change are shown again (the toolbar's ⏭, the Now playing bar, the tab).
+   */
+  setQueueMode({ repeat = this.queue.repeat, shuffle = this.queue.shuffle } = {}) {
+    this.queue.repeat = repeat;
+    this.queue.setShuffle(shuffle);
+    this.nowPlaying?.update();
+    this._layoutTopRow();
+    this._fillKiosk();
   }
 
   /** ⏭: the queue's next sound. */

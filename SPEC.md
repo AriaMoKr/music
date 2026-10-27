@@ -1686,7 +1686,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   heading, after the one above it when it is only a number or "by …"; else its file); a tap
   plays it and turns to it, alone, *▶ Play all* plays them in turn from the page shown. What plays next
   is a `SoundQueue` (`interaction.queue`: items `{ libId, bookId, sound, at? }`, at most 2,000,
-  ⏮ ⏭, repeat; `advance`: on to the next when one ends, or one at a time, the next only on ⏭,
+  ⏮ ⏭, repeat; shuffle (`setShuffle`: the items dealt in a random order, the one playing first,
+  dealt again each time round when repeating, never the one just played first; a sound tapped
+  plays first, Play all, `set`'s `start` null, from any; added items go in among those to come;
+  off, the items are back in their own order from the one playing; `moves` counts the moves to an
+  item, so the Now playing bar says a sound once though a shuffle moves it); `advance`: on to the next when one ends, or one at a time, the next only on ⏭,
   as a tapped row or a link's sound plays among its book's), whose `source` says whose it is: `'book'` (stops when the book is put back) or
   `'gramophone'` (plays on while the visitor walks and reads). The toolbar's top row has ⏭ while
   more follows. **Follow-along**: while a sound of the open book plays its link has a warm band
@@ -1777,7 +1781,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
     (a genre's count respects the current letter and vice versa); choices that would give an
     empty room are disabled.
   - *♪ Listen* (`ui/listen-tab.js`): what plays (its picture, name, book, kind, length, "3 of
-    127"; ⏮ ▶/❚❚ ⏭ ■ and ↻ Repeat), then *Books* (the books that play, the most sounds first; a
+    127"; ⏮ ▶/❚❚ ⏭ ■, ↻ Repeat and ⇄ Shuffle beside it: the queue's modes, kept for the page's
+    life, `interaction.setQueueMode`, which shows again the toolbar's ⏭ and the Now playing bar
+    they change), then *Books* (the books that play, the most sounds first; a
     book's sounds under their headings, *▶ Play all*, *+ Add to queue*, *Find the book*),
     *Composers* (by birth: a timeline; a composer's sounds across books), *Periods* (in time
     order; a period's sounds under their composers) and *Queue* (tap one to play it, *✕ Clear*).
@@ -2323,7 +2329,8 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     Next and `MediaTrackNext` play the book's next sound, which plays alone too.
 - **Tests.** `test/client-back-step.test.js` covers the order of Back's steps;
   `test/client-now-playing.test.js` the media keys' buttons (`Pause` among them) and the bar's
-  place among the card's stops, `test/listening.test.js` a queue played one at a time (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
+  place among the card's stops, `test/listening.test.js` a queue played one at a time and
+  shuffled (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
   - Every control of the card reached and used, and of the help (its reset fieldset, select and
     checkboxes; Save scene, then Restore) and Kiwix's library; Back closes a dialog onto its
     button.

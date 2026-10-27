@@ -16,7 +16,8 @@ import { clock } from '../media/player.js';
  * What the bar shows, or null while nothing is loaded: `title`, `book` (title · author), `line`
  * (kind, length, where it plays, its place in the queue), the buttons' states (`playing`,
  * `loading`, `blocked`: the browser waits for a tap; `hasNext`), and `key`, which changes only when
- * another sound starts (a new item, or the same sound played again from its start in the queue).
+ * another sound starts (a new item, or the same sound played again from its start in the queue:
+ * its `moves`, not its index, which a shuffle changes too).
  * @param {object} ix interaction.js's Interaction: sound, queue, _playing, book, bookOf, world
  */
 export function nowPlayingOf(ix) {
@@ -35,7 +36,7 @@ export function nowPlayingOf(ix) {
     gramophone ? (ix.world?.gramophone ? 'on the gramophone' : 'playing on') : 'from the open book',
     ...(n > 1 ? [`${ix.queue.index + 1} of ${n}`] : []),
   ].join(' · ');
-  const where = item ? [item.libId, item.bookId, item.sound?.c, item.sound?.b, item.sound?.i ?? 0, ix.queue?.index ?? 0].join('\n') : '';
+  const where = item ? [item.libId, item.bookId, item.sound?.c, item.sound?.b, item.sound?.i ?? 0, ix.queue?.moves ?? ix.queue?.index ?? 0].join('\n') : '';
   return {
     key: `${where}\n${media?.src ?? media?.remote?.start ?? ''}\n${media?.name ?? ''}`,
     title,
