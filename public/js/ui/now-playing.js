@@ -56,10 +56,11 @@ export function startedText(info) {
 
 /**
  * A TV remote's media keys (by common's keyOf) and what each does to the bar (SPEC §5.9, music).
+ * A Bluetooth remote's Pause comes as `Pause` (Android's BREAK key), so it is MediaPause too.
  * Rewind and fast-forward are not among them: common reads them as ← and →, for TalkBack.
  */
 export const MEDIA_KEYS = Object.freeze({
-  MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'stop', MediaTrackNext: 'next',
+  MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', Pause: 'pause', MediaStop: 'stop', MediaTrackNext: 'next',
 });
 
 /**

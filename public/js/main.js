@@ -50,6 +50,9 @@ const overlay = new Overlay({ root: document.getElementById('overlay'), wayOut: 
 // A TV (the Hallway's Android TV app, or ?tv=emulate: common's tv.js, SPEC §5.9): walked with its
 // remote (ui/remote.js), the card for the ten-foot view (style.css, html.tv), no VR.
 const tv = tvMode();
+// The remote can't look up or down: on a TV the view rests a little down, as outside's does
+// (controls.restPitch), so the dot can land on the gramophone (its horn's mouth at 1.28 m).
+const TV_PITCH = -0.25;
 document.documentElement.classList.toggle('tv', tv);
 overlay.setTV(tv);
 // Registered before anything can fail: the error screen offers the report too.
@@ -314,6 +317,7 @@ async function start() {
     remote.answerApp(tv);
     interaction.tv = true;
     controls.aimMiddle = true;
+    controls.restPitch = controls.pitch = TV_PITCH;
     controls.scrollKey = (dir) => interaction.scrollUnderDot(dir);
     controls.onPadBack = () => remote.padBack();
     renderer.domElement.setAttribute('aria-describedby', 'ov-hint'); // what the remote does now

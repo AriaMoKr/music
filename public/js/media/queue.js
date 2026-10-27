@@ -18,6 +18,11 @@ export class SoundQueue {
     this.source = null;
     /** Starts again at the first item after the last. */
     this.repeat = false;
+    /**
+     * Goes on to the next item when one ends (Play all, the gramophone); false plays one at a time,
+     * the next only when asked for (⏭): a link's sound, or a row of the Sounds list, among its book's.
+     */
+    this.advance = true;
   }
 
   get current() {
@@ -38,11 +43,17 @@ export class SoundQueue {
   }
 
   /** Replaces the queue with `items` (at most QUEUE_MAX), from item `start`: the current item, or null. */
-  set(items, { start = 0, source = 'book' } = {}) {
+  set(items, { start = 0, source = 'book', advance = true } = {}) {
     this.items = items.slice(0, QUEUE_MAX);
     this.index = this.items.length ? Math.max(0, Math.min(this.items.length - 1, start)) : -1;
     this.source = this.items.length ? source : null;
+    this.advance = advance;
     return this.current;
+  }
+
+  /** The item that follows when the current one ends: the next, or null (one at a time: none). */
+  ended() {
+    return this.advance ? this.next() : null;
   }
 
   /** Adds items at the end (the current one stays); returns how many were added. */
@@ -86,6 +97,7 @@ export class SoundQueue {
     this.items = [];
     this.index = -1;
     this.source = null;
+    this.advance = true;
   }
 }
 

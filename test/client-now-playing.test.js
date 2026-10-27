@@ -74,7 +74,8 @@ describe("a TV remote's media keys on the bar", () => {
   const press = (key, o) => barButton(nowPlayingOf(ix(o)), MEDIA_KEYS[key]);
 
   it('reads play/pause, play, pause, stop and next, and leaves rewind and fast-forward to turning', () => {
-    assert.deepEqual(Object.keys(MEDIA_KEYS), ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaTrackNext']);
+    assert.deepEqual(Object.keys(MEDIA_KEYS), ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'Pause', 'MediaStop', 'MediaTrackNext']);
+    assert.equal(MEDIA_KEYS.Pause, MEDIA_KEYS.MediaPause, "a Bluetooth remote's Pause (Android's BREAK key)");
     assert.equal(MEDIA_KEYS.MediaRewind, undefined, "common's keyOf reads it as ArrowLeft");
     assert.equal(MEDIA_KEYS.MediaFastForward, undefined);
   });
@@ -83,6 +84,7 @@ describe("a TV remote's media keys on the bar", () => {
     assert.equal(press('MediaPlayPause'), 'toggle');
     assert.equal(press('MediaPlayPause', { state: 'paused' }), 'toggle');
     assert.equal(press('MediaPause'), 'toggle');
+    assert.equal(press('Pause'), 'toggle');
     assert.equal(press('MediaPlay', { state: 'paused' }), 'toggle');
     assert.equal(press('MediaPlay', { state: 'blocked' }), 'toggle', 'a key press starts a sound the browser held for a tap');
     assert.equal(press('MediaStop'), 'stop');
@@ -94,9 +96,10 @@ describe("a TV remote's media keys on the bar", () => {
     assert.equal(press('MediaStop', { state: 'idle' }), null);
     assert.equal(press('MediaPlay'), null);
     assert.equal(press('MediaPause', { state: 'paused' }), null);
+    assert.equal(press('Pause', { state: 'paused' }), null);
     assert.equal(press('MediaPlayPause', { state: 'loading' }), null, 'its button waits for the sound too');
     assert.equal(press('MediaStop', { state: 'loading' }), 'stop');
-    assert.equal(press('MediaTrackNext'), null, "a link's one sound has no next");
+    assert.equal(press('MediaTrackNext'), null, "a book's last sound has no next");
   });
 });
 

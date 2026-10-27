@@ -85,6 +85,21 @@ describe('the queue and the names of sounds (media/queue.js)', () => {
     assert.equal(q.add([item(0)]), 0, 'full');
   });
 
+  it('goes on when a sound ends, or plays one at a time with the next on ⏭ (a link, a row of the Sounds list)', () => {
+    const q = new SoundQueue();
+    q.set([item(1), item(2), item(3)]);
+    assert.equal(q.advance, true);
+    assert.equal(q.ended().sound.t, 's2', 'Play all: on to the next');
+    q.set([item(1), item(2), item(3)], { start: 1, advance: false });
+    assert.equal(q.hasNext, true, '⏭ shows');
+    assert.equal(q.ended(), null, 'a link\'s sound ends alone');
+    assert.equal(q.current.sound.t, 's2');
+    assert.equal(q.next().sound.t, 's3', '⏭ plays the one after');
+    assert.equal(q.advance, false, 'which ends alone too');
+    q.clear();
+    assert.equal(q.advance, true);
+  });
+
   it('names a sound by its link\'s words, else a short paragraph, else its heading, else its file', () => {
     assert.equal(isGenericLabel('[Listen]'), true);
     assert.equal(isGenericLabel('Listen (MP3)'), true);
