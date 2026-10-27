@@ -89,6 +89,8 @@ export class Panel {
     this.mesh.renderOrder = 10;
     this.elements = [];
     this.hover = null;
+    /** The hovered list row outlined too: a TV remote's highlight (interaction.js _showTocAt), seen from the sofa. */
+    this.ring = false;
     this.dirty = true;
   }
 
@@ -277,6 +279,11 @@ export class Panel {
         roundRect(g, el.x, y + 2, el.w - barW - 8, rowH - 4, 10);
         g.fillStyle = it.active ? 'rgba(143,108,52,0.55)' : 'rgba(255,255,255,0.10)';
         g.fill();
+        if (hover && this.ring) {
+          g.strokeStyle = UI.accent;
+          g.lineWidth = 4;
+          g.stroke();
+        }
       }
       const size = el.size || Math.min(32, rowH * 0.42);
       g.textBaseline = 'middle';

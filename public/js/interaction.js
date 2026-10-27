@@ -58,6 +58,7 @@ const _onPlane = new THREE.Vector3();
 const _normal = new THREE.Vector3();
 // Reused by _hitTest every frame (no new arrays per pointer per frame).
 const _meshes = [];
+const _solidAt = new THREE.Vector3();
 const _ear = new THREE.Vector3();
 const _earQ = new THREE.Quaternion();
 const _earF = new THREE.Vector3();
@@ -254,6 +255,10 @@ export class Interaction {
     this.inCard = false;
     this._dotPanel = null; // the panel, and its list that scrolls, under the dot (when near enough)
     this._dotList = null;
+    // On the 3D contents a TV's remote moves a highlight instead (music, SPEC §5.9: the dot, level
+    // with the eyes, never reaches their top): { id, i } (Play all, a list's row i), _tocStops.
+    this._tocAt = null;
+    this._tocList = null; // the contents' list at the last _showTocAt
     /** Set by ui/remote.js: fn(on) as the dot comes onto such a list, or leaves it (the hint). */
     this.onDotList = null;
 
@@ -1161,6 +1166,18 @@ export class Interaction {
   }
 
   _fillToc() {
+    this._fillTocPanel();
+    if (this.tv) this._showTocAt(); // a TV's highlight kept, else where they open
+  }
+
+  /** The contents panel on the tab `id` ('contents', 'sounds'): a TV's highlight where it opens. */
+  _showTab(id) {
+    this._tocTab = id;
+    this._tocAt = null;
+    this._fillToc();
+  }
+
+  _fillTocPanel() {
     const p = this.tocPanel;
     const meta = this.reader?.meta;
     p.clear();
@@ -1172,10 +1189,7 @@ export class Interaction {
       [['contents', 'Contents'], ['sounds', `♪ Sounds (${sounds.length})`]].forEach(([id, label], i) => {
         p.add({
           id: `toc-tab-${id}`, type: 'button', x: 30 + i * (tw + 12), y: 18, w: tw, h: 60, label, size: 26, active: this._tocTab === id,
-          onClick: () => {
-            this._tocTab = id;
-            this._fillToc();
-          },
+          onClick: () => this._showTab(id),
         });
       });
     } else {
@@ -1229,7 +1243,7 @@ export class Interaction {
     const book = this.book;
     const items = sounds.map((sound) => ({ libId: book.libId, bookId: book.id, sound }));
     const playing = this._playing && this._playing.bookId === book.id && this._playing.libId === book.libId ? this._playing.sound : null;
-    const allOn = playing && this.queue.length > 1 && this.queue.source === 'book';
+    const allOn = playing && this.queue.length > 1 && this.queue.source === 'book' && this.queue.advance;
     p.add({
       id: 'snd-all', type: 'button', x: 30, y: 96, w: 250, h: 56, label: allOn ? '■ Stop all' : '▶ Play all', size: 25, active: !!allOn,
       onClick: () => {
@@ -1259,7 +1273,7 @@ export class Interaction {
         : {
           label: r.label, right: r.kind, indent: r.under ? 1 : 0,
           active: k === current,
-          onClick: () => this.playSounds([items[r.i]], 0, 'book'),
+          onClick: () => this.playSounds(items, r.i, 'book', { advance: false }), // one; ⏭ the next
         })),
     });
   }
@@ -1349,10 +1363,21 @@ export class Interaction {
     if (sh && (!best || sh.distance < best.distance)) {
       best = sh.book ? { kind: 'book', book: sh.book, distance: sh.distance } : { kind: 'solid', distance: sh.distance };
     }
-    // So do the walls, floor, ceiling and furniture.
+    // So do the walls, floor, ceiling and furniture; but not the gramophone's own collider, which
+    // stands around it (its cabinet inside), when the ray goes on to the gramophone.
     const solid = this.world.raycastSolid(rc.ray);
-    if (solid < rc.far && (!best || solid < best.distance)) best = { kind: 'solid', distance: solid };
+    if (solid < rc.far && (!best || solid < best.distance) && !(best?.kind === 'gramophone' && this._onGramophone(rc.ray, solid))) {
+      best = { kind: 'solid', distance: solid };
+    }
     return best;
+  }
+
+  /** Whether the point at `t` along `ray` is on the gramophone's collider (a standing circle). */
+  _onGramophone(ray, t) {
+    const c = this.world.gramophone?.collider;
+    if (!c) return false;
+    ray.at(t, _solidAt);
+    return Math.hypot(_solidAt.x - c.x, _solidAt.z - c.z) <= c.r + 0.01 && _solidAt.y <= c.h + 0.01;
   }
 
   /** A press on a panel's scroll bar starts dragging its thumb; looking around waits meanwhile. */
@@ -1455,6 +1480,8 @@ export class Interaction {
       return;
     }
     if (this.state === 'read') {
+      // On a TV's contents of a book that plays ← → choose the tab (Contents, ♪ Sounds): they lie over the page.
+      if ((code === 'ArrowLeft' || code === 'ArrowRight') && this._tvToc && this._tocTabStep(code === 'ArrowRight' ? 1 : -1)) return;
       if (['ArrowRight', 'PageDown', ' '].includes(key)) this.turn(1);
       else if (['ArrowLeft', 'PageUp'].includes(key)) this.turn(-1);
       else if (key === '+' || key === '=') this.changeFont(1);
@@ -1526,6 +1553,8 @@ export class Interaction {
       if (this.book.readable) this.read();
     } else if (this.state === 'read' && !this.tocPanel.visible) {
       this.turn(1);
+    } else if (this._tvToc) {
+      this._tocPress();
     } else {
       this._select(this.controls.aimPointer);
     }
@@ -1537,9 +1566,87 @@ export class Interaction {
    * read); false to walk.
    */
   scrollUnderDot(dir) {
+    if (this._tvToc) return this._tocStep(dir);
     if (!this._dotList || this.state === 'busy') return false;
     this._dotPanel.scrollBy(this._dotList, dir);
     return true;
+  }
+
+  /** Whether a TV's remote is on the 3D contents of the book read: its highlight (_tocAt), not the dot. */
+  get _tvToc() {
+    return this.tv && this.state === 'read' && this.tocPanel.visible;
+  }
+
+  /**
+   * The 3D contents' stops for a TV's remote, top to bottom (SPEC §5.9, music): Play all, then the
+   * rows of the list that can be chosen ({ id, i }). The tabs are ← → (_tocTabStep).
+   */
+  _tocStops() {
+    const p = this.tocPanel;
+    const stops = p.get('snd-all') ? [{ id: 'snd-all', i: -1 }] : [];
+    p.get('list')?.items.forEach((it, i) => {
+      if (!it.disabled) stops.push({ id: 'list', i });
+    });
+    return stops;
+  }
+
+  /**
+   * A TV's highlight on the 3D contents at the stop `at`, the list scrolled to show it and a row
+   * on either side; else where they open: the entry read or the sound playing, else the first stop
+   * (Play all on the Sounds tab).
+   */
+  _showTocAt(at = this._tocAt) {
+    const p = this.tocPanel;
+    const stops = this._tocStops();
+    const list = p.get('list') ?? null;
+    const active = list ? list.items.findIndex((it) => it.active) : -1;
+    const stop = (at && stops.find((s) => s.id === at.id && s.i === at.i))
+      ?? stops.find((s) => s.id === 'list' && s.i === active) ?? stops[0] ?? null;
+    if (p.hover) p.hover.hoverRow = null;
+    this._tocAt = stop;
+    this._tocList = list;
+    p.ring = true;
+    p.hover = stop ? p.get(stop.id) : null;
+    if (list) {
+      const visible = Math.floor(list.h / (list.rowH || 64));
+      const n = list.items.length;
+      list.scroll = Math.max(0, Math.min(list.scroll || 0, n - visible));
+      if (stop?.id === 'list') {
+        const lo = Math.max(0, stop.i - 1);
+        const hi = Math.min(n - 1, stop.i + 1);
+        if (lo < list.scroll) list.scroll = lo;
+        else if (hi >= list.scroll + visible) list.scroll = hi - visible + 1;
+        list.hoverRow = stop.i - list.scroll;
+      }
+    }
+    p.markDirty();
+  }
+
+  /** ↑ ↓ on a TV's 3D contents: the highlight to the stop above or below (true: the key is taken). */
+  _tocStep(dir) {
+    const stops = this._tocStops();
+    const at = this._tocAt;
+    const k = at ? stops.findIndex((s) => s.id === at.id && s.i === at.i) : -1;
+    const to = stops[Math.max(0, Math.min(stops.length - 1, k + dir))];
+    if (to) this._showTocAt(to);
+    return true;
+  }
+
+  /** ← → on a TV's 3D contents of a book that plays: the tab that way (Contents, ♪ Sounds); false without tabs. */
+  _tocTabStep(dir) {
+    if (!this.tocPanel.get('toc-tab-sounds')) return false;
+    const tab = dir > 0 ? 'sounds' : 'contents';
+    if (tab !== this._tocTab) this._showTab(tab);
+    return true;
+  }
+
+  /** OK on a TV's 3D contents: what the highlight is on, pressed. */
+  _tocPress() {
+    const at = this._tocAt;
+    const el = at && this.tocPanel.get(at.id);
+    if (!el || el.disabled) return;
+    if (el.type === 'list') el.items[at.i]?.onClick?.(el.items[at.i]);
+    else el.onClick?.(el);
   }
 
   /** A key's button in the page's card (overlay.js, a TV's: the letter keys, Enter, Esc). */
@@ -1575,6 +1682,15 @@ export class Interaction {
     if (!this.reduced) return this._tween(duration, step);
     step(1);
     return Promise.resolve();
+  }
+
+  /** Eases the view's pitch to `to` over `duration` s on a flat screen (in XR the head decides), not awaited: beside a flight. */
+  _easePitch(to, duration) {
+    const C = this.controls;
+    if (C.presenting) return;
+    const from = C.pitch;
+    if (Math.abs(to - from) < 1e-3) return;
+    this._ease(duration, (t) => { C.pitch = from + (to - from) * easeInOut(t); });
   }
 
   /** Animates an object's world transform to a target (position, quaternion, scale) with an arc. */
@@ -1678,6 +1794,8 @@ export class Interaction {
       await b3.close();
     }
     this.scene.attach(b3.group);
+    // A TV's remote can't look down from where the book was held: the view as it rests again.
+    if (this.tv) this._easePitch(this.controls.restPitch, 0.55);
     const tr = this.world.shelves.getBookTransform(book);
     const out = new THREE.Vector3(-1, 0, 0).applyQuaternion(tr.quaternion).multiplyScalar(tr.dims.d * 0.9);
     await this._fly(b3.group, tr.position.clone().add(out), tr.quaternion, 1, 0.55, 0.12);
@@ -1825,7 +1943,7 @@ export class Interaction {
     const { eye, fwd } = this._viewerFrame();
     const target = eye.clone().addScaledVector(fwd, pose.dist * k);
     target.y = eye.y - pose.drop * k;
-    if (pose.flat) this.controls.pitch = 0;
+    if (pose.flat) this._easePitch(0, 0.5); // level while the book flies there (_ease: a cut with less motion)
     const facing = pose.flat ? new THREE.Vector3(eye.x, target.y, eye.z) : eye;
     return { target, quat: this._faceQuat(target, facing), k };
   }
@@ -1988,7 +2106,7 @@ export class Interaction {
     save('settings', this.settings);
     this._focusSearch(false);
     const { position, yaw } = this.world.spawn;
-    this.controls.setViewpoint({ x: position.x, z: position.z, yaw, pitch: 0 });
+    this.controls.setViewpoint({ x: position.x, z: position.z, yaw, pitch: this.controls.restPitch });
   }
 
   /**
@@ -2674,7 +2792,7 @@ export class Interaction {
   /**
    * Plays a link's sound (followLink), as its entry of the book's sound list when it has one
    * (SPEC §3.5 sound lists: the same sound, in this chunk if it is linked twice), so that its link
-   * lights up while it plays; a sound before the queue's is left out of it.
+   * lights up while it plays. It plays alone, among the book's sounds: ⏭ plays the next (§5.6).
    */
   _playLinkSound(media) {
     const sounds = this.reader?.meta?.sounds ?? [];
@@ -2690,17 +2808,18 @@ export class Interaction {
       this._playSound(media);
       return;
     }
-    this.playSounds([{ libId: this.book.libId, bookId: this.book.id, sound }]);
+    const items = sounds.map((s) => ({ libId: this.book.libId, bookId: this.book.id, sound: s }));
+    this.playSounds(items, sounds.indexOf(sound), 'book', { advance: false });
   }
 
   /**
    * Plays sounds one after another (SPEC §5.6 "Sounds"): items { libId, bookId, sound } from item
-   * `start`. A book's (`source` 'book': its Sounds list, its links) stop when it is put back; the
-   * gramophone's play on.
+   * `start`; with `advance` false one at a time, the next on ⏭ (media/queue.js). A book's
+   * (`source` 'book': its Sounds list, its links) stop when it is put back; the gramophone's play on.
    */
-  playSounds(items, start = 0, source = 'book') {
+  playSounds(items, start = 0, source = 'book', { advance = true } = {}) {
     audio.init(); // on the tap itself: the audio context needs the gesture
-    const item = this.queue.set(items, { start, source });
+    const item = this.queue.set(items, { start, source, advance });
     if (item) this._playItem(item);
   }
 
@@ -2774,9 +2893,9 @@ export class Interaction {
     if (this.tocPanel.visible && this._tocTab === 'sounds') this._fillToc();
   }
 
-  /** A sound played to its end: the queue's next, if there is one. */
+  /** A sound played to its end: the queue's next, if it goes on (one at a time: none). */
   _soundEnded() {
-    const next = this.queue.next();
+    const next = this.queue.ended();
     if (next) {
       this._playItem(next);
       return;
@@ -3100,6 +3219,7 @@ export class Interaction {
   }
 
   toggleToc(show = !this.tocPanel.visible) {
+    if (show && !this.tocPanel.visible) this._tocAt = null; // a TV's highlight where they open
     if (show) this._fillToc();
     this.tocPanel.visible = show && this.state === 'read';
     this.toolbar.set('toc', { active: this.tocPanel.visible });
@@ -3624,11 +3744,14 @@ export class Interaction {
     let hoverDoor = false;
     let dotPanel = null;
     let dotList = null;
+    // A TV's remote on the 3D contents moves its own highlight there (_showTocAt), not the dot's.
+    const tvToc = this._tvToc;
     for (const pointer of this.controls.pointers) {
-      const hit = this.state === 'busy' || pointer.teleporting ? null : this._hitTest(pointer);
+      const own = tvToc && pointer.id === 'gamepad';
+      const hit = this.state === 'busy' || pointer.teleporting || own ? null : this._hitTest(pointer);
       pointer.setHitDistance(hit ? hit.distance : null);
       const prev = this._hover.get(pointer.id);
-      if (prev && prev !== hit?.panel) prev.pointerLeave();
+      if (prev && prev !== hit?.panel && !(own && prev === this.tocPanel)) prev.pointerLeave();
       let interactive = false;
       if (hit?.kind === 'panel') {
         interactive = hit.panel.pointerMove(hit.uv);
@@ -3654,13 +3777,19 @@ export class Interaction {
       this._hover.set(pointer.id, hit?.kind === 'panel' ? hit.panel : null);
     }
     this._markLink(hoverLink);
+    // ↑ ↓ are the highlight's on a TV's contents (scrollUnderDot), whatever the dot is on: the hint says so.
+    if (tvToc && this._tocAt) {
+      dotPanel = this.tocPanel;
+      dotList = this._tocList;
+    }
     if (dotList !== this._dotList) {
       this._dotPanel = dotPanel;
       this._dotList = dotList;
-      this.onDotList?.(!!dotList);
+      // The hint's (overlay.setRemote list): 'tabs' on the contents of a book that plays (← → its tabs).
+      this.onDotList?.(!!dotList && (tvToc && this.tocPanel.get('toc-tab-sounds') ? 'tabs' : true));
     }
-    // A TV's dot: while walking the room or holding a book, and on the contents of one being read.
-    if (this.tv) this.controls.aimShown = !this.inCard && !this.textView?.isOpen && (this.state !== 'read' || this.tocPanel.visible);
+    // A TV's dot: while walking the room or holding a book (on the contents the remote's highlight).
+    if (this.tv) this.controls.aimShown = !this.inCard && !this.textView?.isOpen && this.state !== 'read';
     const door = this.world.door;
     if (door) {
       door.hover = hoverDoor;

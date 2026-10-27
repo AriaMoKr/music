@@ -2,9 +2,9 @@
 // vrlbry), with the Now playing bar (ui/now-playing.js) in its card and the remote's media keys.
 // The bar's Pause, Stop and Next are stops of the card: in the overlay's, before the foot row's
 // buttons (the bar stands above them on a TV); in the text view's, after its toolbar's, before the
-// text's links (the bar is outside the view's layer, across its foot). Play/Pause (and Play,
-// Pause), Stop and Next press its buttons wherever the focus is; rewind and fast-forward are
-// common's keyOf's arrows (for TalkBack), not the bar's.
+// text's links on the screen (the bar is outside the view's layer, across its foot). Play/Pause
+// (and Play, Pause), Stop and Next press its buttons wherever the focus is; rewind and
+// fast-forward are common's keyOf's arrows (for TalkBack), not the bar's.
 
 import { keyOf } from '../../vendor/common/tv.js';
 import { LibraryRemote } from './remote.js';
@@ -45,6 +45,34 @@ export class MusicRemote extends LibraryRemote {
     }
     const foot = this.overlay.root.querySelector('.ov-bottom');
     return withBarStops(stops, bar, { before: (e) => foot.contains(e) });
+  }
+
+  /**
+   * ↑ ↓ in the text view with the bar between its toolbar and the text (the library's _textStep,
+   * whose screen ends above the bar): down from the toolbar's last to the bar, from the bar's last
+   * to the first stop on the screen; up from the text, the stop before off the screen, to the bar's
+   * last. True when the key was taken.
+   * @param {HTMLElement} a the focused control
+   * @param {'ArrowUp' | 'ArrowDown'} key
+   */
+  _textStep(a, key) {
+    const tv = this.textView;
+    const bar = this.nowPlaying && tv?.isOpen && !tv.tocOpen && this._withBar() ? this.nowPlaying.stops() : [];
+    if (!bar.length) return super._textStep(a, key);
+    const stops = this._stops();
+    const at = stops.indexOf(a);
+    if (at < 0) return false;
+    const inText = (s) => tv.el.contains(s) && !tv.inBar(s);
+    if (key === 'ArrowDown') {
+      if (a !== bar[bar.length - 1]) return bar.includes(a) || bar.includes(stops[at + 1]) ? false : super._textStep(a, key);
+      stops.slice(at + 1).find((s) => inText(s) && tv.onScreen(s))?.focus({ preventScroll: true });
+      return true;
+    }
+    if (!inText(a)) return false;
+    const before = stops[at - 1];
+    if (!before || tv.inBar(before) || (inText(before) && tv.onScreen(before))) return false;
+    bar[bar.length - 1].focus({ preventScroll: true });
+    return true;
   }
 
   /** Whether the card has the bar: not while a dialog or the text view's contents are the card. */

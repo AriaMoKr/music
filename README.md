@@ -206,8 +206,10 @@ takes the book at the dot in the middle of the view and reads it, ← → turn i
 the card (the search, where OK brings up the keyboard and ↓ goes through the results, and the
 book's buttons for its contents, the text view, the theme and the text size), and Back takes one
 step back. With TalkBack on, channel up and down walk, and rewind and fast-forward turn. In a
-book read as text, OK on a Listen link plays it; the remote's play/pause, stop and next keys
-control the sound playing, and so do the Now playing bar's buttons (Menu, then ↓). Add
+book read as text, OK on a Listen link plays it, and next plays the book's next sound; the
+remote's play/pause, stop and next keys control the sound playing, and so do the Now playing
+bar's buttons (Menu, then ↓). The view looks a little down, so OK with the dot on the gramophone
+plays it; in a book's contents ← → choose its Sounds list and ↑ ↓ reach Play all. Add
 `?tv=emulate` to the address to try it in a browser.
 
 The catalogue stand next to where you start lets you re-shelve the books by title, author or

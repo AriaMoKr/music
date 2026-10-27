@@ -409,10 +409,10 @@
     sepia and night, and in the 3D reader with the bar. The bar beside the help's buttons at
     1280 × 800 and 667 × 375, above them at 375 × 667 and across the view's foot at 320 × 568
     and 320 × 200, covering nothing (the card's ten controls and the search uncovered).
-  - A link plays its one sound, as on the 3D page (a queue of one), so the bar's Next is
-    unavailable then; a queue comes from the Sounds list or the Listen tab, both 3D. Not yet in
-    the page: the queue, composers and periods, Play all, and the stand's tempo, loop, key and
-    parts. A book's sound plays from the book, not the gramophone (only the Listen tab's do).
+  - A link plays its sound alone among its book's, as on the 3D page, so the bar's Next plays
+    the book's next one (since 2026-10-26; a sound played to its end is followed by nothing). Not
+    yet in the page: the queue, composers and periods, Play all, and the stand's tempo, loop, key
+    and parts. A book's sound plays from the book, not the gramophone (only the Listen tab's do).
   - Reaching the bar from the middle of a part takes Tab through the rest of it (or a screen
     reader's landmarks: it is a region); a key for it would help.
   - Not yet: a real screen reader, and a phone in the hand.
@@ -433,23 +433,24 @@
     has the TalkBack line.
   - Reading in 3D the spread is small on a TV (the reading pose of a desktop screen); the text
     view is the readable way for now.
-- **Sounds on a TV** (music; requested 2026-10-25; done in a browser the same day; SPEC §5.9
-  "Sounds on a TV"). The Now playing bar is in the remote's card (Menu), the remote's media keys
-  press its buttons (`ui/music-remote.js`), the text view's Listen links play with OK, and the
-  pixel ratio is 2 at most (vrlbry's). Checked with `?tv=emulate` and real key presses (SPEC
-  §5.9, Tests). On the TV itself another session checks it, with what comes back as a later
-  request:
-  - The media keys reach the page: Android may route them to a media session rather than the
-    focused view, and whether the WebView pauses a recording's `<audio>` itself as well (a
-    second toggle would undo ours).
-  - A score playing at the TV's volume; the frame rate with the gramophone playing.
-  - Found here: on a TV the view stays at eye height, so the dot passes over the gramophone
-    (1.4 m tall, the eye at 1.6 m) and OK cannot start or pause it; its queue comes from the
-    kiosk's Listen tab. A taller pick volume, or OK at its foot, would let the remote take it.
-  - A Listen link plays its one sound (as on the 3D page), so Next and `MediaTrackNext` are for
-    a queue (the Listen tab, the score wall's single sounds not included); the 3D contents'
-    Sounds list (Play all) is not under the dot on a TV.
-  - axe was not run on the TV states with the bar this time (it could not be loaded here).
+- **Sounds on a TV** (music; requested 2026-10-25; done in a browser the same day, and the TV's
+  findings 2026-10-26; SPEC §5.9 "Sounds on a TV"). The Now playing bar is in the remote's card
+  (Menu), the remote's media keys press its buttons (`ui/music-remote.js`), the text view's
+  Listen links play with OK, and the pixel ratio is 2 at most (vrlbry's). On the TV itself (the
+  TV's session, reported 2026-10-26) the books, the card, the bar, Listen with OK and the media
+  keys work, and TalkBack reads the bar; 55–58 fps among the shelves with the gramophone
+  playing, 52–53 at the way in.
+  - Done 2026-10-26 in a browser (SPEC §5.9, Tests), for the TV's session to check on the TV:
+    the view rests a little down (−0.25 rad, as outside's), so the dot lands on the gramophone
+    and OK plays it; the 3D contents take the remote's highlight, ← → their tabs and ↑ ↓ to
+    Play all and the rows; Next after a Listen link's sound plays the book's next; `Pause` (a
+    Bluetooth remote's) pauses; the bar between the text view's toolbar and its text again
+    after vrlbry's step to the screen's first link. axe 4.14 finds nothing in nine TV states.
+  - Still for the TV: a score at the TV's own volume (it was at 0 last time); the tipped view
+    and the contents' highlight seen from the sofa (is −0.25 too much among the shelves?).
+  - The stand's tab row (♪ Listen among them) is above the dot on a TV, tipped or level (the
+    dot at 369 px of its 1,000 level, 535–747 tipped, the tabs at 96–150), so the Listen tab
+    can't be chosen with the remote; the gramophone is its way to a queue there.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

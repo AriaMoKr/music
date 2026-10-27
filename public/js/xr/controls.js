@@ -100,6 +100,12 @@ export class Controls extends EventTarget {
     this.pointers = [];
     this.yaw = 0;
     this.pitch = 0;
+    /**
+     * The pitch the view rests at outside XR (arriving, Home, a book put back): level; a TV's a
+     * little down (main.js), as its remote can't look up or down, so that the dot in the middle
+     * falls on what stands lower than the eyes too (the gramophone, music's: SPEC §5.9).
+     */
+    this.restPitch = 0;
     this._keys = new Set();
     this._xr = [];
     this._rayVisible = true;
@@ -874,7 +880,7 @@ export class Controls extends EventTarget {
 
   onSessionEnd() {
     this.yaw = this.rig.rotation.y;
-    this.pitch = 0;
+    this.pitch = this.restPitch;
     for (const e of this._xr) if (e.aiming) this._endAim(e, false);
   }
 

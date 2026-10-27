@@ -1193,7 +1193,7 @@ public/
     ui/listen-tab.js     the kiosk's Listen tab: what plays, books, composers, periods, the queue.
     ui/music-stand.js    the music stand beside the book: piano roll or picture, playhead, practice.
     ui/now-playing.js    the page's "Now playing" bar: what plays, Play/Pause, Stop, Next (the keyboard, screen readers).
-    ui/music-remote.js   music's TV remote: the library's (ui/remote.js) with the Now playing bar in its card and the media keys (§5.9).
+    ui/music-remote.js   music's TV remote: the library's (ui/remote.js) with the Now playing bar in its card (between the text view's toolbar and text too) and the media keys (§5.9).
     world/gramophone.js  the gramophone of a room whose books play (its horn: where its sound comes from).
     world/score-wall.js  the wall of scores: pictures beside sounds, framed, one atlas.
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
@@ -1613,7 +1613,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   block with the link's `f` when that chunk has one. A link that leads nowhere says so in a
   notice. A link to a sound (`media`, or an `href` resolved to one) plays it instead, and goes on
   no trail (`_playSound`, `interaction.sound`: media/player.js): one sound at a time, its name in
-  a notice; while it is loaded the toolbar's top row has ▶ / ❚❚, ■ and its time ("0:12 / 1:30",
+  a notice; a sound of the book's sound list plays alone among them (the queue one at a time, its
+  `advance` false: below), so ⏭ plays the book's next; while it is loaded the toolbar's top row has ▶ / ❚❚, ■ and its time ("0:12 / 1:30",
   redrawn when the second changes) between a shorter progress bar and the page label. A MIDI file
   is played by the synthesizer (media/synth.js: notes scheduled 1 s ahead from a timer, never from
   the frame loop, at most 40 voices), with sampled instruments where it has them (below) and else
@@ -1683,9 +1684,10 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   tune's one sound as one row named by its heading), each named by `soundTitle` (its link's words
   when they name it, "[Listen: Dorian]" → "Dorian"; else a short paragraph around it; else its
   heading, after the one above it when it is only a number or "by …"; else its file); a tap
-  plays it and turns to it, *▶ Play all* plays them in turn from the page shown. What plays next
+  plays it and turns to it, alone, *▶ Play all* plays them in turn from the page shown. What plays next
   is a `SoundQueue` (`interaction.queue`: items `{ libId, bookId, sound, at? }`, at most 2,000,
-  ⏮ ⏭, repeat), whose `source` says whose it is: `'book'` (stops when the book is put back) or
+  ⏮ ⏭, repeat; `advance`: on to the next when one ends, or one at a time, the next only on ⏭,
+  as a tapped row or a link's sound plays among its book's), whose `source` says whose it is: `'book'` (stops when the book is put back) or
   `'gramophone'` (plays on while the visitor walks and reads). The toolbar's top row has ⏭ while
   more follows. **Follow-along**: while a sound of the open book plays its link has a warm band
   per line on the spread (`reader.soundRects`; meshes in front of the page, as a hovered link's),
@@ -2286,8 +2288,8 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     Stop from the bar walks again (the focus to the view), as a control that hides itself does.
   - The remote's media keys (`MEDIA_KEYS`, read through common's `keyOf`, the TV's with no
     `code`) press the bar's buttons wherever the focus is, once per press (not as the key
-    repeats): `MediaPlayPause` its Play/Pause, `MediaPlay` and `MediaPause` only when that is
-    what it would do, `MediaStop` Stop, `MediaTrackNext` Next (`barButton`); one the bar would
+    repeats): `MediaPlayPause` its Play/Pause, `MediaPlay` and `MediaPause` (and `Pause`, a
+    Bluetooth remote's, Android's BREAK key) only when that is what it would do, `MediaStop` Stop, `MediaTrackNext` Next (`barButton`); one the bar would
     not take now (Play while playing, Next with none queued) does nothing. With nothing loaded the
     keys are left to the page and the app (not prevented). `MediaRewind` and
     `MediaFastForward` are not the bar's: common reads them as ← and →, which turn (for TalkBack).
@@ -2296,12 +2298,32 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     buttons. Walking or with a book in 3D it stands centred above the foot row, the hint,
     messages and the card's foot moved up by its height (`--np-h`); reading in 3D, in the foot
     row's place until the card has the focus; in the text view across its foot.
-  - The 3D view stays at eye height on a TV (no pitch), so the dot passes over the gramophone
-    (1.4 m): its queue comes from the kiosk's Listen tab there. A Listen link plays its one
-    sound (§5.6), so Next is for a queue.
+  - In the text view the bar's stops lie between the toolbar and the text on the screen (the
+    view ends above the bar, so the library's step to the first stop on the screen passed it
+    by): ↓ from the toolbar's last goes to the bar, from the bar's last to the first stop on the
+    screen; ↑ from the text, the stop before off the screen, to the bar's last
+    (`MusicRemote._textStep`, the library's otherwise).
+  - The view rests a little down on a TV (`controls.restPitch`, −0.25 rad as outside's: on
+    arriving, Home, and eased back as a book goes back on its shelf; reading levels it while the
+    book flies there, `_easePitch`), since the remote can't look up or down. The dot falls on
+    what stands below the eyes: the gramophone (its horn's mouth at 1.28 m), whose own collider
+    no longer stops a ray that goes on to it (`_onGramophone`), so OK plays a book's sounds on it
+    or pauses them; books from about 0.8 to 1.5 m as one comes nearer; a book in hand (held
+    0.16 m below the eyes, 0.62 m ahead). The stand's lists stay under it from 0.65 to 1.5 m;
+    its tab row (♪ Listen among them) is above it, as it was with the view level.
+  - The 3D contents, over the page on a TV, take a highlight of the remote's in place of the dot,
+    which, level with the eyes there, never reached their top (the tabs, Play all, the first
+    rows): ↑ ↓ from stop to stop (Play all, then the rows that can be chosen: `_tocStops`), the
+    list scrolled to keep it in sight with a row on either side; ← → the tab of a book that
+    plays (Contents, ♪ Sounds: `_tocTabStep`; they turn no page while the contents are open);
+    OK presses it (`_tocPress`). It opens on the entry read or the sound playing, else on the
+    first stop (Play all), the row outlined (`panel.ring`); the dot is hidden while reading, and
+    the hint says what the keys do (`tocTabs`).
+  - A Listen link's sound, or a row of the Sounds list, plays alone among its book's (§5.6), so
+    Next and `MediaTrackNext` play the book's next sound, which plays alone too.
 - **Tests.** `test/client-back-step.test.js` covers the order of Back's steps;
-  `test/client-now-playing.test.js` the media keys' buttons and the bar's place among the card's
-  stops (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
+  `test/client-now-playing.test.js` the media keys' buttons (`Pause` among them) and the bar's
+  place among the card's stops, `test/listening.test.js` a queue played one at a time (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
   - Every control of the card reached and used, and of the help (its reset fieldset, select and
     checkboxes; Save scene, then Restore) and Kiwix's library; Back closes a dialog onto its
     button.
@@ -2326,6 +2348,23 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     `MediaFastForward` still turns; a media key with nothing loaded is not taken. A book open in
     3D: the bar in the foot row's place, above it once Menu shows the book's buttons, ↑ from
     Contents through the help to Next, Stop walking again.
+  - music (2026-10-26, after vrlbry's round): the view at rest −0.25; turned to the gramophone
+    from the start, the dot on it, OK: its queue (3 sounds) plays; `Pause` pressed for real (it
+    comes as key `Pause`, code empty): paused; again: still paused; `MediaStop`. Beethoven's
+    Fifth from its shelf (the dot on it at 1.34 m), OK, OK: reading, the view level; Menu,
+    Contents: the highlight on the entry read, the hint with the tabs; →: ♪ Sounds, on Play
+    all; ↓ ↓ to "♪ 2" (outlined), ↑ to Play all, OK: the four play ("■ Stop all", the highlight
+    kept), OK: stopped; ←: Contents, the page not turned; Back closes them. As text: OK to the
+    links, ↓ to the second, OK: it plays alone, "2 of 4", Next available; `MediaTrackNext`:
+    the third, marked; Menu, Menu, ↓ through the toolbar to Pause, Stop, Next, ↓ to the first
+    link on the screen, ↑ ↑ back to Next, OK: the next plays; at a sound's end nothing follows.
+    The book put back: the view eased down again; Menu on the Controls help, ↑ to the search's
+    box (held), OK (the keyboard), "beethoven", ↓ into the results with the focus, OK: the book
+    out. axe (4.14, in a Chrome of its own at 960 × 540) with nothing found walking, on the
+    Controls help, on a search result, a book in hand, reading with the Sounds tab playing, the
+    book's buttons, the text view with the bar, the bar's Next and the help open (A− and A+
+    were named "Smaller text" and "Larger text", which axe 4.14's label-in-name rule, no longer
+    experimental, finds: they say "A− smaller text" and "A+ larger text" now).
 
   And again (2026-10-26, common v0.6.1):
   - Menu lands on the Controls help, with a book out on its first button; the search's box and

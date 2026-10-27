@@ -44,7 +44,8 @@ const TV_HINTS = {
   list: '↑ ↓ scroll the list · OK chooses · ← → turn away',
   hand: 'OK reads it · Back puts it back · Menu: more',
   read: '← → turn the pages · Menu: contents, text size and more · Back: one step back',
-  toc: '↑ ↓ scroll the contents · OK goes there · Back closes them',
+  toc: '↑ ↓ through the contents · OK goes there · Back closes them',
+  tocTabs: '↑ ↓ through the list · ← → Contents or ♪ Sounds · OK chooses · Back closes them',
   card: '↑ ↓ from button to button · ← → change a choice · OK presses · Back: walk again',
 };
 
@@ -90,7 +91,7 @@ const HELP = {
     ['Search', '↑ from this button to the box, OK to type with the keyboard · ↓ through the results, OK opens one · Back: the box again'],
     ['A list on the stand', 'Walk up to the stand, the dot on the list: ↑ ↓ scroll it, OK chooses'],
     ['The text view', '↑ ↓ scroll it, ← → turn the pages · OK: the links on the screen · Menu: its toolbar'],
-    ['Sounds', 'OK on a “Listen” link plays it · the remote’s ⏯ pauses and plays, ⏹ stops, ⏭ plays the next · or Menu, then the Now playing bar’s buttons'],
+    ['Sounds', 'OK on a “Listen” link plays it, ⏭ the book’s next · the book’s contents: → for ♪ Sounds, ↑ ↓ to Play all or a sound · OK on the gramophone plays it · the remote’s ⏯ pauses and plays, ⏹ stops, ⏭ plays the next · or Menu, then the Now playing bar’s buttons'],
     ['Back', 'One step back: the contents closed, back along the links, the text view closed, the book put back; in the card, walking again; else back to the Hallway'],
     ['With TalkBack', 'Channel up and down walk, rewind and fast-forward turn'],
   ],
@@ -167,7 +168,7 @@ export class Overlay {
           <button data-key="Enter">Read</button><button data-key="t" data-code="KeyT">Read as text</button><button data-key="f" data-code="KeyF">In front of me</button><button data-key="Escape">Put back</button>
         </span>
         <span class="ov-book ov-book-open" role="group" aria-label="The open book">
-          <button class="ov-b-toc" data-key="c" data-code="KeyC" aria-pressed="false">Contents</button><button data-key="-" data-code="Minus" aria-label="Smaller text">A−</button><button data-key="+" data-code="Equal" aria-label="Larger text">A+</button><button data-key="n" data-code="KeyN">Theme</button><button class="ov-b-pages" data-key="p" data-code="KeyP">1 page</button><button data-key="f" data-code="KeyF">In front of me</button><button class="ov-b-back" data-key="Backspace" hidden>↩ Back</button><button data-key="Escape">Put back</button>
+          <button class="ov-b-toc" data-key="c" data-code="KeyC" aria-pressed="false">Contents</button><button data-key="-" data-code="Minus" aria-label="A− smaller text">A−</button><button data-key="+" data-code="Equal" aria-label="A+ larger text">A+</button><button data-key="n" data-code="KeyN">Theme</button><button class="ov-b-pages" data-key="p" data-code="KeyP">1 page</button><button data-key="f" data-code="KeyF">In front of me</button><button class="ov-b-back" data-key="Backspace" hidden>↩ Back</button><button data-key="Escape">Put back</button>
         </span>
         <button class="ov-textview" title="The part you are reading, as a page of text (T)">Text view</button>
         <button class="ov-vr" hidden>Enter VR</button>
@@ -708,7 +709,7 @@ export class Overlay {
     if (this.tv) {
       const cls = this.root.classList;
       const reading = cls.contains('ov-reading');
-      const kind = this._tvCard ? 'card' : reading ? (this._tvList ? 'toc' : 'read') : cls.contains('ov-bookout') ? 'hand' : this._tvList ? 'list' : 'walk';
+      const kind = this._tvCard ? 'card' : reading ? (this._tvList ? (this._tvList === 'tabs' ? 'tocTabs' : 'toc') : 'read') : cls.contains('ov-bookout') ? 'hand' : this._tvList ? 'list' : 'walk';
       this.$('.ov-hint').textContent = TV_HINTS[kind];
       return;
     }

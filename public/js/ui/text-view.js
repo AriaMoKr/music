@@ -271,7 +271,7 @@ const STATIC = `
     <button type="button" class="tv-close" aria-label="Close text view" title="Back to the book in 3D (T or Esc)">Close<span class="tv-wide"> text view</span></button>
     <button type="button" class="tv-toc-btn" aria-expanded="false" aria-controls="tv-toc">Contents</button>
     <span class="tv-size" role="group" aria-label="Text size">
-      <button type="button" class="tv-smaller" aria-label="Smaller text">A−</button><button type="button" class="tv-bigger" aria-label="Larger text">A+</button>
+      <button type="button" class="tv-smaller" aria-label="A− smaller text">A−</button><button type="button" class="tv-bigger" aria-label="A+ larger text">A+</button>
     </span>
     <label class="tv-theme"><span class="tv-wide">Theme</span> <select class="tv-theme-sel" aria-label="Theme"><option value="paper">Paper</option><option value="sepia">Sepia</option><option value="night">Night</option></select></label>
     <span class="tv-where"><span class="tv-label tv-wide" aria-hidden="true"></span><input class="tv-slider" type="range" min="0" max="1000" step="1" aria-label="Where in the book"></span>
