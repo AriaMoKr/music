@@ -446,8 +446,25 @@
     Play all and the rows; Next after a Listen link's sound plays the book's next; `Pause` (a
     Bluetooth remote's) pauses; the bar between the text view's toolbar and its text again
     after vrlbry's step to the screen's first link. axe 4.14 finds nothing in nine TV states.
-  - Still for the TV: a score at the TV's own volume (it was at 0 last time); the tipped view
-    and the contents' highlight seen from the sofa (is −0.25 too much among the shelves?).
+  - On the TV (the TV's session, reported 2026-10-27, HallwayApp's README "Behind the doors"):
+    the dot lands on the gramophone from 2 m and OK plays it; the contents' ♪ Sounds tab and
+    Play all work with the remote; Next goes on after a Listen link's sound; a Bluetooth
+    remote's Pause pauses; the sound plays on the TV's speakers. 59.9 fps facing the gramophone,
+    58.4 while it plays.
+  - Done 2026-10-27 in a browser, for the TV's session to see on the TV: with the dot on the
+    gramophone the walking hint says "OK plays the gramophone" ("OK pauses the gramophone"
+    while it plays), the book's line again off it (`gramophoneHint` in `ui/music-remote.js`, the
+    overlay's hint left as vrlbry has it). axe 4.14 finds nothing, those two states among 11.
+  - Some Listen links' sounds are a few notes, over in about three seconds (the TV's session
+    heard them): that is how the books have them, not cut. Of lcc-m's 2,975 MIDI files 296 last
+    3 s or less (Kobbé's leitmotifs, Shedlock's examples: the notes of the picture beside the
+    link, which ends "etc."), and 43 of its 2,240 MP3s (the 2 s trumpet calls of 33900). Every
+    MIDI file is read whole, each note-on a note; every MP3's byte range on Kiwix's mirror is its
+    whole size and its frames run to its end; the site's 357 MIDI files of Kobbé are the ZIM's,
+    byte for byte; in a browser a 2.9 s motif, a 20.9 s song and two 2 s recordings each play to
+    their end. 12 MIDI files hold silence after their last note before their End of Track (one
+    90 s), which is not played.
+  - Still for the TV: the tipped view seen from the sofa (is −0.25 too much among the shelves?).
   - The stand's tab row (♪ Listen among them) is above the dot on a TV, tipped or level (the
     dot at 369 px of its 1,000 level, 535–747 tipped, the tabs at 96–150), so the Listen tab
     can't be chosen with the remote; the gramophone is its way to a queue there.

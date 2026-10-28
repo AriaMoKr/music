@@ -4,11 +4,25 @@
 // buttons (the bar stands above them on a TV); in the text view's, after its toolbar's, before the
 // text's links on the screen (the bar is outside the view's layer, across its foot). Play/Pause
 // (and Play, Pause), Stop and Next press its buttons wherever the focus is; rewind and
-// fast-forward are common's keyOf's arrows (for TalkBack), not the bar's.
+// fast-forward are common's keyOf's arrows (for TalkBack), not the bar's. With the dot on the
+// gramophone, the walking hint (the overlay's, vrlbry's) says what OK does there.
 
 import { keyOf } from '../../vendor/common/tv.js';
 import { LibraryRemote } from './remote.js';
 import { withBarStops } from './now-playing.js';
+
+/** What OK does with a TV's dot on the gramophone (interaction.onDotGramophone), in the walking hint. */
+const GRAMOPHONE_OK = Object.freeze({ play: 'OK plays the gramophone', pause: 'OK pauses the gramophone' });
+
+/**
+ * The walking hint with the dot on the gramophone: its OK clause (vrlbry's, "OK takes the book at
+ * the dot") says what OK does there; the hint as it is when `what` is null.
+ * @param {string} hint the overlay's
+ * @param {'play' | 'pause' | null} what
+ */
+export function gramophoneHint(hint, what) {
+  return what ? hint.replace(/\bOK\b[^·\n]*?(?= · |\n|$)/, GRAMOPHONE_OK[what]) : hint;
+}
 
 export class MusicRemote extends LibraryRemote {
   /**
@@ -18,6 +32,21 @@ export class MusicRemote extends LibraryRemote {
   constructor({ nowPlaying, ...o }) {
     super(o);
     this.nowPlaying = nowPlaying;
+    // The overlay makes the hint (vrlbry's), and its OK clause is changed here while the dot is on
+    // the gramophone: whenever the hint is made again too (the card, a book out), and only walking.
+    const { overlay, interaction } = o;
+    this._gramophone = null;
+    const render = overlay._renderHint.bind(overlay);
+    overlay._renderHint = () => {
+      render();
+      if (!overlay.tv || !this._gramophone || interaction.inCard || interaction.state !== 'browse') return;
+      const el = overlay.$('.ov-hint');
+      el.textContent = gramophoneHint(el.textContent, this._gramophone);
+    };
+    interaction.onDotGramophone = (what) => {
+      this._gramophone = what;
+      overlay._renderHint();
+    };
     // After the Remote's own (the window's capture, which leaves these keys alone), before the site's.
     addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
