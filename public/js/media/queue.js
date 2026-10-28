@@ -192,16 +192,47 @@ const GENERIC = /^[\s[(]*(?:listen(?: to)?|play(?: music)?|hear|here|click(?: he
 /** A link text that is the file's name ("117-4.mid", "[music001.mp3]"). */
 const FILE_NAME = /^[\s[(]*[\w.-]+\.(?:mid|midi|kar|rmi|mp3|m4a|ogg|oga|wav|flac)[\s\])]*$/i;
 
-/** True for a link text that says only "play this", or is the file's name. */
-export const isGenericLabel = (t) => !t || GENERIC.test(t) || FILE_NAME.test(t);
+/** Words of how to play a sound, or of its files: never which music it is. */
+const HOW_TO = new Set(['hear', 'listen', 'play', 'click', 'tap', 'press', 'here', 'view', 'download', 'open',
+  'file', 'files', 'source', 'version', 'audio', 'recording', 'midi', 'mp3', 'ogg', 'wav', 'pdf', 'lilypond', 'musicxml', 'xml']);
+/** Words that go with them ("this music", "the sound file"), naming nothing among them. */
+const WITH = new Set(['to', 'this', 'the', 'a', 'an', 'it', 'of', 'on', 'in', 'for', 'with', 'music', 'tune', 'sound', 'lyrics']);
+/** Words that only join the rest of a paragraph ("[Listen] and [Listen]", "etc."). */
+const JOIN = new Set(['and', 'or', 'etc']);
+/** A format's name run into the next word ("View Lilypondand [Listen]") or misspelt ("PDFe"). */
+const FORMAT_RUN = /^(?:pdf|lilypond|midi|mp3|musicxml)[a-z]{0,3}$/;
+/** A sound's length in braces ("[Audio: {1m 50s} ]"): how long it is, not what. */
+const LENGTH = /\{\s*(?:\d+\s*(?:h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?)\s*)+\}/gi;
+
+/**
+ * True for words that say only how to play a sound, or what its files are ("To hear this music
+ * (MIDI), click here.", "(sound file) pdf (music and lyrics)", "Listen to music"), or only join
+ * the rest of their paragraph ("etc."); not for words that name music ("The Sound of Music",
+ * "Listen to Finale").
+ */
+function saysNothing(text) {
+  const words = text.replace(LENGTH, ' ').toLowerCase().match(/[\p{L}\p{N}]+/gu);
+  if (!words) return true;
+  let how = false;
+  let joins = true;
+  for (const w of words) {
+    if (HOW_TO.has(w) || FORMAT_RUN.test(w)) how = true;
+    else if (!WITH.has(w) && !JOIN.has(w)) return false;
+    if (!JOIN.has(w)) joins = false;
+  }
+  return how || joins;
+}
+
+/** True for a link text that says only "play this" or how to, or is the file's name. */
+export const isGenericLabel = (t) => !t || GENERIC.test(t) || FILE_NAME.test(t) || saysNothing(t);
 
 /** A paragraph's text short enough to name a sound ("Fig. 23. Kyrie"), not a page of prose. */
 const NAMING_X = 70;
 
-/** A link's words without "[Listen: …]" around what they name ("Dorian"). */
+/** A link's words without "[Listen: …]" or "play tune: …" around what they name ("Dorian"). */
 function ownWords(t) {
   const inner = t.replace(/^\s*\[\s*/, '').replace(/\s*\]\s*$/, '');
-  const named = inner.replace(/^(?:listen|play|hear)(?: to)?\s*[:–-]?\s*/i, '');
+  const named = inner.replace(/^(?:listen|play|hear)(?: to)?(?:\s+(?:the\s+)?(?:tune|music)(?=\s*[:–-]))?\s*[:–-]?\s*/i, '');
   return named || inner;
 }
 
@@ -217,13 +248,13 @@ export function soundHeading(sound) {
 
 /**
  * What a sound is called in lists: its link's words when they name it ("Dorian", "Good King
- * Wenceslas"), else a short paragraph around it ("Fig. 23. Kyrie"), else its heading, else its
- * file's name.
+ * Wenceslas"), else a short paragraph around it ("Fig. 23. Kyrie") unless it only says how to
+ * play it or what its files are, else its heading, else its file's name.
  * @param {object} sound a sound list entry
  */
 export function soundTitle(sound) {
   if (!isGenericLabel(sound.t)) return ownWords(sound.t);
-  if (sound.x && sound.x.length >= 3 && sound.x.length <= NAMING_X) return sound.x;
+  if (sound.x && sound.x.length >= 3 && sound.x.length <= NAMING_X && !saysNothing(sound.x)) return sound.x;
   if (sound.h || sound.p) return soundHeading(sound);
   return sound.media?.name?.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') || sound.t || 'Sound';
 }

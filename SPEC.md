@@ -1682,8 +1682,14 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   `ui/music-stand.js`): a book that plays has two lists in its contents panel, *Contents* and
   *♪ Sounds (n)*: its sounds under their headings (`soundRows`: a heading row where it changes, a
   tune's one sound as one row named by its heading), each named by `soundTitle` (its link's words
-  when they name it, "[Listen: Dorian]" → "Dorian"; else a short paragraph around it; else its
-  heading, after the one above it when it is only a number or "by …"; else its file); a tap
+  when they name it, "[Listen: Dorian]" → "Dorian", "play tune: Cithara" → "Cithara"; else a
+  short paragraph around it; else its heading, after the one above it when it is only a number
+  or "by …"; else its file). Link words or a paragraph that say only how to play the sound or
+  what its files are name nothing ("To hear this music (MIDI), click here.", "(sound file) pdf
+  (music and lyrics)", "Listen to music", "[Audio: {1m 50s} ]"), nor does one of only "and",
+  "or" or "etc." (`saysNothing`: words of playing and of files, with "this", "the", "music",
+  "to" and such among them, a format's name run into the next word, a length in braces); words
+  that name music stay ("Listen to Finale", "The Sound of Music"); a tap
   plays it and turns to it, alone, *▶ Play all* plays them in turn from the page shown. What plays next
   is a `SoundQueue` (`interaction.queue`: items `{ libId, bookId, sound, at? }`, at most 2,000,
   ⏮ ⏭, repeat; shuffle (`setShuffle`: the items dealt in a random order, the one playing first,

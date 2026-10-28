@@ -478,11 +478,26 @@
     queue's end, a sound that cannot be played), not 250 ms after. Checked in a Chrome of its own
     (SPEC §5.9): eight short sounds, four slow to load, the focus on Pause throughout, nothing in
     the bar replaced; Stop and the queue's end give the focus back as before.
-  - Some sounds' titles are their link's sentence with the link and the format's name taken out,
-    which a screen reader reads as it is: The Pianoforte Sonata's (17074) are "To hear this music
+  - Some sounds' titles were their link's sentence with the link and the format's name taken out,
+    which a screen reader reads as it is: The Pianoforte Sonata's (17074) were "To hear this music
     ( ), click ." (from "To hear this music (MIDI), click here.", "here" the link; `soundTitle`,
-    its `x` when the link's own words say nothing). A sentence that only says how to play it
-    should count as saying nothing, so the heading names it.
+    its `x` when the link's own words say nothing). Done 2026-10-27: words that say only how to
+    play a sound or what its files are ("hear", "click", "view", "file", "version", "PDF",
+    "Lilypond"…, with "this music", "the", "to"; a sound's length in braces), or only "and",
+    "or", "etc.", name nothing, in a link or its paragraph (`saysNothing` in `media/queue.js`),
+    so the heading names the sound; and "play tune: Cithara" is "Cithara". Of lcc-m's 5,215
+    sounds 152 in 11 books are named otherwise, every one by its heading or its own name:
+    17074's 81 ("♪ 1" … under each heading), Dramatized Rhythm Plays' 34 ("(sound file)
+    (music and lyrics)": now THE BAND, LITTLE JACK HORNER…), "[Listen: {1min 5sec} ]" and
+    "[Audio: {45 sec} ]" (10, by their scenes), "Listen to music" (3, which showed "music"),
+    "Listen:", "Lilypondand" / "Lilypondor" (a format's name run into the next word), "PDFe",
+    "etc.", "and", and 31582's "tune: …". "Listen to Finale" and "The Sound of Music" still
+    name theirs.
+  - Still named by a piece of prose: 28 sounds in 6 books whose link stands inside a sentence
+    (30889's "; the Thin, between", 38223's "and for", "instead of", 40384's ", or thus"): the
+    paragraph's words around the link, cut where it was. Some do name it (58117's "and Teruah
+    (T'rua̓h)", 40288's sung words), so a rule for them needs care: a title starting with a comma
+    or a small letter, say, would be the heading.
   - Still for the TV: the tipped view seen from the sofa (is −0.25 too much among the shelves?).
   - The stand's tab row (♪ Listen among them) is above the dot on a TV, tipped or level (the
     dot at 369 px of its 1,000 level, 535–747 tipped, the tabs at 96–150), so the Listen tab
