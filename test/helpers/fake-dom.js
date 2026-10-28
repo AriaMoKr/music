@@ -1,5 +1,6 @@
-// A minimal document for building DOM in Node (the text view's renderBlocks): elements with
-// attributes, children, text and click listeners, and markup() to read what was built.
+// A minimal document for building DOM in Node (the text view's renderBlocks, the Now playing
+// bar): elements with attributes, classes, children, text, click listeners and the focus, and
+// markup() to read what was built.
 
 class Node {
   constructor() {
@@ -18,6 +19,12 @@ class Node {
   get textContent() {
     return this.childNodes.map((c) => c.textContent).join('');
   }
+
+  /** Whether `node` is this one or below it. */
+  contains(node) {
+    for (let n = node; n; n = n.parentNode) if (n === this) return true;
+    return false;
+  }
 }
 
 class Text extends Node {
@@ -33,12 +40,31 @@ class Text extends Node {
 }
 
 class Element extends Node {
-  constructor(tag) {
+  constructor(tag, doc = null) {
     super();
     this.nodeType = 1;
     this.tagName = tag.toUpperCase();
     this.attributes = new Map();
     this.listeners = {};
+    this.ownerDocument = doc;
+    this.hidden = false;
+  }
+
+  /** Its classes (the class attribute): contains, add, remove, toggle. */
+  get classList() {
+    const get = () => new Set((this.getAttribute('class') ?? '').split(/\s+/).filter(Boolean));
+    const put = (set) => this.setAttribute('class', [...set].join(' '));
+    return {
+      contains: (c) => get().has(c),
+      add: (c) => put(get().add(c)),
+      remove: (c) => { const set = get(); set.delete(c); put(set); },
+      toggle: (c, on = !get().has(c)) => { const set = get(); if (on) set.add(c); else set.delete(c); put(set); return on; },
+    };
+  }
+
+  /** The focus to it: its document's activeElement. */
+  focus() {
+    if (this.ownerDocument) this.ownerDocument.activeElement = this;
   }
 
   setAttribute(name, value) {
@@ -78,12 +104,15 @@ class Element extends Node {
   }
 }
 
-/** A document: createElement and createTextNode. */
+/** A document: createElement, createTextNode and activeElement (its body until an element has the focus). */
 export function fakeDocument() {
-  return {
-    createElement: (tag) => new Element(tag),
+  const doc = {
+    createElement: (tag) => new Element(tag, doc),
     createTextNode: (data) => new Text(data),
   };
+  doc.body = new Element('body', doc);
+  doc.activeElement = doc.body;
+  return doc;
 }
 
 /** What a node holds, as markup (attributes in the order set; text as it is, not escaped). */

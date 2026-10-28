@@ -3,7 +3,8 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { barButton, MEDIA_KEYS, nowPlayingOf, startedText, withBarStops } from '../public/js/ui/now-playing.js';
+import { barButton, MEDIA_KEYS, NowPlaying, nowPlayingOf, startedText, withBarStops } from '../public/js/ui/now-playing.js';
+import { fakeDocument } from './helpers/fake-dom.js';
 
 const BOOK = { libId: 'm', id: '7', title: 'How Music Developed', author: 'Henderson' };
 const tune = { c: 2, b: 14, t: 'Listen', k: 'midi', h: 'The G scale', media: { src: '/zim/m/C/7_g.mid', name: 'g.mid', mime: 'audio/midi' } };
@@ -132,5 +133,143 @@ describe("the bar among a TV remote's card stops", () => {
   it('goes at the end without its neighbours, and adds nothing while hidden', () => {
     assert.deepEqual(withBarStops(['a', 'b'], bar, { before: () => false }), ['a', 'b', 'pause', 'stop', 'next']);
     assert.deepEqual(withBarStops(['a', 'b'], [], { after: (s) => s === 'a' }), ['a', 'b']);
+  });
+});
+
+describe("the bar while a queue goes on (a TV's TalkBack on it)", () => {
+  const shanty = [1, 2, 3].map((n) => ({ c: 0, b: n, t: 'Listen', k: 'midi', h: `Shanty ${n}`, media: { src: `/zim/m/C/7_s${n}.mid`, name: `s${n}.mid`, mime: 'audio/midi' } }));
+  globalThis.ResizeObserver ??= class { observe() {} };
+
+  /**
+   * The bar over a fake document, with an Interaction stand-in that plays `items` as the page does:
+   * a sound's end stops the player (idle), and in the same task the queue's next starts (loading).
+   */
+  function page(items = shanty) {
+    const doc = fakeDocument();
+    const root = doc.createElement('div');
+    const props = new Map();
+    root.style = { setProperty: (k, v) => props.set(k, v), getPropertyValue: (k) => props.get(k) ?? '' };
+    const view = doc.createElement('canvas'); // where a TV's focus goes when the bar goes: walking
+    const said = [];
+    const queue = {
+      items: items.map((sound) => ({ libId: 'm', bookId: '7', sound })), index: -1, moves: 0, source: 'gramophone',
+      get length() { return this.items.length; },
+      get current() { return this.items[this.index] ?? null; },
+      get hasNext() { return this.index < this.items.length - 1; },
+    };
+    const ix = {
+      queue, sound: { state: 'idle', media: null, duration: 0, toggle() {} },
+      bookOf: () => BOOK, world: { gramophone: {} },
+      /** The player's state, as player.js's _set tells interaction.js (which updates the bar). */
+      set(state, o = {}) {
+        Object.assign(this.sound, { state }, o);
+        bar.update();
+      },
+      /** The queue's next (or first), loading: its bytes have not come yet. */
+      start() {
+        queue.index++;
+        queue.moves++;
+        this.set('loading', { media: queue.current.sound.media, duration: 0 });
+      },
+      /** A sound played to its end: the player idle, then the queue's next at once, if any (_soundEnded). */
+      ended() {
+        this.set('idle', { media: null, duration: 0 });
+        if (queue.hasNext) this.start();
+        else this.stopSounds();
+      },
+      stopSounds() {
+        queue.items = [];
+        queue.index = -1;
+        this.set('idle', { media: null, duration: 0 });
+      },
+      nextSound() {},
+    };
+    const bar = new NowPlaying({ root, interaction: ix, announce: (t) => said.push(t), returnFocus: () => view });
+    return { doc, bar, ix, view, said };
+  }
+
+  /** Every node of the bar, elements and text, in order. */
+  const nodes = (el) => [el, ...el.childNodes.flatMap((c) => (c.nodeType === 1 ? nodes(c) : [c]))];
+  const text = (el) => el.childNodes.map((c) => c.textContent).join('');
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('keeps the bar, every element and text node in it, and the focus on Pause through a slow next sound', async () => {
+    const { doc, bar, ix, said } = page();
+    ix.start();
+    ix.set('playing', { duration: 7 });
+    const pause = bar.stops()[0];
+    pause.focus();
+    const before = nodes(bar.el);
+    assert.equal(text(bar.el.childNodes[0]), 'Shanty 1How Music Developed · Henderson — MIDI · 0:07 · on the gramophone · 1 of 3');
+
+    ix.ended();
+    // Its bytes take longer to come than the 250 ms the bar used to wait for a sound to start.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(bar.el.hidden, false, 'still shown while the next sound loads');
+    assert.equal(ix.sound.state, 'loading');
+    const loading = nodes(bar.el);
+    assert.equal(loading.length, before.length);
+    assert.ok(loading.every((n, i) => n === before[i]), 'no element or text node replaced');
+    assert.equal(doc.activeElement, pause, 'the focus on Pause');
+    assert.equal(pause.getAttribute('aria-label'), 'Pause', 'a sound loading is shown as playing');
+    assert.equal(text(bar.el.childNodes[0].childNodes[0]), 'Shanty 2', 'the next sound named at once');
+
+    ix.set('playing', { duration: 3 });
+    const playing = nodes(bar.el);
+    assert.ok(playing.length === before.length && playing.every((n, i) => n === before[i]));
+    assert.equal(text(bar.el.childNodes[0].childNodes[1]), 'How Music Developed · Henderson — MIDI · 0:03 · on the gramophone · 2 of 3');
+    assert.equal(doc.activeElement, pause);
+    assert.deepEqual(said, ['Playing Shanty 1, from How Music Developed · Henderson.', 'Playing Shanty 2, from How Music Developed · Henderson.']);
+  });
+
+  it('goes after the last sound, the focus given back', async () => {
+    const { doc, bar, ix, view } = page(shanty.slice(0, 2));
+    ix.start();
+    ix.set('playing', { duration: 7 });
+    bar.stops()[2].focus(); // Next
+    ix.ended();
+    ix.set('playing', { duration: 3 });
+    await tick();
+    assert.equal(bar.el.hidden, false);
+    assert.equal(bar.stops()[2].getAttribute('aria-disabled'), 'true', 'no next after the last');
+    ix.ended();
+    assert.equal(bar.el.hidden, false, 'not before the end of the task: a sound may start in it');
+    await tick();
+    assert.equal(bar.el.hidden, true);
+    assert.equal(doc.activeElement, view);
+    assert.deepEqual(bar.stops(), []);
+  });
+
+  it('goes on Stop, and when a sound cannot be played', async () => {
+    const stopped = page();
+    stopped.ix.start();
+    stopped.ix.set('playing', { duration: 7 });
+    stopped.bar.stops()[1].focus();
+    stopped.bar.stops()[1].click(); // Stop
+    await tick();
+    assert.equal(stopped.bar.el.hidden, true);
+    assert.equal(stopped.doc.activeElement, stopped.view);
+
+    const failed = page();
+    failed.ix.start();
+    failed.bar.stops()[0].focus();
+    failed.ix.set('idle', { media: null }); // player.js _fail: stopped, the queue left where it was
+    await tick();
+    assert.equal(failed.bar.el.hidden, true, 'nothing more plays');
+    assert.equal(failed.doc.activeElement, failed.view);
+  });
+
+  it('stays when one sound replaces another in a task (play stops the one before first)', async () => {
+    const { bar, ix } = page();
+    ix.start();
+    ix.set('playing', { duration: 7 });
+    const before = nodes(bar.el);
+    ix.set('idle', { media: null });
+    ix.queue.index = 1;
+    ix.queue.moves++;
+    ix.set('loading', { media: shanty[1].media });
+    await tick();
+    assert.equal(bar.el.hidden, false);
+    assert.ok(nodes(bar.el).every((n, i) => n === before[i]));
   });
 });

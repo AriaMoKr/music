@@ -464,6 +464,25 @@
     byte for byte; in a browser a 2.9 s motif, a 20.9 s song and two 2 s recordings each play to
     their end. 12 MIDI files hold silence after their last note before their End of Track (one
     90 s), which is not played.
+  - With TalkBack on the TV (the TV's session, `tv-v1.1.0`, reported 2026-10-27, HallwayApp's
+    README "TalkBack behind the doors"): Menu keeps the keyboard down; OK on the gramophone plays a
+    book; TalkBack reads the Now playing bar (what plays, its book, Pause, Stop, Next sound) and OK
+    presses each; the media keys work. But while a queue played, TalkBack's focus left the bar
+    each time the sound changed, for the Controls help (Menu's first stop, where the page's own
+    focus was): with The Shanty Book on the gramophone the bar could only be read whole paused.
+  - Done 2026-10-27 in a browser, for the TV's session to check with TalkBack: the bar did not
+    hide between sounds (a queue's next sound is 'loading' at once, however slow, and that shows
+    the bar), but each sound replaced its text nodes (16 over eight sounds), and a screen
+    reader's focus on a replaced node is lost. Now its elements and text nodes are made once and
+    their text changed in place, and it goes only when a task ends with nothing loaded (Stop, the
+    queue's end, a sound that cannot be played), not 250 ms after. Checked in a Chrome of its own
+    (SPEC §5.9): eight short sounds, four slow to load, the focus on Pause throughout, nothing in
+    the bar replaced; Stop and the queue's end give the focus back as before.
+  - Some sounds' titles are their link's sentence with the link and the format's name taken out,
+    which a screen reader reads as it is: The Pianoforte Sonata's (17074) are "To hear this music
+    ( ), click ." (from "To hear this music (MIDI), click here.", "here" the link; `soundTitle`,
+    its `x` when the link's own words say nothing). A sentence that only says how to play it
+    should count as saying nothing, so the heading names it.
   - Still for the TV: the tipped view seen from the sofa (is −0.25 too much among the shelves?).
   - The stand's tab row (♪ Listen among them) is above the dot on a TV, tipped or level (the
     dot at 369 px of its 1,000 level, 535–747 tipped, the tabs at 96–150), so the Listen tab

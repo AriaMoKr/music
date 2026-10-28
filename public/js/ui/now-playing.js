@@ -6,7 +6,7 @@
 // buttons are in the remote's card (Menu), and the remote's media keys press them (ui/music-remote.js).
 //
 // nowPlayingOf, barButton and withBarStops are pure (the Interaction or a stand-in), for the tests;
-// NowPlaying is the page's.
+// NowPlaying is the page's (tested over test/helpers/fake-dom.js).
 
 import { isMidi } from '../core/content/sounds.js';
 import { soundTitle } from '../media/queue.js';
@@ -98,20 +98,35 @@ export function withBarStops(stops, bar, { before, after }) {
   return rest;
 }
 
-const STATIC = `
-  <span class="ov-np-what">
-    <span class="ov-np-title"></span>
-    <span class="ov-np-sub"></span>
-  </span>
-  <span class="ov-np-buttons">
-    <button type="button" class="ov-np-toggle" aria-label="Pause" title="Pause">❚❚</button>
-    <button type="button" class="ov-np-stop" aria-label="Stop" title="Stop">■</button>
-    <button type="button" class="ov-np-next" aria-label="Next sound" title="Next sound">⏭</button>
-  </span>`;
+/** An element of the bar's, of class `cls`, holding `children` (a string: its one text node). */
+function part(doc, tag, cls, ...children) {
+  const el = doc.createElement(tag);
+  el.setAttribute('class', cls);
+  for (const c of children) el.append(typeof c === 'string' ? doc.createTextNode(c) : c);
+  return el;
+}
+
+/** A button of the bar's: its glyph, named (aria-label, title). */
+function barPart(doc, cls, name, glyph) {
+  const b = part(doc, 'button', cls, glyph);
+  b.setAttribute('type', 'button');
+  b.setAttribute('aria-label', name);
+  b.setAttribute('title', name);
+  return b;
+}
+
+/** An element's one text node changed in place, never replaced (a screen reader's focus on it stays). */
+function setText(el, text) {
+  const node = el.childNodes[0];
+  if (node.data !== text) node.data = text;
+}
 
 /**
  * The bar, in the overlay after the text view (so Tab reaches it from the view's end), a region
  * named "Now playing". interaction.js calls update() whenever the sound or the queue changes.
+ * Its elements and their text nodes are made once and kept, their text changed in place: TalkBack's
+ * focus on one left the bar, for the page's own focus (the Controls help), whenever a queue's next
+ * sound replaced them.
  */
 export class NowPlaying {
   /**
@@ -124,26 +139,28 @@ export class NowPlaying {
   constructor({ root, interaction, announce, returnFocus }) {
     Object.assign(this, { I: interaction, announce, returnFocus });
     const doc = root.ownerDocument;
-    const el = doc.createElement('section');
-    el.className = 'ov-np';
+    this._title = part(doc, 'span', 'ov-np-title', '');
+    this._sub = part(doc, 'span', 'ov-np-sub', '');
+    this._toggle = barPart(doc, 'ov-np-toggle', 'Pause', '❚❚');
+    this._buttons = { toggle: this._toggle, stop: barPart(doc, 'ov-np-stop', 'Stop', '■'), next: barPart(doc, 'ov-np-next', 'Next sound', '⏭') };
+    const el = part(doc, 'section', 'ov-np', part(doc, 'span', 'ov-np-what', this._title, this._sub),
+      part(doc, 'span', 'ov-np-buttons', ...Object.values(this._buttons)));
     el.hidden = true;
     el.setAttribute('aria-label', 'Now playing');
-    el.innerHTML = STATIC; // the bar's own markup: what plays goes in as text
     root.append(el);
     this.el = el;
     this.root = root;
-    this.$ = (sel) => el.querySelector(sel);
     this._said = null; // the sound last said
     this._info = null; // what the bar shows
-    this._hideTimer = 0;
+    this._hiding = false; // a check at the end of the task that nothing plays (update)
     // Disabled buttons would drop the focus (Next on the last sound): aria-disabled, and ignored.
-    const on = (sel, fn) => this.$(sel).addEventListener('click', (e) => {
-      if (e.currentTarget.getAttribute('aria-disabled') === 'true') return;
+    const on = (b, fn) => b.addEventListener('click', () => {
+      if (b.getAttribute('aria-disabled') === 'true') return;
       fn();
     });
-    on('.ov-np-toggle', () => this.I.sound.toggle()); // on the tap: a blocked sound may start
-    on('.ov-np-stop', () => this.I.stopSounds());
-    on('.ov-np-next', () => this.I.nextSound());
+    on(this._toggle, () => this.I.sound.toggle()); // on the tap: a blocked sound may start
+    on(this._buttons.stop, () => this.I.stopSounds());
+    on(this._buttons.next, () => this.I.nextSound());
     // The text view ends above the bar (style.css, --np-h), so the bar never covers its text.
     new ResizeObserver(() => this._fit()).observe(el);
   }
@@ -161,40 +178,42 @@ export class NowPlaying {
     if (active?.closest?.('.tv-view')) active.scrollIntoView({ block: 'nearest' });
   }
 
-  /** Shows what plays now, or hides the bar (its focus given back) when nothing does. */
+  /**
+   * Shows what plays now, or hides the bar (its focus given back) when nothing more is to play:
+   * Stop, the queue's end, a sound that cannot be played.
+   */
   update() {
     const info = nowPlayingOf(this.I);
     if (!info) {
-      // Between two sounds (Next, the queue going on) the player is idle for a moment: the bar
-      // goes only once nothing has started again, or the focus on its Next would be lost.
-      if (!this.el.hidden && !this._hideTimer) {
-        this._hideTimer = setTimeout(() => {
-          this._hideTimer = 0;
+      // Between two sounds (Next, a queue going on) the player is idle for a moment, and the next
+      // sound starts loading in the same task (interaction._playItem: player.js play is 'loading'
+      // at once, however long its bytes take): the bar goes only if that task ends with nothing
+      // loaded, so it stays, as it is, while a queue goes on.
+      if (!this.el.hidden && !this._hiding) {
+        this._hiding = true;
+        queueMicrotask(() => {
+          this._hiding = false;
           if (!nowPlayingOf(this.I)) this._hide();
-        }, 250);
+        });
       }
       return;
     }
-    clearTimeout(this._hideTimer);
-    this._hideTimer = 0;
     const appearing = this.el.hidden;
     this.el.hidden = false;
     this._info = info;
-    const sub = info.book ? `${info.book} — ${info.line}` : info.line;
-    for (const [sel, text] of [['.ov-np-title', info.title], ['.ov-np-sub', sub]]) {
-      const span = this.$(sel);
-      if (span.textContent !== text) span.textContent = text;
-    }
-    const toggle = this.$('.ov-np-toggle');
+    setText(this._title, info.title);
+    setText(this._sub, info.book ? `${info.book} — ${info.line}` : info.line);
+    const toggle = this._toggle;
     const name = info.playing ? 'Pause' : 'Play';
     if (toggle.getAttribute('aria-label') !== name) {
       toggle.setAttribute('aria-label', name);
-      toggle.title = name;
-      toggle.textContent = info.playing ? '❚❚' : '▶';
+      toggle.setAttribute('title', name);
+      setText(toggle, info.playing ? '❚❚' : '▶');
     }
-    toggle.setAttribute('aria-disabled', String(info.loading));
+    if (toggle.getAttribute('aria-disabled') !== String(info.loading)) toggle.setAttribute('aria-disabled', String(info.loading));
     toggle.classList.toggle('ov-np-wait', info.blocked);
-    this.$('.ov-np-next').setAttribute('aria-disabled', String(!info.hasNext));
+    const next = this._buttons.next;
+    if (next.getAttribute('aria-disabled') !== String(!info.hasNext)) next.setAttribute('aria-disabled', String(!info.hasNext));
     if (appearing) this._fit(true);
     // Said once, when it starts playing (or waits for a tap), not as it loads or plays on.
     if (info.key !== this._said && ((info.playing && !info.loading) || info.blocked)) {
@@ -212,13 +231,13 @@ export class NowPlaying {
     const info = action ? nowPlayingOf(this.I) : null;
     if (!info) return false;
     const button = repeat ? null : barButton(info, action);
-    if (button) this.$(`.ov-np-${button}`).click();
+    if (button) this._buttons[button].click();
     return true;
   }
 
   /** Its buttons, for a TV remote's card (ui/music-remote.js); none while it is hidden. */
   stops() {
-    return this.el.hidden ? [] : [...this.el.querySelectorAll('button')];
+    return this.el.hidden ? [] : Object.values(this._buttons);
   }
 
   _hide() {
