@@ -1726,9 +1726,16 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   Next while nothing follows, and Play/Pause while a sound loads, are `aria-disabled` (still
   focusable, so the focus is not lost). A sound that starts is said once, politely
   (`overlay.announce`: "Playing <title>, from <book>."; "…: press Play to hear it." when the
-  browser waits for a tap), not as it pauses, goes on or plays on; between two sounds (Next, a
-  queue going on) the bar stays, and when it goes (Stop, the last sound's end) focus in it goes
-  back to the text view's title, the "Text view" button or the search. It sits in the foot row at
+  browser waits for a tap), not as it pauses, goes on or plays on. Between two sounds (Next, a
+  queue going on) the bar stays as it is: a queue's next sound starts loading in the same task as
+  the one before ends (`_playItem`: player.js `play` is 'loading' at once, however long its bytes
+  take, and 'loading' shows the bar), so the bar goes only when a task ends with nothing loaded:
+  Stop, the queue's end, a sound that cannot be played (a check at the end of the task,
+  `queueMicrotask`; it was 250 ms). Its elements and their text nodes are made once and kept, the
+  text changed in place (`setText`), never replaced: a screen reader's focus on one stays (TalkBack's
+  left the bar for the page's own focus, the Controls help, each time a queue's next sound
+  replaced them). When it goes, focus in it goes back to the text view's title, the "Text view"
+  button or the search. It sits in the foot row at
   the left, the help's buttons moved to the right and the card stopping above it; on a narrow
   screen (≤ 640 px) above the help's row, the search moved up above it; with the text view open,
   across the view's foot, the view ending above it (`--np-h`, set at once when the bar appears,
@@ -2181,7 +2188,10 @@ overlay's `announce`).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
   links (sounds' too, and the one playing found), heading levels, the top block, the round trip from a page to the
   view and back to the same block, and the themes' colours; `test/client-now-playing.test.js` what
-  the Now playing bar shows and when a sound counts as another.
+  the Now playing bar shows and when a sound counts as another, and the bar itself (over
+  `fake-dom.js`) while a queue goes on: through a next sound slow to load, kept with every element
+  and text node and the focus on Pause; gone after the last sound, on Stop and when a sound cannot
+  be played, the focus given back.
 
 ### 5.9 TV remote (`ui/remote.js`, `back-step.js`)
 
@@ -2384,6 +2394,14 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     it plays, "OK pauses the gramophone"; OK: paused, "plays" again; Menu: the card's hint, Back:
     the gramophone's again; the dot off it: the book's line (on the wall), the list's (on the
     stand's). axe 4.14 finds nothing in those and the nine states before.
+  - music (2026-10-27, TalkBack's focus on the bar): in a Chrome of its own (focus emulated, so
+    focus events come): The Pianoforte Sonata (Gutenberg 17074) read, Play all in its ♪ Sounds,
+    then its examples of 0.75–2.4 s; Menu, ↑ to the bar's Pause; eight sounds went by, the last
+    four with their bytes 1.2 s late: the bar never hid, no element or text node in it replaced
+    (16 texts changed in place; before, 16 text nodes replaced and none changed), no focus event,
+    the focus on Pause throughout. ↓ to Stop, OK: the bar gone, the focus to the view, walking. A
+    queue of three to its end: the bar gone once, at the end, the focus to the view; in the text
+    view, to the text view itself. axe 4.14 finds nothing in the 11 states.
 
   And again (2026-10-26, common v0.6.1):
   - Menu lands on the Controls help, with a book out on its first button; the search's box and
