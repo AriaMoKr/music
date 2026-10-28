@@ -255,12 +255,15 @@ export class Interaction {
     this.inCard = false;
     this._dotPanel = null; // the panel, and its list that scrolls, under the dot (when near enough)
     this._dotList = null;
+    this._dotGramophone = null; // what OK does with the dot on the gramophone (onDotGramophone), else null
     // On the 3D contents a TV's remote moves a highlight instead (music, SPEC §5.9: the dot, level
     // with the eyes, never reaches their top): { id, i } (Play all, a list's row i), _tocStops.
     this._tocAt = null;
     this._tocList = null; // the contents' list at the last _showTocAt
     /** Set by ui/remote.js: fn(on) as the dot comes onto such a list, or leaves it (the hint). */
     this.onDotList = null;
+    /** Set by ui/music-remote.js: fn(what) as the dot comes onto the gramophone, or leaves it (_dotGramophone). */
+    this.onDotGramophone = null;
 
     this.tooltip = new Label({ width: 0.56, height: 0.13 });
     this.tooltip.visible = false;
@@ -3755,6 +3758,7 @@ export class Interaction {
     let hoverBook = null;
     let hoverLink = null;
     let hoverDoor = false;
+    let onGramophone = false; // a TV's dot on the gramophone
     let dotPanel = null;
     let dotList = null;
     // A TV's remote on the 3D contents moves its own highlight there (_showTocAt), not the dot's.
@@ -3782,6 +3786,7 @@ export class Interaction {
         interactive = true;
       } else if (hit?.kind === 'gramophone' || hit?.kind === 'score') {
         interactive = true;
+        if (hit.kind === 'gramophone' && pointer.id === 'gamepad') onGramophone = true;
       } else if (hit?.kind === 'page' || hit?.kind === 'held') {
         interactive = true;
         if (hit.kind === 'page' && !hoverLink) hoverLink = this._linkUnder(hit);
@@ -3800,6 +3805,15 @@ export class Interaction {
       this._dotList = dotList;
       // The hint's (overlay.setRemote list): 'tabs' on the contents of a book that plays (← → its tabs).
       this.onDotList?.(!!dotList && (tvToc && this.tocPanel.get('toc-tab-sounds') ? 'tabs' : true));
+    }
+    // What OK does with a TV's dot on the gramophone while walking (gramophoneTap), for the hint
+    // (onDotGramophone, ui/music-remote.js): 'pause' it playing, else 'play'. (The scores hang
+    // above the dot, which a TV's remote never tips up.)
+    const dotGramophone = !onGramophone || !this.tv || this.inCard || this.state !== 'browse' ? null
+      : this.queue.source === 'gramophone' && (this.sound.state === 'playing' || this.sound.state === 'loading') ? 'pause' : 'play';
+    if (dotGramophone !== this._dotGramophone) {
+      this._dotGramophone = dotGramophone;
+      this.onDotGramophone?.(dotGramophone);
     }
     // A TV's dot: while walking the room or holding a book (on the contents the remote's highlight).
     if (this.tv) this.controls.aimShown = !this.inCard && !this.textView?.isOpen && this.state !== 'read';

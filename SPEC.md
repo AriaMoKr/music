@@ -1193,7 +1193,7 @@ public/
     ui/listen-tab.js     the kiosk's Listen tab: what plays, books, composers, periods, the queue.
     ui/music-stand.js    the music stand beside the book: piano roll or picture, playhead, practice.
     ui/now-playing.js    the page's "Now playing" bar: what plays, Play/Pause, Stop, Next (the keyboard, screen readers).
-    ui/music-remote.js   music's TV remote: the library's (ui/remote.js) with the Now playing bar in its card (between the text view's toolbar and text too) and the media keys (§5.9).
+    ui/music-remote.js   music's TV remote: the library's (ui/remote.js) with the Now playing bar in its card (between the text view's toolbar and text too), the media keys and the gramophone's OK in the walking hint (§5.9).
     world/gramophone.js  the gramophone of a room whose books play (its horn: where its sound comes from).
     world/score-wall.js  the wall of scores: pictures beside sounds, framed, one atlas.
     perf.js              ?perf recorder (frame timing, events, segments), a no-op unless started (§5.7).
@@ -2317,6 +2317,13 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     or pauses them; books from about 0.8 to 1.5 m as one comes nearer; a book in hand (held
     0.16 m below the eyes, 0.62 m ahead). The stand's lists stay under it from 0.65 to 1.5 m;
     its tab row (♪ Listen among them) is above it, as it was with the view level.
+  - With the dot on the gramophone the walking hint says what OK does there: "OK plays the
+    gramophone", or "OK pauses the gramophone" while it plays (`gramophoneTap`), and the book's
+    line again once the dot is off it. The hint is the overlay's (vrlbry's `TV_HINTS.walk`), its
+    OK clause changed by music's remote (`gramophoneHint`, from interaction's
+    `onDotGramophone`, again whenever the overlay makes the hint), only while walking: the card's
+    and a book's hints stay theirs. The scores hang above the dot, which the remote never tips
+    up, so they need no line.
   - The 3D contents, over the page on a TV, take a highlight of the remote's in place of the dot,
     which, level with the eyes there, never reached their top (the tabs, Play all, the first
     rows): ↑ ↓ from stop to stop (Play all, then the rows that can be chosen: `_tocStops`), the
@@ -2330,7 +2337,8 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
 - **Tests.** `test/client-back-step.test.js` covers the order of Back's steps;
   `test/client-now-playing.test.js` the media keys' buttons (`Pause` among them) and the bar's
   place among the card's stops, `test/listening.test.js` a queue played one at a time and
-  shuffled (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
+  shuffled, `test/client-music-remote.test.js` the gramophone's OK in the overlay's walking hint
+  (music). Checked in a browser with `?tv=emulate` and real key presses (2026-10-25):
   - Every control of the card reached and used, and of the help (its reset fieldset, select and
     checkboxes; Save scene, then Restore) and Kiwix's library; Back closes a dialog onto its
     button.
@@ -2372,6 +2380,10 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     book's buttons, the text view with the bar, the bar's Next and the help open (A− and A+
     were named "Smaller text" and "Larger text", which axe 4.14's label-in-name rule, no longer
     experimental, finds: they say "A− smaller text" and "A+ larger text" now).
+  - music (2026-10-27): 2 m from the gramophone, the dot on it: "OK plays the gramophone"; OK:
+    it plays, "OK pauses the gramophone"; OK: paused, "plays" again; Menu: the card's hint, Back:
+    the gramophone's again; the dot off it: the book's line (on the wall), the list's (on the
+    stand's). axe 4.14 finds nothing in those and the nine states before.
 
   And again (2026-10-26, common v0.6.1):
   - Menu lands on the Controls help, with a book out on its first button; the search's box and
