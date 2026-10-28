@@ -207,6 +207,36 @@ describe('the queue and the names of sounds (media/queue.js)', () => {
     assert.equal(soundTitle({ t: 'Listen', media: { name: 'music_01.mid' } }), 'music 01');
   });
 
+  it('names a sound by its heading when the words beside it say only how to play it, or what its files are', () => {
+    // As the Music collection's books have them (gutenberg_en_lcc-m_2026-03): the paragraph's runs
+    // (a sound list's `x` leaves out the link and the formats' names), then the title.
+    const said = (h, ...runs) => soundTitle(soundsOf([[{ t: 'h', l: 2, r: [[h, 0]] }, { t: 'p', r: runs }]])[0]);
+    const mid = (t, f = 'music/music001.midi') => [t, 0, link(f)];
+    assert.equal(said('INTRODUCTORY', [' To hear this music (MIDI), click ', 0], mid('here'), ['.', 0]), 'INTRODUCTORY', 'The Pianoforte Sonata');
+    assert.equal(said('THE BAND', mid('MIDI'), [' (sound file) pdf (music and lyrics)', 0]), 'THE BAND', 'Dramatized Rhythm Plays');
+    assert.equal(said('SCENE II.', mid('Listen to music'), ['\nPDF version', 128]), 'SCENE II.', 'the link says how, the rest is a format');
+    assert.equal(said('At a Pianoforte Recital', mid('Listen'), [' View Lilypond', 0], ['or', 0], mid('Listen', 'music/2.midi'), [' View Lilypond', 0]),
+      'At a Pianoforte Recital', 'a format run into "or"');
+    assert.equal(said('The Dying Ranger', mid('Listen'), [' | Download Finale | View/Download PDFe', 0]), 'The Dying Ranger', 'misspelt');
+    assert.equal(said('CHAPTER VI 1854-1855', ['etc.\n', 0], mid('[Listen]')), 'CHAPTER VI 1854-1855', 'only "etc."');
+    assert.equal(said('PLATE XLVII.', mid('[Listen]'), [' and', 0]), 'PLATE XLVII.', 'only "and"');
+    // Link words that say how, or how long: none of them a name.
+    for (const t of ['Listen:', 'Listen to music', '[Listen: {1min 5sec} ]', '[Audio: {1m 50s} ]', 'To hear this music, click here']) {
+      assert.equal(isGenericLabel(t), true, t);
+      assert.equal(soundTitle({ t, h: 'Scena II.' }), 'Scena II.', t);
+    }
+    assert.equal(soundTitle({ t: 'play tune: Cithara' }), 'Cithara', 'the words before the name left out');
+    // Words that name music stay, though some are words of sounds and files.
+    assert.equal(soundTitle({ t: 'Listen to Finale', h: 'Sonata' }), 'Finale', 'a movement, not the program');
+    assert.equal(soundTitle({ t: 'Listen', x: 'The Sound of Music', h: 'Songs' }), 'The Sound of Music');
+    assert.equal(soundTitle({ t: 'Listen', x: 'See Example A.', h: 'FOOTNOTES' }), 'See Example A.');
+    assert.equal(soundTitle({ t: 'Listen', x: 'Scale of f# Melodic', h: 'THE MINOR SCALE.' }), 'Scale of f# Melodic');
+    assert.equal(soundTitle({ t: '[Listen Line 1]' }), 'Line 1');
+    // In a list, the heading's sounds by number.
+    const rows = soundRows(['music001', 'music002'].map((f) => ({ t: 'here', k: 'midi', h: 'JOHANN KUHNAU', x: 'To hear this music ( ), click .', href: `music/${f}.midi` })));
+    assert.deepEqual(rows.map((r) => r.heading ?? r.label), ['JOHANN KUHNAU', '♪ 1', '♪ 2']);
+  });
+
   it('lists sounds under their headings, a tune\'s one sound as one row', () => {
     const rows = soundRows([
       { t: 'Listen', h: 'No. 1 ROMISH LADY', k: 'midi' },
