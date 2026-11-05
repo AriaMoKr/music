@@ -6,7 +6,7 @@
 // a mesh in front of it, moved every frame (nothing allocated).
 
 import * as THREE from 'three';
-import { Panel, UI } from './panel.js';
+import { Panel, UI } from '../../vendor/common/panel.js';
 import { FAMILY_NAMES, ROLL_SPAN, drawRoll, inWindow, partColor, rollLayout, windowFor } from '../media/roll.js';
 import { RATE_MAX, RATE_MIN } from '../media/synth.js';
 

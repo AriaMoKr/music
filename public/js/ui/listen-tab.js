@@ -4,7 +4,7 @@
 // its book from there on, on the gramophone, which goes on playing while the visitor walks and
 // reads. Filled by interaction.js's _fillKiosk (`ix`: the Interaction).
 
-import { UI } from './panel.js';
+import { UI } from '../../vendor/common/panel.js';
 import { soundRows, soundTitle } from '../media/queue.js';
 import { playingBooks, playsSounds } from '../rooms.js';
 import { clock } from '../media/player.js';

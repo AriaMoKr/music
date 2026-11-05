@@ -75,6 +75,23 @@ class Element extends Node {
     return this.attributes.get(name) ?? null;
   }
 
+  hasAttribute(name) {
+    return this.attributes.has(name);
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+
+  /** It or its nearest ancestor with an attribute or a class: closest('[name]') or closest('.name'). */
+  closest(sel) {
+    const [, kind, name] = /^(\[|\.)([\w-]+)\]?$/.exec(sel) ?? [];
+    if (!name) throw new Error(`fake-dom: closest('${sel}') is neither an [attribute] nor a .class`);
+    const has = kind === '[' ? (n) => n.attributes.has(name) : (n) => n.classList.contains(name);
+    for (let n = this; n; n = n.parentNode) if (n.nodeType === 1 && has(n)) return n;
+    return null;
+  }
+
   addEventListener(type, fn) {
     (this.listeners[type] ??= []).push(fn);
   }

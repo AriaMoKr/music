@@ -1,3 +1,4 @@
+// @ts-check
 // Built-in performance scenarios (?perf), started by tools/quest-perf.mjs through
 // window.__vrlbry.perf.run(). Each one is a recorder segment, so the dump breaks the numbers down
 // per scenario. They drive the real app: room switches, walking (the rig glides along aisles),
@@ -58,7 +59,8 @@ async function until(fn, ms) {
  * is not ready within 20 s.
  */
 async function densestSong(I) {
-  let catalog = null;
+  // Set in the wait (a closure), so typed here: tsc would take it for null below.
+  let catalog = /** @type {{ items?: any[] } | null} */ (null);
   await until(() => (catalog = I.soundCatalog()), 20000);
   let best = null;
   for (const it of catalog?.items ?? []) {

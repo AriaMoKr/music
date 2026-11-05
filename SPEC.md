@@ -14,9 +14,11 @@ If you must deviate, keep the deviation minimal and report it.
 ## 1. Ground rules
 
 - **Runtime:** Node.js ≥ 22.15 (uses built-in `zlib.zstdDecompress`). ES modules everywhere
-  (`"type": "module"`). No build step, no bundler, no TypeScript.
+  (`"type": "module"`). No build step, no bundler. Types are JSDoc, which tsc checks a file at a time
+  (`tsconfig.json`: a file with `// @ts-check`; `npm test` runs it), never compiled.
 - **Dependencies (already installed):** `three@0.186` (client), `htmlparser2@12` (server HTML
-  parsing), `selfsigned@5` (server `--https`), dev: `iwer@2.5` (WebXR emulation for testing).
+  parsing), `selfsigned@5` (server `--https`), dev: `iwer@2.5` (WebXR emulation for testing),
+  `typescript@5.9` and `@types/three` (the type check).
   Do not add other runtime dependencies. Node built-ins only otherwise.
 - **Client** is plain ES modules served from `public/`. Three.js is loaded through an import map:
   `"three": "/vendor/three/build/three.module.js"`, `"three/addons/": "/vendor/three/examples/jsm/"`.
@@ -1178,7 +1180,7 @@ public/
     world/book3d.js      a single free-standing book: closed/open, cover, pages, page turn anim.
     world/world.js       World facade: builds room + shelves from libraries, layout, collisions.
     xr/controls.js       input: XR controllers/hands, desktop mouse+keyboard, touch; locomotion.
-    ui/panel.js          canvas-texture UI panels with buttons/text, hover & click via UV.
+    ui/text-view.js      the text view (§5.8): the library's book in AriaMoKr/common's TextView.
     ui/overlay.js        DOM overlay: library info, search, help (non-VR); setReading(bool) fades it while a book is open.
     interaction.js       app state machine: browse → inspect → opening → read; wires everything.
     rooms.js             which books are shelved: the current place (one library, or one room of a huge one).
@@ -1518,24 +1520,31 @@ export class Controls extends EventTarget {
 - XR controller gamepads follow xr-standard: buttons 0 trigger, 1 squeeze, 3 thumbstick press,
   4 A/X, 5 B/Y; axes 2/3 thumbstick.
 
-### 5.5 Panels (`ui/panel.js`)
+### 5.5 Panels (AriaMoKr/common's `panel.js`)
+
+The 3D panels are common's (`../vendor/common/panel.js`, v0.8.3; its README, "panel.js", has
+the whole interface), shared with the Hallway's other sites. What interaction.js uses:
 
 ```js
-export class Panel {
-  constructor({ width, height /* metres */, pxPerMeter = 1200, background = 'rgba(25,20,16,0.92)', radius = 24 })
+import { Panel, Label, UI } from '../vendor/common/panel.js';
+class Panel {
+  constructor({ width, height /* metres */, pxPerMeter = 1200, ring = 0 /* vrlbry's lists: no outline */ })
   mesh: THREE.Mesh          // PlaneGeometry; mesh.userData.panel = this
-  canvas, ctx
-  clear(); add(element); remove(id); get(id)
-  // element = { id, type: 'button'|'text'|'image'|'list'|'slider', x, y, w, h (px), label, value,
-  //             onClick(uvPx, element), disabled, active, font, color, align }
-  redraw()                  // repaint (only when dirty — call markDirty())
-  pointerMove(uv) / pointerLeave(); click(uv): boolean   // uv from raycast intersection (0..1)
-  pressAt(uv): boolean; dragTo(uv); release(); dragging   // a list's scroll bar: press the thumb
+  canvas, ctx, w, h         // the canvas's pixels, which the elements' boxes are in
+  clear(); add(element); remove(id); get(id); set(id, fields)   // set: drawn again only on a change
+  // element = { id, type: 'button'|'text'|'image'|'list'|'slider'|'rect'|'custom', x, y, w, h (px),
+  //             label, text, value, items, scroll, onClick, disabled, active, hidden, size, … }
+  update(); markDirty()     // drawn again on the next update() (each frame) after a change, never else
+  pointerMove(u, v) / pointerLeave(); click(u, v): boolean   // u, v from the ray's hit (0..1, from
+  //   the bottom left; panelUv in interaction.js, the same object each time: nothing allocated per
+  //   ray); leaving clears what was lit, a slider's mark (hoverValue) too
+  pressAt(u, v): boolean; dragTo(u, v); release(); dragging   // a list's scroll bar: press the thumb
   //   (or the track beside it: a page towards the press) and drag; interaction.js calls them on
   //   selectstart / every frame (the ray on the panel's plane, so off the panel too) / selectend,
   //   holds looking around meanwhile, and swallows the release's click
   visible
 }
+class Label { constructor({ width, height }); setText(title, sub); visible; panel; mesh }   // tooltip, notice
 ```
 
 ### 5.6 Interaction (`interaction.js`) — the state machine
@@ -1579,7 +1588,9 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   "2 pages", theme, Close.
   **One page or two** (`reader/spreads.js`): a spread is `{ left, right }`, each a PageRef, `'ex'`
   (the ex-libris before the first page), `'blank'` or null. Two pages pair by page number (odd on
-  the right) and turn two at a time. The single-page view shows only the right-hand page: the
+  the right) and turn two at a time. A theme draws the spread shown again as it is (`_redraw`), not
+  paired again: before the part read the numbers are estimates until its layout is in, and pairing
+  again stood the book a page back. The single-page view shows only the right-hand page: the
   book's left half (the cover and its pages) is hidden once the cover has swung past edge-on
   (`Book3D.single`, `setSingle`), no left canvas is drawn (the spread's left, `'ex'` before the
   first page or `'blank'`, is not shown), the page lies flat (a spread's halves rise toward the
@@ -1657,7 +1668,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   stand's "Sampled" / "Synth" button and the help dialog's "Play MIDI songs with sampled
   instruments" change it, the song playing at once (`SoundPlayer.setInstruments`). Without the
   manifest, or where Opus cannot be decoded, every song plays the oscillators. Where the reader was goes on a trail (up to 100: the book, the spread's page and side,
-  the font size), kept while links swap books and dropped when the book is closed; the toolbar's
+  the font size, and for a link followed in the text view its place, `view`: §5.8), kept while
+  links swap books and dropped when the book is closed; the toolbar's
   "↩ Back" (beside the progress bar while there is a trail), B/Y and Backspace go back along it,
   to the same spread while the font size is the same. So does the browser's Back (its button, a
   phone's back gesture, a mouse's back button, Quest Browser's: AriaMoKr/common's
@@ -1983,9 +1995,13 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   after up to 6 books; picking an article takes its volume off the shelf and opens it at that
   article, `interaction.openArticle` / `read({ at })`), Enter VR button
   (only when `immersive-vr` is supported), control help, loading progress, error toasts. The
-  search box is a combobox (`aria-controls` its listbox, `aria-expanded` while results show,
+  search box is a combobox (`aria-controls` its listbox, `aria-expanded` while the list shows,
   `aria-activedescendant` the highlighted option, which has `aria-selected`; `_showList`), and a
   polite status says how many results there are ("12 results", "No results") once typing pauses.
+  While articles are still to come and nothing else matches (a Wikipedia among the libraries and
+  two letters or more: `asksArticles`), the list and the status say "Searching…" and the list is
+  `aria-busy`, for 10 s at most (`ARTICLE_WAIT`, for a stalled request; articles that come later
+  are still listed); "No results" waits until then. A search that fails counts as none found.
   The card stays within the screen and scrolls inside it; on a short screen (a phone held
   sideways, height ≤ 500 px) it stops above the buttons at the foot, its library list does not
   scroll on its own, and the hint goes; between 641 and 780 px wide the search box takes the space
@@ -2097,6 +2113,17 @@ readers, the keyboard, zoom and phones. The module is shared with the sites made
 (music): it gets what it uses from `main.js` (the interaction, `getChunk`, `imageSource`, the
 overlay's `announce`).
 
+The view itself, its toolbar, keys, place and CSS, is AriaMoKr/common's `TextView`
+(`../vendor/common/text-view.js`, v0.8.3; its README, "text-view.js"), which outside's and
+music's views extend too. `ui/text-view.js` keeps the pure part (`renderBlocks`, `topBlock`,
+`runsText` and the rest), and its `TextView` extends common's with the library's book, all through
+the interaction: a part is a chunk (`renderPart`: `getChunk`, then `renderBlocks`), a place is a
+block anchor `{ c, b }` (with `f` for an element a link leads to: `placeAimed` shows the 3D page's
+place for it), the contents are `reader.meta.toc`, and the toolbar's actions are the 3D book's
+(`turnPage` is its turn; common's `turn(side)` brings the book to the reader's place first). What
+the view says as a book comes out, opens and closes (`bookInHand`, `openOnRead`, `bookOpened`,
+`bookClosing`) stays the library's.
+
 - **Opening and closing.** While a book is open on a screen (not in a headset):
   - Ways in: T, the overlay's "Text view" button (shown only while reading), or the help
     dialog's "Open books as text" (`settings.textView`), which opens each book in it at once.
@@ -2148,38 +2175,65 @@ overlay's `announce`).
   "Part n of N").
 - **The toolbar** is a sticky header. In order:
   - ← Previous part, Close, and Contents;
-  - A− / A+ (`changeFont`);
+  - A− / A+ (`changeFont`), named "A− smaller text" and "A+ larger text" (the names start with
+    what the buttons show);
   - the theme: paper, sepia or night (`setTheme`), in the reader's `THEMES` colours (a test keeps
-    them the same);
+    them the same), each with its `color-scheme` (night's `dark`);
   - the page label, and a slider (`aria-valuetext` "Page x of y", `jumpToProgress`);
-  - ↩ Back (while there is a trail), Put back, and Next part →.
+  - ↩ Back (while there is a trail), Put back, and Next part →. Back's last step, which hides it,
+    leaves the focus on the view's home (the title; on a TV the view), not on the page.
 
   In a Wikipedia volume the parts are called articles. The part buttons are repeated at the
   part's end.
   - Contents is a panel under the toolbar, over the text, so the reader's place stays. It is
     filled when first opened, with focus on the entry at or before the part shown. Choosing one
-    is `jumpToToc`.
+    is `jumpToToc` (`useContents`), its block put just below the toolbar.
   - At ≤ 640 px wide the toolbar drops words, to fit two rows at 320 px: arrows for the parts,
     "Close", no "Theme" and no page label. The accessible names stay whole.
   - On a short screen (≤ 420 px tall: a phone held sideways, 400 % zoom) the toolbar slides away
     while the reader scrolls down. It comes back on a scroll up, or when focus reaches it; the
-    text the browser scrolled towards it is put back.
+    text the browser scrolled towards it is put back. The view's own smooth scrolls (to the place
+    after a size, a turn or Back) leave it in sight (common v0.8.3; before, a click on A+ slid it
+    away).
 - **One place.** The view and the 3D book share the reader's place, a block anchor `{ c, b }`.
+  The view's own is finer, the line within the block: `{ c, b, w }`, w the first word on the line
+  at its top (`wordStarts`: the block's words as shown, a list inside an item left out; omitted
+  when 0, the block's top). A block can be screens tall (Jespersen's chapter III, block 27: 2,538
+  px at 375 × 812), and wherever the view puts the reader back (a size, Back, a turned phone,
+  opened again) it is at their line, not at the block's top. The 3D book's place stays the block:
+  `jumpTo` takes it to the block's page.
   - Opening: the view opens at `anchorOf` the page shown, or at its own last place while the 3D
-    book still shows it.
+    book still shows it; a frame on, once drawn, it is put there again unless the reader has
+    scrolled.
   - A turn, jump, link, Back or contents entry in the 3D book: the view shows that part and
     scrolls to the block (`follow`, called from `_afterTurn`). A place aimed at (`aim`: a link's
     or an entry's block, a part's start) wins over the spread's left page, which may end the
-    part before.
-  - The reader's own scrolling: once it rests (250 ms), the block at the view's top becomes the
-    place (`topBlock`, measured below the sticky toolbar). So it does at once before anything that
-    starts from the place: a size, Back, a link, a turn, closing.
+    part before. The 3D book's pages shown again with the view's place still on them (1 page or
+    2, a phone turned) leave the view at it (common v0.8.2); a turn of the view's own (← →) goes
+    to the new pages' first block.
+  - A link followed in the view keeps the view's place on the trail as well (`view`, with its w:
+    the place the shell brought the 3D book to just before, which `jumpTo` in place hands the
+    library's `TextView`; the page may begin blocks before it). Back with the view open (↩ Back
+    clicked or by Enter, the browser's Back: `_goTo`) aims the view at that line, not at the
+    page's first block, and at another font size takes the 3D book to that block's page. With the
+    view closed, Back goes to the page, as from a link of the 3D book's own.
+  - The reader's own scrolling: once it rests (250 ms), the place at the view's top becomes the
+    place (`placeAt`, measured below the sticky toolbar): the block there (`topBlock`), and when it
+    began above the top, the first word whose line is in sight (`firstWordBelow`, each word's
+    first letter measured with a `Range`). A table row is its top: its cells' words are not in
+    order down the page. So it does at once before anything that starts from the place: a size,
+    Back, a link, a turn, closing. The view puts a place back with the top of its word's line
+    just below the toolbar, else its block's top (`placeTop`).
     - The 3D book goes there in place, without a turn (`jumpToAnchor(anchor, { inPlace: true })`),
       unless the spread shown holds that block already (`_showsBlock`, `reader.blocksOn`).
     - So the page label, the saved position and the trail follow the text view.
     - The view's own scrolls are not the reader's: near a part's end, the block aimed at cannot
       reach the top.
   - Closing leaves the 3D book at that place.
+  - A change of width (a phone turned, a window resized, the browser's zoom) reflows the text or
+    wraps the toolbar under the scroll: the view goes back to the reader's place, taken as they
+    scrolled, before the text moved, and the 3D book stays where it is. A change of height alone
+    moves nothing.
   - Smooth scrolling only with full motion (`interaction.reduced`).
 - **Layout.**
   - A 70ch column on a desktop, the full width on a phone. The text size is
@@ -2192,12 +2246,19 @@ overlay's `announce`).
     was closed, and the toolbar shown for the jump; a scroll-padding
     would count the toolbar's own buttons as hidden).
 - **Tests.** `test/client-text-view.test.js` covers blocks to DOM (with `test/helpers/fake-dom.js`),
-  links (sounds' too, and the one playing found), heading levels, the top block, the round trip from a page to the
-  view and back to the same block, and the themes' colours; `test/client-now-playing.test.js` what
-  the Now playing bar shows and when a sound counts as another, and the bar itself (over
-  `fake-dom.js`) while a queue goes on: through a next sound slow to load, kept with every element
-  and text node and the focus on Pause; gone after the last sound, on Stop and when a sound cannot
-  be played, the focus given back.
+  links (sounds' too, and the one playing found; a sound's link played where the view is, which
+  stays as it is meanwhile, and marked, its line brought to the top when it starts off the
+  screen), heading levels, the top block, the round trip
+  from a page to the view and back to the same block, the focus after ↩ Back's last step, Back to
+  the block a link was followed from (interaction.js's trail itself, with common's shell, a
+  stand-in reader and 3D turn: Back, the browser's Back, another font size, the view closed), the
+  reader's line in a tall block (a block's words, the first in sight; over a layout of it, A+ and
+  A−, and a link then ↩ Back and the browser's Back, each bringing the same word's line back to
+  the top), and the themes' colours and color-schemes in common's `TEXT_VIEW_CSS` (style.css sets
+  none of them); `test/client-now-playing.test.js` what the Now playing bar shows and when a
+  sound counts as another, and the bar itself (over `fake-dom.js`) while a queue goes on: through
+  a next sound slow to load, kept with every element and text node and the focus on Pause; gone
+  after the last sound, on Stop and when a sound cannot be played, the focus given back.
 
 ### 5.9 TV remote (`ui/remote.js`, `back-step.js`)
 
@@ -2250,8 +2311,15 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     last), ↑ from the first back to the box, OK opens the one with the focus, Back closes them
     onto the box. `LibraryRemote` leaves a combobox's focused option its ↑ ↓ OK and Escape (and
     turns TalkBack's channel keys into its arrows). ↑ from the box, or ↓ with no result to go
-    to, closes the list and goes on as from any control. The highlight follows the focus, so no
-    result looks chosen while the box has it. A focused result keeps the focus when the article
+    to and none on the way, closes the list and goes on as from any control. While the articles
+    are still to come and nothing else matched (the list "Searching…" and `aria-busy`, 10 s at
+    most: §5.6), ↓ is the box's: it waits there, and the focus goes to the first result once
+    they come (`overlay._downWaits`); when none come, or not within those 10 s, it stays in the
+    box, from which ↓ then goes on. Any other key gives a waiting ↓ up, also one common's Remote
+    takes itself, which the box never sees (← → at the caret's ends, TalkBack's rewind and
+    fast-forward: `overlay.remoteKey`), and so do typing, Back, the list closing or the focus
+    moved elsewhere. The highlight follows the focus, so no result looks chosen while the box has
+    it. A focused result keeps the focus when the article
     results arrive and the list is made again; closing the list drops the article search still
     to come (on a desktop too, where it reopened the list after Escape).
   - The focus falling to nowhere (a control that hid itself: ↩ Back after the last link, Put
@@ -2260,9 +2328,9 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     data…".
   - **The book's buttons** stand in for the letter keys (`.ov-book`, shown in TV mode): in hand
     Read, Read as text (T), In front of me (F), Put back; open Contents (C, `aria-pressed`),
-    A− / A+, Theme (N), 1 page / 2 pages (P), In front of me, ↩ Back (while there is a trail),
-    Put back, and Text view. Each presses its key (`overlay.onBookKey` →
-    `interaction.pressKey`); the open book's follow its toolbar (`setBookButtons`). Contents
+    A− / A+ (named as the text view's), Theme (N), 1 page / 2 pages (P), In front of me, ↩ Back
+    (while there is a trail), Put back, and Text view. Each presses its key (`overlay.onBookKey`
+    → `interaction.pressKey`); the open book's follow its toolbar (`setBookButtons`). Contents
     chosen there returns to walking, the dot on them.
   - Enter or Space on a button or link presses it and is not the view's key too (controls.js
     `pressesControl`).
@@ -2425,5 +2493,27 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     highlight, Escape, the list staying closed); axe with nothing found walking, on the Controls
     help, in the search's box and on a result, a book in hand, the text view on a link, and with
     the help or Kiwix's library open.
+
+  And again (2026-11-03), ↓ in the search's box before its results have come, with the
+  checkout's Gutenberg, Wikipedia (top 1M) and Wikisource, and with the article answers held
+  back 1.5 s (CDP):
+  - ↓ right after typing a word only articles match ("photosynthesis") waits in the box
+    ("Searching…", `aria-busy`) and goes to the first article once they come, where OK opens
+    it; the same with TalkBack's channel down, and on the box focused again with its query.
+  - With nothing at all ("xqzv") the box keeps the focus and says "No matching books" and "No
+    results"; ↓ then goes on. More letters, ↑, Back or the focus moved elsewhere give a waiting
+    ↓ up. Books shown at once go as before; on a desktop ↓ is as before (the first result
+    highlighted when they come).
+  - axe with nothing found while the list waits and once the results show, on a desktop and on
+    a TV.
+  - With the answers held back 12 s the list and the status say "Searching…" for 10 s, then "No
+    matching books" and "No results", the ↓ given up and the focus kept in the box; the
+    articles are listed when they come, and ↓ then goes to the first. Before: still waiting at
+    10 s, and the articles took the focus 13 s after the ↓.
+  - → at the end of the box's text and TalkBack's fast-forward (common's Remote takes them: the
+    box never sees them) give a waiting ↓ up. Before: the articles took the focus.
+  - An answer the search cannot read (`{}`) is none found at once, a warning logged, and ↓ then
+    goes on. Before: "Searching…" for good, ↓ doing nothing. Nothing is said once the list has
+    closed (`_showList` drops a status still to be said).
 
   The TV itself, its frame rate included, is another session's (TODO).

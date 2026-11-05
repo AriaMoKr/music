@@ -9,7 +9,7 @@ import {
   currentRef, currentSide, fitOnePage, isPage, nextSpread, pageViewSetting, prevSpread, sameSpread, singlePage, spreadAt,
 } from './reader/spreads.js';
 import { bookIndex, matchBooks, findArticles } from './search.js';
-import { Panel, Label, UI } from './ui/panel.js';
+import { Panel, Label, UI } from '../vendor/common/panel.js';
 import { audio } from './audio.js';
 import { perf } from './perf.js';
 import { load, save } from './util/storage.js';
@@ -100,8 +100,9 @@ function setListener(ctx, camera) {
 }
 const _hits = [];
 const _head = new THREE.Vector3();
+const _uv = { x: 0, y: 0 };
 
-/** Where a ray meets a panel's plane, as panel uv (beyond 0..1 off the panel), or null. */
+/** Where a ray meets a panel's plane, as panel uv (beyond 0..1 off the panel), or null: the same object each time. */
 function panelUv(panel, ray) {
   const m = panel.mesh;
   m.updateMatrixWorld();
@@ -109,7 +110,9 @@ function panelUv(panel, ray) {
   _plane.setFromNormalAndCoplanarPoint(_normal, m.getWorldPosition(_onPlane));
   if (!ray.intersectPlane(_plane, _onPlane)) return null;
   m.worldToLocal(_onPlane);
-  return { x: _onPlane.x / panel.width + 0.5, y: _onPlane.y / panel.height + 0.5 };
+  _uv.x = _onPlane.x / panel.width + 0.5;
+  _uv.y = _onPlane.y / panel.height + 0.5;
+  return _uv;
 }
 
 /** The reader's toolbar: its width (m), and how far below the page's foot its own foot is (m). */
@@ -1388,7 +1391,7 @@ export class Interaction {
     this._swallowSelect = null;
     if (this.state === 'busy' || pointer.teleporting || this._panelDrag) return;
     const hit = this._hitTest(pointer);
-    if (hit?.kind !== 'panel' || !hit.panel.pressAt(hit.uv)) return;
+    if (hit?.kind !== 'panel' || !hit.panel.pressAt(hit.uv.x, hit.uv.y)) return;
     this._panelDrag = { pointer, panel: hit.panel, look: this.controls.lookEnabled };
     this.controls.lookEnabled = false;
   }
@@ -1419,7 +1422,7 @@ export class Interaction {
     if (this._search.focus && !(hit?.kind === 'panel' && hit.panel === this.kiosk)) this._focusSearch(false);
     if (!hit) return;
     if (hit.kind === 'panel') {
-      if (hit.panel.click(hit.uv)) audio.click();
+      if (hit.panel.click(hit.uv.x, hit.uv.y)) audio.click();
     } else if (hit.kind === 'book' && this.state === 'browse') {
       this.pick(hit.book);
     } else if (hit.kind === 'door' && this.state === 'browse') {
@@ -1608,7 +1611,7 @@ export class Interaction {
     if (p.hover) p.hover.hoverRow = null;
     this._tocAt = stop;
     this._tocList = list;
-    p.ring = true;
+    p.ring = 4; // the row's outline, 4 px, seen from the sofa
     p.hover = stop ? p.get(stop.id) : null;
     if (list) {
       const visible = Math.floor(list.h / (list.rowH || 64));
@@ -2383,23 +2386,31 @@ export class Interaction {
     return found && { ...found, side: hit.side };
   }
 
-  /** Where the reader is, to come back to (the trail). */
-  _here() {
+  /**
+   * Where the reader is, to come back to (the trail): the page, and the text view's own place when
+   * it is open (`view`, the block at its top and the word on its top line, w: the page may begin
+   * blocks before it, and a block be screens tall).
+   * @param {{ c: number, b: number, w?: number } | null} [view]
+   */
+  _here(view = null) {
     const s = this._cur.spread;
     const side = currentSide(s);
     const page = s[side];
     return {
       libId: this.book.libId, id: this.book.id, at: this.reader.anchorOf(page), side,
       page: { c: page.c, p: page.p }, fontScale: this.reader.fontScale,
+      ...(view ? { view: { c: view.c, b: view.b, ...(view.w ? { w: view.w } : {}) } } : {}),
     };
   }
 
   /**
    * Follows a link of the open book (SPEC §3.5): `at` is a place in it, `to` one in another of
    * the library's books, `href` is asked of the library first (resolveLink). Where the reader was
-   * goes on the trail, for back().
+   * goes on the trail, for back(): with `view`, the text view's place, which Back brings it to.
+   * @param {object} link
+   * @param {{ view?: { c: number, b: number, w?: number } | null }} [options]
    */
-  async followLink(link) {
+  async followLink(link, { view = null } = {}) {
     if (this.state !== 'read' || this._turnBusy || this._following) return;
     // On the tap itself (before anything is awaited): a sound needs the audio context running.
     audio.init();
@@ -2436,7 +2447,7 @@ export class Interaction {
         dest = { libId: book.libId, id: to.book, at: { c: to.c, b: to.b ?? 0, ...(to.f ? { f: to.f } : {}) } };
       }
       audio.click();
-      const from = this._here();
+      const from = this._here(view);
       this._trail.push(from);
       if (this._trail.length > 100) {
         this._trail.shift();
@@ -2493,15 +2504,19 @@ export class Interaction {
   }
 
   /**
-   * Shows a place { libId, id, at, page?, fontScale?, side? }: in the open book with a turn, in
-   * another of the library's books by putting this one back and taking that one out (a Wikipedia
-   * volume, a Wikisource work). `page` (a trail's) is used while the font size is the same.
+   * Shows a place { libId, id, at, page?, fontScale?, side?, view? }: in the open book with a turn,
+   * in another of the library's books by putting this one back and taking that one out (a Wikipedia
+   * volume, a Wikisource work). `page` (a trail's) is used while the font size is the same. A
+   * trail's `view` (followed from the text view) is the place while the view is open: it shows
+   * that block's line again (w), not the page's first block, and the 3D book goes to the block at
+   * another font size.
    * @returns {Promise<boolean>} whether the place is shown
    */
   async _goTo(dest) {
-    this.textView?.aim(dest.at); // the text view shows the place, not a spread's left page
+    const at = (this.textView?.isOpen && dest.view) || dest.at;
+    this.textView?.aim(at); // the text view shows the place, not a spread's left page
     try {
-      return await this._goToNow(dest);
+      return await this._goToNow(at === dest.at ? dest : { ...dest, at });
     } finally {
       this.textView?.aim(null);
     }
@@ -3117,7 +3132,7 @@ export class Interaction {
     this.settings.theme = name;
     save('settings', this.settings);
     this.reader.setTheme(name);
-    await this._jumpInPlace(this._currentRef());
+    await this._redraw();
   }
 
   /** Whether the spread shown holds some of block b of part c (anchor { c, b }). */
@@ -3130,9 +3145,9 @@ export class Interaction {
   }
 
   /**
-   * Opens the book at a block anchor { c, b } (the text view's place, a part's start), unless the
-   * spread shown holds that block already; inPlace: without a turn (the text view covers the
-   * book). Whether it moved.
+   * Opens the book at a block anchor { c, b } (the text view's place, whose line w is the view's
+   * own, a part's start), unless the spread shown holds that block already; inPlace: without a
+   * turn (the text view covers the book). Whether it moved.
    */
   async jumpToAnchor(anchor, { inPlace = false } = {}) {
     if (this.state !== 'read' || this._turnBusy || this._showsBlock(anchor)) return false;
@@ -3147,7 +3162,7 @@ export class Interaction {
     this.settings.theme = t;
     save('settings', this.settings);
     this.reader.setTheme(t);
-    await this._jumpInPlace(this._currentRef());
+    await this._redraw();
   }
 
   /** Whether the single-page view is wanted now: the setting, 'auto' deciding by the screen. */
@@ -3218,20 +3233,33 @@ export class Interaction {
     }, 300);
   }
 
-  /** Re-renders the current position without a turn animation (font / theme changes). */
-  async _jumpInPlace(ref) {
+  /**
+   * Re-renders the current position without a turn animation (font / theme changes): the spread
+   * of `ref`, or `spread` as it is (_redraw).
+   */
+  async _jumpInPlace(ref, spread = null) {
     this._turnBusy = true;
     try {
       this._prepToken = (this._prepToken || 0) + 1;
       this._next = null;
       this._prev = null;
-      const shown = await this._renderSpread(await this._spreadAt(ref));
+      const shown = await this._renderSpread(spread ?? await this._spreadAt(ref));
       this._cur = shown;
       this.book3d.setPages(shown.left, shown.right);
       this._afterTurn();
     } finally {
       this._turnBusy = false;
     }
+  }
+
+  /**
+   * Draws the spread shown again, its pages as they are (a theme changed: nothing moves). Found
+   * again from the page read they could pair otherwise, since spreadAt pairs pages by their number
+   * and the numbers before the part read are estimates until its layout is in: a theme and then
+   * another stood the book a page back each time, behind the text view too.
+   */
+  _redraw() {
+    return this._jumpInPlace(null, this._cur.spread);
   }
 
   toggleToc(show = !this.tocPanel.visible) {
@@ -3771,7 +3799,7 @@ export class Interaction {
       if (prev && prev !== hit?.panel && !(own && prev === this.tocPanel)) prev.pointerLeave();
       let interactive = false;
       if (hit?.kind === 'panel') {
-        interactive = hit.panel.pointerMove(hit.uv);
+        interactive = hit.panel.pointerMove(hit.uv.x, hit.uv.y);
         // A TV's dot on a list that scrolls: the remote's ↑ ↓ are its (scrollUnderDot).
         const el = this.tv && pointer.id === 'gamepad' ? hit.panel.hover : null;
         if (el && hit.panel.scrolls(el) && (this.state !== 'browse' || hit.distance <= TV_REACH)) {
@@ -3831,7 +3859,7 @@ export class Interaction {
       if (!panel.visible || !this.controls.pointers.includes(pointer)) this._endPanelDrag();
       else {
         const uv = panelUv(panel, pointer.raycaster.ray);
-        if (uv) panel.dragTo(uv);
+        if (uv) panel.dragTo(uv.x, uv.y);
       }
     }
     if (this.state === 'browse') {

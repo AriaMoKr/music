@@ -431,6 +431,11 @@
     page focuses); ↓ takes the focus into the search's results, so OK opens one; ↓ past the
     text view's toolbar goes to a link on the screen, not the part's first; the walking hint
     has the TalkBack line.
+  - ↓ in the search's box before its results had come (seen 2026-11-03, with a word only
+    Wikipedia's articles match): it closed the list, dropping them, and went on to the Controls
+    help. Now it waits in the box while they are on the way ("Searching…", `aria-busy`, 10 s at
+    most) and goes to the first when they come (done 2026-11-03 in a browser, SPEC §5.9; for
+    that session to check on the TV).
   - Reading in 3D the spread is small on a TV (the reading pose of a desktop screen); the text
     view is the readable way for now.
 - **Sounds on a TV** (music; requested 2026-10-25; done in a browser the same day, and the TV's
@@ -502,6 +507,100 @@
   - The stand's tab row (♪ Listen among them) is above the dot on a TV, tipped or level (the
     dot at 369 px of its 1,000 level, 535–747 tipped, the tabs at 96–150), so the Listen tab
     can't be chosen with the remote; the gramophone is its way to a queue there.
+- **The text view and the 3D panel on common's** (vrlbry's, requested 2026-11-01 and done there
+  the same day; merged here 2026-11-04 with the next two; SPEC §5.5, §5.8). common v0.6.1 →
+  v0.8.1: `ui/panel.js` went for common's `panel.js`, and the text view is common's `TextView`
+  with the library's book in a subclass (`ui/text-view.js`), as outside's is to be. With it the
+  first `tsconfig.json`: tsc in `npm test`, a file at a time (28 files with `// @ts-check`, the
+  subclass first; CLAUDE.md, "Types").
+  - music's on them: the stand and the Listen tab are common's `Panel`s (the piano roll a
+    `custom` element), and the 3D contents' row the remote points at keeps its outline on a TV
+    (`ring`, 4 px). The sounds are on the subclass: a Listen link plays where the view is, the one
+    playing is marked (and its line brought to the top when a new one starts off the screen), and
+    the view stays as it is while a link is followed (`_still`, `follow`). Nothing more was needed
+    from common's shell: only its public and protected parts (`_show`, `_header`, `_style`).
+  - Tests: renderPart's links clicked (a sound's plays, the view still meanwhile; another goes
+    to the shell's `onLink`), and `markSound` (the link marked alone, one off the screen brought
+    to the top once, none for another book's sound or the view closed). Each part taken out in
+    turn fails them.
+  - Checked here in headless Chrome (common's `launchChrome`; the bad-password count stayed 0),
+    on the server with Gutenberg's Music class, in The Shanty Book, with real clicks and keys: at
+    1280 × 800 three Listen links in the view each play, marked alone and named by the Now
+    playing bar, the view where it was to the pixel; the bar's Next plays the next sound, its link
+    marked on the screen, and Stop takes the mark and the bar away. At 375 × 812, from 250 px
+    above a link inside block 154 (1,620 px tall): A+, A−, sepia, night and paper, then the link
+    (to part 2) and ↩ Back by its button and by the browser's Back, the reader's word 0.1 to
+    0.3 px from the toolbar's foot after each. With `?tv=emulate`: the 3D contents' row the
+    remote points at outlined, ↓ ↓ moving it; the card's A− and A+ named "A− smaller text" and
+    "A+ larger text"; axe nothing, in 3D, with the contents, with the card's book buttons out and
+    in the view, a sound playing or not. axe swept through the view (six places from top to end,
+    the contents, a sound playing) in each theme at 1280 × 800 and 375 × 812: nothing. No page
+    errors or warnings.
+  - New to the view: each theme's `color-scheme` (night's `dark`; it was `dark` in all three), A−
+    and A+ named "A− smaller text" and "A+ larger text" (axe's `label-content-name-mismatch` found
+    the old names), the place kept through a change of width, and the view put at its place again
+    a frame after it opens. New to the panels: nothing allocated per ray, `set` drawing again only
+    on a change, and a slider's mark cleared when the pointer leaves.
+  - Checked live in vrlbry in headless Chrome (common's `launchChrome`; the bad-password count
+    stayed 0), beside the old code (`eb0dfab`), with real keys, clicks and wheel turns: open and close at the
+    place (the focus back on "Text view"), A+, A− and the themes, ← and →, the contents, a link
+    and ↩ Back, the parts; 1280 × 800, 375 × 812, 740 × 360 and 320 × 256 with no sideways
+    scroll and the toolbar sliding away on the short two; 1280 → 375 → 1280 twice with the same
+    block at the top (the old code lost it at 375); `?tv=emulate` (the view keeps the focus, ↑ ↓
+    scroll, Menu to the toolbar and out, OK to a link on the screen, Back to walking); the 3D
+    toolbar, slider, contents scroll bar and tooltip by pointer, and with `?xr=emulate` by a
+    controller (entering VR closes the view); axe with `label-content-name-mismatch` on: nothing,
+    in the three themes, with and without the contents.
+  - Not yet: a real headset, and the TV (that session's).
+  - Seen alike before and after, and fixed after it the same day: a theme stood the 3D book a page
+    back (1:18 → 1:8 → 1:0 at the first two, the view still at block 26, until the reader
+    scrolled). It found the spread again from the page read, and pages pair by their number,
+    estimated before the part read until its layout is in (≈31, then 31 when it was in): now the
+    spread shown is drawn again as it is (`_redraw`; SPEC §5.2), in the 3D book (N) too. And ↩
+    Back in the view, which hides itself at the trail's last step, dropped the focus to the page
+    (`body`): it goes to the view's home (the title; on a TV the view, where walking again put it
+    before; SPEC §5.8). The card's A− and A+ (a TV's) are named as the view's now. Checked live
+    as above (a theme, N three times: the same spread, each in its own paper; the last Back, on a
+    screen and with `?tv=emulate`), and the view's Back by a test. The card's ↩ Back on a TV is
+    left as it is: its last step goes back to walking, as SPEC §5.9 has it.
+- **↩ Back to the reader's place in the text view, common v0.8.3** (vrlbry's, requested
+  2026-11-02 and done there the same day; merged here 2026-11-04; SPEC §5.2, §5.8). A link followed from the middle of a part, with the view open,
+  came back to the page's first block (Jespersen's *Language*, chapter III's part, from 164 px
+  into block 3 to block 0): the trail kept only the 3D page. Its step now keeps the view's place
+  as well (`view`, the block the shell brought the 3D book to before the link), which Back and
+  the browser's Back aim the view at; in the 3D book alone Back goes to the page, as before.
+  Nothing more was needed from common's shell. common v0.8.1 → v0.8.3: the view stays at its
+  place while the 3D book's pages shown again show it (v0.8.2), and its own smooth scrolls leave
+  the toolbar of a short screen in sight (v0.8.3).
+  - A test: the trail itself (interaction.js) with common's shell, a stand-in reader and 3D turn;
+    Back, the browser's Back, another font size, the view closed, a link of the 3D book's own.
+  - Checked live in vrlbry in headless Chrome (the bad-password count stayed 0): at 1280 × 800 a
+    link from the middle of a part and ↩ Back by its button, by Enter and by the browser's Back,
+    each time the block left at the top (the reader was 164, 300 and 250 px into it); at
+    740 × 360 A+ and A− clicked with the toolbar shown leave it shown; with `?tv=emulate` axe
+    finds nothing with the card's book buttons out (the book in hand and open). The earlier
+    checks (place, link, sizes, width, TV, themes, axe) as before.
+- **The reader's line in the text view** (vrlbry's, requested 2026-11-03 and done there the same
+  day; merged here 2026-11-04; SPEC §5.8). The view's place was a block, `{ c, b }`, and a block
+  can be screens tall: wherever the view put the reader back (A+, A−, ↩ Back, a theme, a turned
+  phone, opened again), the block's top came to the top, however far down it they were
+  (Jespersen's *Language*, chapter III, block 27: 2,673 px at 375 × 812 there). The place is now
+  the block and the first word on the line at the top,
+  `{ c, b, w }`, as outside's is (`placeAt`: `wordStarts`, `firstWordBelow` and a `Range`;
+  `placeTop`: the top of that word's line), kept by `aim` and `placeAimed` and on the trail
+  (`_here`'s `view`); the 3D book still goes to the block's page. Nothing new from common.
+  - Tests: a block's words and the first in sight; over a layout of a 600-word block, A+ and A−,
+    and a link then ↩ Back and the browser's Back, each bring the same word's line back to the
+    top. Each part of the fix taken out in turn fails them.
+  - Checked live in vrlbry in headless Chrome beside the code before (56d2e1c; the bad-password
+    count stayed 0): at 375 × 812, from the middle of block 27, A+, A−, sepia, the phone turned to
+    812 × 375 and back, Close and Text view again: the reader's word 0 px from the toolbar's foot
+    after each (before: 598 to 1,608 px below it, the block's top at the top). At 1280 × 800, a
+    link from 164, 377 and 470 px into block 3, then ↩ Back by its button, by Enter and by the
+    browser's Back: the reader's line back at the top each time (before: 166, 382 and 463 px
+    below). axe swept through the view (six places from top to end, and the contents) in each
+    theme at 1280 × 800 and 375 × 812: nothing. The earlier checks as before; at 740 × 360 A+
+    and A− keep the toolbar shown and now the line, within block 60.
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.

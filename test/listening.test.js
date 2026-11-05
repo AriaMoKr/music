@@ -12,9 +12,11 @@ import { MidiSynth, RATE_MAX, RATE_MIN } from '../public/js/media/synth.js';
 import { SoundPlayer } from '../public/js/media/player.js';
 import { PLAYING_PLACE, collectionsFor, groupPlaces, periodCollections, placeBookCount, playingBooks, playsSounds } from '../public/js/rooms.js';
 import { placeFromSearch, placeHref } from '../public/js/place-url.js';
-import { partGroups } from '../public/js/ui/music-stand.js';
-import { booksOfKind, booksThatPlay, catalogOfKind, isOfKind } from '../public/js/ui/listen-tab.js';
 import { TUNE } from './helpers/midi-writer.js';
+import './helpers/vendor.js'; // the stand and the Listen tab import ../../vendor/common/panel.js
+
+const { partGroups } = await import('../public/js/ui/music-stand.js');
+const { booksOfKind, booksThatPlay, catalogOfKind, isOfKind } = await import('../public/js/ui/listen-tab.js');
 
 const link = (href) => ({ href });
 
