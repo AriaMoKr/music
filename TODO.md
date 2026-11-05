@@ -535,7 +535,8 @@
     "A+ larger text"; axe nothing, in 3D, with the contents, with the card's book buttons out and
     in the view, a sound playing or not. axe swept through the view (six places from top to end,
     the contents, a sound playing) in each theme at 1280 × 800 and 375 × 812: nothing. No page
-    errors or warnings.
+    errors or warnings. The same again on the site after the deploy (a5cae82's), whose
+    `vendor/common/` is common v0.8.3's, module for module, with no `ui/panel.js`.
   - New to the view: each theme's `color-scheme` (night's `dark`; it was `dark` in all three), A−
     and A+ named "A− smaller text" and "A+ larger text" (axe's `label-content-name-mismatch` found
     the old names), the place kept through a change of width, and the view put at its place again
