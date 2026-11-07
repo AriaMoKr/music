@@ -638,7 +638,10 @@
     no "In the text" and asks no `text`; ↓ highlights the second on a desktop and takes the focus
     to the first, then the second, with `?tv=emulate`, and Enter or OK takes it out. axe: nothing
     in the list (on a TV with a result focused too) or through the view in each theme. The earlier
-    checks (the reader's line, the 3D contents' outline, the card's A− and A+) as before.
+    checks (the reader's line, the 3D contents' outline, the card's A− and A+) as before. The same
+    again on the site after the deploy (4c76b21's), whose books that play are pre-rendered byte
+    for byte as before the merge: 115 books, their 865 parts with 5,222 sound links, 84 sound
+    files, the catalogue and the sound index.
  On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.
